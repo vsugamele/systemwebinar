@@ -5,8 +5,24 @@ import { EventEngine } from '@/lib/event-engine'
 import { getPusherClient } from '@/lib/pusher'
 import type { Webinar, WebinarEvent, ChatMessage, ChatMessagePayload, OfferPopupPayload, PitchButtonPayload } from '@/types'
 
+// Extend PitchButtonPayload for new fields
+interface ExtendedPitchPayload extends PitchButtonPayload {
+  text_above?: string
+  countdown_seconds?: number
+  scarcity_spots?: number
+  broadcast_sales?: boolean
+  broadcast_names?: string
+}
+
+interface WebinarConfig {
+  chat_cpm?: number
+  chat_names?: string[]
+  tracking_head_code?: string
+  tracking_body_code?: string
+}
+
 interface Props {
-  webinar: Webinar
+  webinar: Webinar & WebinarConfig
   events: WebinarEvent[]
 }
 
@@ -18,22 +34,57 @@ function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
 }
 
+function formatCountdown(secs: number) {
+  const m = Math.floor(secs / 60)
+  const s = secs % 60
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+}
+
+// Pool of chat messages for CPM simulation
+const GENERIC_CHAT_PHRASES = [
+  'Incrível! Adorando o conteúdo 🔥',
+  'Que conteúdo valioso, obrigado!',
+  'Estou adorando tudo isso! 👏',
+  'Minha mente foi aberta com isso',
+  'Nunca tinha pensado assim antes',
+  'Isso vai mudar minha vida! 🚀',
+  'Estou tomando notas o tempo todo',
+  'Conteúdo de altíssima qualidade!',
+  'Já aplicando isso no meu projeto',
+  'Sensacional! 🙌',
+  'Que dica poderosa!',
+  'Tô aqui desde o início, incrível!',
+  'Isso é exatamente o que eu precisava',
+  'Obrigada por esse conteúdo gratuito!',
+  'Parece que foi feito pra mim 😊',
+  'Salvando cada dica! ✍️',
+  'Vocês são incríveis!',
+  'Quero mais conteúdo assim!',
+  'Compartilhei com 3 amigos já haha',
+  'Melhor webinar que já assisti!',
+]
+
 export default function WebinarRoom({ webinar, events }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const chatEndRef = useRef<HTMLDivElement>(null)
   const engineRef = useRef<EventEngine | null>(null)
   const sessionId = useRef(generateSessionId())
-  const firedRef = useRef<Set<string>>(new Set())
+  const broadcastTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const cpmTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
   const [userName, setUserName] = useState('Você')
   const [viewers, setViewers] = useState(webinar.peak_viewers_min)
+  const [viewersPulse, setViewersPulse] = useState(false)
   const [pitchVisible, setPitchVisible] = useState(false)
-  const [pitchPayload, setPitchPayload] = useState<PitchButtonPayload | null>(null)
+  const [pitchPayload, setPitchPayload] = useState<ExtendedPitchPayload | null>(null)
   const [popupVisible, setPopupVisible] = useState(false)
   const [popupPayload, setPopupPayload] = useState<OfferPopupPayload | null>(null)
   const [videoError, setVideoError] = useState(false)
+  const [countdown, setCountdown] = useState(0)
+  const [scarcitySpots, setScarcitySpots] = useState(0)
+  const countdownRef = useRef<NodeJS.Timeout | null>(null)
 
   // ---- Viewer counter simulation ----
   useEffect(() => {
@@ -43,11 +94,47 @@ export default function WebinarRoom({ webinar, events }: Props) {
     const interval = setInterval(() => {
       setViewers(v => {
         const delta = Math.floor(Math.random() * 5) - 2
-        return Math.max(min, Math.min(max, v + delta))
+        const next = Math.max(min, Math.min(max, v + delta))
+        if (next !== v) {
+          setViewersPulse(true)
+          setTimeout(() => setViewersPulse(false), 400)
+        }
+        return next
       })
     }, 4000)
     return () => clearInterval(interval)
   }, [webinar])
+
+  // ---- CPM-based chat simulation ----
+  useEffect(() => {
+    const cpm = webinar.chat_cpm || 0
+    if (cpm <= 0) return
+
+    const poolNames = webinar.chat_names?.length ? webinar.chat_names
+      : ['Maria', 'João', 'Ana', 'Carlos', 'Luciana', 'Pedro', 'Fernanda', 'Rafael']
+
+    const intervalMs = (60 / cpm) * 1000
+    const jitter = intervalMs * 0.4
+
+    function scheduleNext() {
+      const delay = intervalMs + (Math.random() * jitter * 2 - jitter)
+      cpmTimerRef.current = setTimeout(() => {
+        const name = poolNames[Math.floor(Math.random() * poolNames.length)]
+        const text = GENERIC_CHAT_PHRASES[Math.floor(Math.random() * GENERIC_CHAT_PHRASES.length)]
+        setMessages(m => [...m, {
+          id: Math.random().toString(36),
+          author: name,
+          text,
+          timestamp: Math.floor(videoRef.current?.currentTime || 0),
+          isSimulated: true,
+        }])
+        scheduleNext()
+      }, delay)
+    }
+
+    scheduleNext()
+    return () => { if (cpmTimerRef.current) clearTimeout(cpmTimerRef.current) }
+  }, [webinar.chat_cpm, webinar.chat_names])
 
   // ---- Real-time chat (Pusher) ----
   useEffect(() => {
@@ -73,6 +160,50 @@ export default function WebinarRoom({ webinar, events }: Props) {
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // ---- Countdown ticker ----
+  function startCountdown(seconds: number) {
+    if (countdownRef.current) clearInterval(countdownRef.current)
+    setCountdown(seconds)
+    countdownRef.current = setInterval(() => {
+      setCountdown(c => {
+        if (c <= 1) {
+          clearInterval(countdownRef.current!)
+          return 0
+        }
+        return c - 1
+      })
+    }, 1000)
+  }
+
+  // ---- Broadcast sales messages ----
+  function startBroadcast(payload: ExtendedPitchPayload) {
+    const rawNames = payload.broadcast_names
+    const poolNames = rawNames
+      ? rawNames.split(',').map(n => n.trim()).filter(Boolean)
+      : webinar.chat_names?.length ? webinar.chat_names
+      : ['Maria', 'João', 'Ana', 'Carlos', 'Luciana']
+
+    let idx = 0
+    function fireNext() {
+      if (idx >= poolNames.length) return
+      const name = poolNames[idx++]
+      const firstName = name.split(' ')[0]
+      setMessages(m => [...m, {
+        id: `broadcast-${idx}`,
+        author: '🛒 Notificação',
+        text: `${firstName} acabou de comprar! 🎉`,
+        timestamp: Math.floor(videoRef.current?.currentTime || 0),
+        isSimulated: true,
+        isBroadcast: true,
+      } as any])
+      const delay = 10000 + Math.random() * 10000 // 10–20s between each
+      broadcastTimerRef.current = setTimeout(fireNext, delay)
+    }
+
+    // Start after 5 seconds of pitch appearing
+    broadcastTimerRef.current = setTimeout(fireNext, 5000)
+  }
 
   // ---- Event engine ----
   useEffect(() => {
@@ -102,14 +233,39 @@ export default function WebinarRoom({ webinar, events }: Props) {
     })
 
     engine.on('pitch_button', (ev) => {
-      const p = ev.payload as PitchButtonPayload
+      const p = ev.payload as ExtendedPitchPayload
       setPitchPayload(p)
       setPitchVisible(true)
       trackEvent('popup_seen', ev.timestamp_seconds, { type: 'pitch' })
+
+      // Countdown
+      if (p.countdown_seconds && p.countdown_seconds > 0) {
+        startCountdown(p.countdown_seconds)
+      }
+
+      // Scarcity
+      if (p.scarcity_spots && p.scarcity_spots > 0) {
+        setScarcitySpots(p.scarcity_spots)
+        // Randomly decrement spots over time
+        let spots = p.scarcity_spots
+        const spotInterval = setInterval(() => {
+          if (spots <= 1) { clearInterval(spotInterval); return }
+          if (Math.random() < 0.3) {
+            spots--
+            setScarcitySpots(spots)
+          }
+        }, 20000)
+      }
+
+      // Broadcast sales
+      if (p.broadcast_sales) {
+        startBroadcast(p)
+      }
     })
 
     engine.on('hide_pitch_button', () => {
       setPitchVisible(false)
+      if (broadcastTimerRef.current) clearTimeout(broadcastTimerRef.current)
     })
 
     engineRef.current = engine
@@ -137,7 +293,6 @@ export default function WebinarRoom({ webinar, events }: Props) {
     }
 
     const onSeeking = () => {
-      // Block seeking — restore position
       if (Math.abs(video.currentTime - (video as any)._lastTime || 0) > 2) {
         video.currentTime = (video as any)._lastTime || 0
       }
@@ -211,6 +366,8 @@ export default function WebinarRoom({ webinar, events }: Props) {
 
   function handleCTADismiss() {
     setPitchVisible(false)
+    if (countdownRef.current) clearInterval(countdownRef.current)
+    if (broadcastTimerRef.current) clearTimeout(broadcastTimerRef.current)
     trackEvent('cta_dismissed', Math.floor(videoRef.current?.currentTime || 0))
   }
 
@@ -240,7 +397,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <div className="viewer-count">
               <div className="viewer-dot" />
-              {viewers.toLocaleString()} assistindo
+              <span className={viewersPulse ? 'bump-anim' : ''}>{viewers.toLocaleString()}</span> assistindo
             </div>
           </div>
         </div>
@@ -256,7 +413,6 @@ export default function WebinarRoom({ webinar, events }: Props) {
                 width: '100%',
                 height: '100%',
                 objectFit: 'contain',
-                // Hide controls completely via CSS
               }}
               onError={() => setVideoError(true)}
               onContextMenu={e => e.preventDefault()}
@@ -276,9 +432,43 @@ export default function WebinarRoom({ webinar, events }: Props) {
                 <img src={pitchPayload.image_url} alt="Oferta" className="pitch-image" />
               )}
               <div className="pitch-body">
+                {/* Text above button */}
+                {pitchPayload.text_above && (
+                  <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--warning)', textAlign: 'center', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    {pitchPayload.text_above}
+                  </p>
+                )}
+
+                {/* Countdown badge */}
+                {countdown > 0 && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
+                    borderRadius: 8, padding: '6px 10px', marginBottom: 8,
+                  }}>
+                    <span style={{ fontSize: 16 }}>⏳</span>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: '#ef4444', fontFamily: 'monospace' }}>
+                      {formatCountdown(countdown)}
+                    </span>
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>restantes</span>
+                  </div>
+                )}
+
+                {/* CTA Button */}
                 <button className="pitch-cta" onClick={handleCTAClick}>
                   {pitchPayload.cta_text}
                 </button>
+
+                {/* Scarcity spots */}
+                {scarcitySpots > 0 && (
+                  <div style={{
+                    textAlign: 'center', fontSize: 11, marginTop: 6,
+                    color: scarcitySpots <= 3 ? '#ef4444' : 'var(--text-muted)',
+                    fontWeight: scarcitySpots <= 3 ? 700 : 400,
+                  }}>
+                    {scarcitySpots <= 3 ? '🔴' : '🟡'} Apenas {scarcitySpots} {scarcitySpots === 1 ? 'vaga restante' : 'vagas restantes'}!
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -320,7 +510,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
           <div className="chat-title">💬 Chat ao Vivo</div>
           <div className="viewer-count">
             <div className="viewer-dot" />
-            {viewers}
+            <span className={viewersPulse ? 'bump-anim' : ''}>{viewers.toLocaleString()}</span>
           </div>
         </div>
 
@@ -330,26 +520,36 @@ export default function WebinarRoom({ webinar, events }: Props) {
               Seja o primeiro a comentar! 👋
             </div>
           )}
-          {messages.map((msg, i) => (
-            <div key={msg.id || i} className="chat-message">
-              <div
-                className="chat-avatar"
-                style={{
-                  background: msg.isSimulated
-                    ? `hsl(${(msg.author.charCodeAt(0) * 37) % 360}, 70%, 40%)`
-                    : 'var(--brand)',
-                  backgroundImage: msg.avatar ? `url(${msg.avatar})` : undefined,
-                  backgroundSize: 'cover',
-                }}
-              >
-                {!msg.avatar && getInitials(msg.author)}
+          {messages.map((msg, i) => {
+            const isBroadcast = (msg as any).isBroadcast
+            return (
+              <div key={msg.id || i} className="chat-message" style={isBroadcast ? {
+                background: 'rgba(34,197,94,0.08)', borderRadius: 8, padding: '6px 8px',
+                border: '1px solid rgba(34,197,94,0.2)', margin: '2px 0'
+              } : {}}>
+                {!isBroadcast && (
+                  <div
+                    className="chat-avatar"
+                    style={{
+                      background: msg.isSimulated
+                        ? `hsl(${(msg.author.charCodeAt(0) * 37) % 360}, 70%, 40%)`
+                        : 'var(--brand)',
+                      backgroundImage: msg.avatar ? `url(${msg.avatar})` : undefined,
+                      backgroundSize: 'cover',
+                    }}
+                  >
+                    {!msg.avatar && getInitials(msg.author)}
+                  </div>
+                )}
+                <div>
+                  {!isBroadcast && <div className="chat-msg-author">{msg.author}</div>}
+                  <div className="chat-msg-text" style={isBroadcast ? { color: 'var(--success)', fontWeight: 600 } : {}}>
+                    {msg.text}
+                  </div>
+                </div>
               </div>
-              <div className="chat-msg-body">
-                <div className="chat-msg-author">{msg.author}</div>
-                <div className="chat-msg-text">{msg.text}</div>
-              </div>
-            </div>
-          ))}
+            )
+          })}
           <div ref={chatEndRef} />
         </div>
 
@@ -373,7 +573,6 @@ export default function WebinarRoom({ webinar, events }: Props) {
         video::-webkit-media-controls { display: none !important; }
         video::-webkit-media-controls-enclosure { display: none !important; }
         video::-webkit-media-controls-panel { display: none !important; }
-        video::--webkit-media-controls-play-button { display: none !important; }
         video { pointer-events: none; }
       `}</style>
     </div>

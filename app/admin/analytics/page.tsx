@@ -154,7 +154,7 @@ export default function AnalyticsPage() {
             </div>
 
             {/* Optimization Tips */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
               {[
                 { icon: '📊', label: 'Taxa de inscrição', value: `${attendanceRate}%`, meta: 'Meta: 20–40%', ok: parseFloat(attendanceRate) >= 20 },
                 { icon: '👥', label: 'Taxa de presença', value: `${attendanceRate}%`, meta: 'Meta: 30–50%', ok: parseFloat(attendanceRate) >= 30 },
@@ -175,9 +175,38 @@ export default function AnalyticsPage() {
                 </div>
               ))}
             </div>
+
+            {/* Monetization */}
+            <div style={{
+              background: 'var(--bg-card)', border: '1px solid var(--border)',
+              borderRadius: 16, padding: 24, marginBottom: 16
+            }}>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 20 }}>
+                💰 Monetização
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16 }}>
+                {[
+                  { label: 'Cliques no CTA', value: data.cta_clicks, sub: 'Live Room', icon: '🖱️' },
+                  { label: 'Taxa de conversão', value: `${conversionRate}%`, sub: 'cliques / presentes', icon: '📈' },
+                  { label: 'Ganho por participante', value: 'R$ 0,00', sub: 'configure seu CRM', icon: '🧮' },
+                  { label: 'Pop-ups exibidos', value: data.popup_seen, sub: 'Offer popups', icon: '🎯' },
+                ].map((m, i) => (
+                  <div key={i} style={{
+                    background: 'var(--bg-elevated)', borderRadius: 12,
+                    padding: '16px 20px', textAlign: 'center'
+                  }}>
+                    <div style={{ fontSize: 24, marginBottom: 8 }}>{m.icon}</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 4 }}>{m.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>{m.value}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>{m.sub}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </>
         )}
       </div>
     </>
   )
 }
+

@@ -17,7 +17,14 @@ const EVENT_TYPES = [
 const emptyPayloads: Record<EventType, object> = {
   chat_message: { author: '', avatar: '', text: '' },
   offer_popup: { title: '', subtitle: '', image_url: '', cta_text: 'Quero Agora', cta_url: '', duration_seconds: 30 },
-  pitch_button: { image_url: '', cta_text: 'Garantir Minha Vaga', cta_url: '', exit_at_seconds: undefined },
+  pitch_button: {
+    image_url: '', text_above: '', cta_text: 'Garantir Minha Vaga', cta_url: '',
+    exit_at_seconds: undefined,
+    countdown_seconds: 0,
+    scarcity_spots: 0,
+    broadcast_sales: false,
+    broadcast_names: '',
+  },
   hide_pitch_button: {},
   email_auto: { template: 'followup', delay_minutes: 10 },
 }
@@ -341,7 +348,12 @@ export default function EventsPage() {
                       onChange={e => updatePayload('image_url', e.target.value)} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Texto do CTA</label>
+                    <label className="form-label">Texto Acima do Botão</label>
+                    <input className="form-input" placeholder="50% DE DESCONTO — AGARRE ESSA OPORTUNIDADE!"
+                      value={form.payload.text_above || ''} onChange={e => updatePayload('text_above', e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Texto do CTA (dentro do botão)</label>
                     <input className="form-input" placeholder="Quero garantir minha vaga agora!"
                       value={form.payload.cta_text || ''} onChange={e => updatePayload('cta_text', e.target.value)} />
                   </div>
@@ -350,11 +362,49 @@ export default function EventsPage() {
                     <input className="form-input" placeholder="https://..." value={form.payload.cta_url || ''}
                       onChange={e => updatePayload('cta_url', e.target.value)} />
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Ocultar no segundo (opcional)</label>
-                    <input type="number" className="form-input" placeholder="Ex: 3600"
-                      value={form.payload.exit_at_seconds || ''}
-                      onChange={e => updatePayload('exit_at_seconds', e.target.value ? Number(e.target.value) : undefined)} />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+                    <div className="form-group">
+                      <label className="form-label">Ocultar no segundo</label>
+                      <input type="number" className="form-input" placeholder="Ex: 3600"
+                        value={form.payload.exit_at_seconds || ''}
+                        onChange={e => updatePayload('exit_at_seconds', e.target.value ? Number(e.target.value) : undefined)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">⏱ Countdown (seg)</label>
+                      <input type="number" className="form-input" placeholder="0 = desativado"
+                        value={form.payload.countdown_seconds || 0}
+                        onChange={e => updatePayload('countdown_seconds', Number(e.target.value))} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">🪑 Vagas Restantes</label>
+                      <input type="number" className="form-input" placeholder="0 = desativado"
+                        value={form.payload.scarcity_spots || 0}
+                        onChange={e => updatePayload('scarcity_spots', Number(e.target.value))} />
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: 14, border: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                      <div>
+                        <div style={{ fontWeight: 600, fontSize: 13 }}>📣 Broadcast de Vendas</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Simula mensagens de compra no chat após o pitch aparecer</div>
+                      </div>
+                      <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input type="checkbox" checked={!!form.payload.broadcast_sales}
+                          onChange={e => updatePayload('broadcast_sales', e.target.checked)}
+                          style={{ width: 16, height: 16, accentColor: 'var(--brand)' }} />
+                        <span style={{ fontSize: 13 }}>{form.payload.broadcast_sales ? 'Ativado' : 'Desativado'}</span>
+                      </label>
+                    </div>
+                    {form.payload.broadcast_sales && (
+                      <div className="form-group">
+                        <label className="form-label">Nomes para o Broadcast (separados por vírgula)</label>
+                        <input className="form-input" placeholder="Maria, João, Ana, Carlos, Luciana..."
+                          value={form.payload.broadcast_names || ''}
+                          onChange={e => updatePayload('broadcast_names', e.target.value)} />
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Deixe vazio para usar o pool de nomes do webinar</span>
+                      </div>
+                    )}
                   </div>
                 </>
               )}

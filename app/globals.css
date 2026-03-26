@@ -229,6 +229,10 @@ input, textarea, select { font-family: inherit; }
   min-height: 100vh;
 }
 
+.mobile-header {
+  display: none;
+}
+
 .sidebar {
   width: 260px;
   min-height: 100vh;
@@ -410,7 +414,7 @@ input, textarea, select { font-family: inherit; }
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 table { width: 100%; border-collapse: collapse; }
@@ -489,12 +493,19 @@ tbody tr:hover td { background: var(--bg-hover); }
   50% { opacity: 0.5; }
 }
 
+@keyframes bump {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); color: var(--success); }
+  100% { transform: scale(1); }
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
 .animate-fadeIn { animation: fadeIn 0.3s ease; }
 .animate-slideUp { animation: slideUp 0.3s ease; }
+.bump-anim { animation: bump 0.4s cubic-bezier(0.34, 1.56, 0.64, 1); display: inline-block; }
 
 /* =============================================
    LOADING
@@ -755,7 +766,6 @@ tbody tr:hover td { background: var(--bg-hover); }
   flex-shrink: 0;
 }
 
-.chat-msg-body {}
 .chat-msg-author {
   font-size: 12px;
   font-weight: 700;
@@ -1223,12 +1233,41 @@ tbody tr:hover td { background: var(--bg-hover); }
    RESPONSIVE
    ============================================= */
 @media (max-width: 1024px) {
+  .admin-layout { flex-direction: column; }
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .sidebar {
+    position: fixed;
+    top: 61px;
+    bottom: 0;
+    left: 0;
+    z-index: 40;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+    width: 260px;
+  }
+  .sidebar.open {
+    transform: translateX(0);
+    box-shadow: 10px 0 30px rgba(0,0,0,0.5);
+  }
+  .main-content { min-height: auto; margin-left: 0; }
+
   .webinar-room {
     grid-template-columns: 1fr;
-    grid-template-rows: 1fr 300px;
+    grid-template-rows: minmax(250px, 40vh) 1fr;
   }
-  .sidebar { display: none; }
-  .main-content { margin-left: 0; }
+  /* Ensure the video header takes less space on mobile if needed */
+  .video-header { padding: 10px 16px; }
+  .chat-header { padding: 12px 16px; min-height: 48px; }
 }
 
 @media (max-width: 768px) {

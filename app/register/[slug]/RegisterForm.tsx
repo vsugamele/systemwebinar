@@ -4,12 +4,33 @@ import { useState } from 'react'
 import type { Webinar } from '@/types'
 
 interface Props {
-  webinar: Webinar & { projects?: { name?: string; accent_color?: string } }
+  webinar: Webinar & { webi_projects?: { name?: string; accent_color?: string }; form_fields?: any[] }
+}
+
+const FIELD_META: Record<string, { label: string; placeholder: string; type?: string }> = {
+  phone:    { label: 'Telefone / WhatsApp', placeholder: '(11) 99999-9999', type: 'tel' },
+  whatsapp: { label: 'WhatsApp com DDD', placeholder: '(11) 99999-9999', type: 'tel' },
+  cpf:      { label: 'CPF', placeholder: '000.000.000-00' },
+  company:  { label: 'Empresa', placeholder: 'Nome da sua empresa' },
+  role:     { label: 'Cargo ou Profissão', placeholder: 'Ex.: Empresário, Médico...' },
+  custom_1: { label: 'Informação adicional', placeholder: 'Resposta...' },
 }
 
 export default function RegisterForm({ webinar }: Props) {
-  const accent = (webinar as any).projects?.accent_color || '#6366f1'
-  const [form, setForm] = useState({ name: '', email: '', phone: '' })
+  const accent = (webinar as any).webi_projects?.accent_color || (webinar as any).projects?.accent_color || '#6366f1'
+
+  // Parse form_fields config
+  const rawFields = (webinar as any).form_fields as any[] | null
+  const extraFields: Array<{ key: string; label: string; placeholder: string; type?: string; required?: boolean }> =
+    (Array.isArray(rawFields) ? rawFields : [{ key: 'phone' }])
+      .map((f: any) => {
+        const key = typeof f === 'string' ? f : f.key
+        const meta = FIELD_META[key] || { label: key, placeholder: '' }
+        const label = (typeof f === 'object' && f.label) ? f.label : meta.label
+        return { key, label, placeholder: meta.placeholder, type: meta.type }
+      })
+      .filter(f => f.key !== 'name' && f.key !== 'email') // name & email are always present
+  const [form, setForm] = useState<Record<string, string>>({ name: '', email: '' })
   const [loading, setLoading] = useState(false)
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
@@ -108,15 +129,19 @@ export default function RegisterForm({ webinar }: Props) {
               />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">WhatsApp (opcional)</label>
-              <input
-                className="form-input"
-                placeholder="(11) 99999-9999"
-                value={form.phone}
-                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-              />
-            </div>
+            {/* Dynamic extra fields */}
+            {extraFields.map(field => (
+              <div key={field.key} className="form-group">
+                <label className="form-label">{field.label}</label>
+                <input
+                  type={field.type || 'text'}
+                  className="form-input"
+                  placeholder={field.placeholder}
+                  value={form[field.key] || ''}
+                  onChange={e => setForm(f => ({ ...f, [field.key]: e.target.value }))}
+                />
+              </div>
+            ))}
 
             {error && <p className="form-error">⚠ {error}</p>}
 
