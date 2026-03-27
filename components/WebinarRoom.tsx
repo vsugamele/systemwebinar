@@ -1,9 +1,13 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { EventEngine } from '@/lib/event-engine'
 import { getPusherClient } from '@/lib/pusher'
 import type { Webinar, WebinarEvent, ChatMessage, ChatMessagePayload, OfferPopupPayload, PitchButtonPayload } from '@/types'
+import dynamic from 'next/dynamic'
+
+const WebinarQuiz = dynamic(() => import('./WebinarQuiz'), { ssr: false })
+const TestimonialsSection = dynamic(() => import('./TestimonialsSection'), { ssr: false })
 
 // Extend PitchButtonPayload for new fields
 interface ExtendedPitchPayload extends PitchButtonPayload {
@@ -19,12 +23,22 @@ interface WebinarConfig {
   chat_names?: string[]
   tracking_head_code?: string
   tracking_body_code?: string
+  ai_enabled?: boolean
 }
 
 interface Props {
   webinar: Webinar & WebinarConfig
   events: WebinarEvent[]
 }
+
+const EMOJI_REACTIONS = [
+  { emoji: '👍', label: 'Curtir' },
+  { emoji: '❤️', label: 'Amar' },
+  { emoji: '🔥', label: 'Incrível' },
+  { emoji: '🤯', label: 'Surpreendente' },
+  { emoji: '😂', label: 'Divertido' },
+  { emoji: '🙌', label: 'Aplausos' },
+]
 
 function generateSessionId() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
@@ -107,6 +121,8 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const sessionId = useRef(generateSessionId())
   const broadcastTimerRef = useRef<NodeJS.Timeout | null>(null)
   const cpmTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const elapsedRef = useRef(0) // seconds watched (for non-YouTube videos)
+  const elapsedIntervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
@@ -121,6 +137,36 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const [countdown, setCountdown] = useState(0)
   const [scarcitySpots, setScarcitySpots] = useState(0)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
+
+  // New feature state
+  const [reactions, setReactions] = useState<Record<string, number>>(() => {
+    const init: Record<string, number> = {}
+    EMOJI_REACTIONS.forEach(r => { init[r.emoji] = 0 })
+    return init
+  })
+  const [flyingEmojis, setFlyingEmojis] = useState<{ id: number; emoji: string; x: number }[]>([])
+  const [quizOpen, setQuizOpen] = useState(false)
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [aiTyping, setAiTyping] = useState(false)
+
+  // ---- Elapsed time counter (works for both HTML video & YouTube iframe) ----
+  useEffect(() => {
+    elapsedIntervalRef.current = setInterval(() => {
+      const videoEl = videoRef.current
+      if (videoEl && !videoEl.paused) {
+        elapsedRef.current = Math.floor(videoEl.currentTime)
+      } else {
+        // For YouTube iframes — just increment elapsed wall time
+        elapsedRef.current += 1
+      }
+      setElapsedSeconds(elapsedRef.current)
+    }, 1000)
+    trackEvent('joined', 0)
+    return () => {
+      if (elapsedIntervalRef.current) clearInterval(elapsedIntervalRef.current)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // ---- Viewer counter simulation ----
   useEffect(() => {
@@ -371,14 +417,24 @@ export default function WebinarRoom({ webinar, events }: Props) {
     } catch {}
   }
 
+  // ---- Emoji reaction handler ----
+  function fireReaction(emoji: string) {
+    setReactions(r => ({ ...r, [emoji]: (r[emoji] || 0) + 1 }))
+    const id = Date.now() + Math.random()
+    const x = 20 + Math.random() * 60 // random horizontal %
+    setFlyingEmojis(f => [...f, { id, emoji, x }])
+    setTimeout(() => setFlyingEmojis(f => f.filter(e => e.id !== id)), 2000)
+  }
+
   async function sendChatMessage() {
     if (!chatInput.trim()) return
+    const text = chatInput.trim()
 
     const msg: ChatMessage = {
       id: Math.random().toString(36),
       author: userName,
-      text: chatInput.trim(),
-      timestamp: Math.floor(videoRef.current?.currentTime || 0),
+      text,
+      timestamp: Math.floor(videoRef.current?.currentTime || elapsedRef.current),
       isSimulated: false,
     }
 
@@ -392,6 +448,34 @@ export default function WebinarRoom({ webinar, events }: Props) {
     })
 
     trackEvent('chat_sent', msg.timestamp)
+
+    // AI auto-response if enabled and message is a question
+    if ((webinar as any).ai_enabled) {
+      const isQ = text.endsWith('?') || /como|quando|qual|quanto|posso|consigo|funciona|o que|por que|porque|dúvida|ajuda|não entendi/i.test(text)
+      if (isQ) {
+        setAiTyping(true)
+        setTimeout(async () => {
+          try {
+            const res = await fetch('/api/ai-chat', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ question: text, webinar_id: webinar.id }),
+            })
+            const data = await res.json()
+            if (data.answer) {
+              setMessages(m => [...m, {
+                id: `ai-${Date.now()}`,
+                author: '🤖 Assistente',
+                text: data.answer,
+                timestamp: Math.floor(elapsedRef.current),
+                isSimulated: true,
+              }])
+            }
+          } catch {}
+          setAiTyping(false)
+        }, 1500 + Math.random() * 1000)
+      }
+    }
   }
 
   function handleCTAClick() {
@@ -430,7 +514,17 @@ export default function WebinarRoom({ webinar, events }: Props) {
             </div>
             <span style={{ fontSize: 14, fontWeight: 600 }}>{webinar.name}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button
+              onClick={() => setQuizOpen(true)}
+              style={{
+                background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
+                borderRadius: 8, padding: '6px 12px', fontSize: 12, color: '#a5b4fc',
+                cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+              }}
+            >
+              📝 Quiz
+            </button>
             <div className="viewer-count">
               <div className="viewer-dot" />
               <span className={viewersPulse ? 'bump-anim' : ''}>{viewers.toLocaleString()}</span> assistindo
@@ -548,7 +642,53 @@ export default function WebinarRoom({ webinar, events }: Props) {
             </div>
           )}
         </div>
+
+        {/* EMOJI REACTIONS BAR */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px',
+          borderTop: '1px solid var(--border)', background: 'var(--bg)',
+          position: 'relative', overflow: 'hidden',
+        }}>
+          {/* Flying emojis */}
+          {flyingEmojis.map(fe => (
+            <span key={fe.id} style={{
+              position: 'absolute', bottom: '100%', left: `${fe.x}%`,
+              fontSize: 24, animation: 'emojiFloat 2s ease-out forwards',
+              pointerEvents: 'none', userSelect: 'none',
+            }}>{fe.emoji}</span>
+          ))}
+
+          <span style={{ fontSize: 12, color: 'var(--text-muted)', marginRight: 4 }}>Reações:</span>
+          {EMOJI_REACTIONS.map(r => (
+            <button
+              key={r.emoji}
+              title={r.label}
+              onClick={() => fireReaction(r.emoji)}
+              style={{
+                background: reactions[r.emoji] > 0 ? 'rgba(99,102,241,0.15)' : 'var(--bg-card)',
+                border: `1px solid ${reactions[r.emoji] > 0 ? 'rgba(99,102,241,0.4)' : 'var(--border)'}`,
+                borderRadius: 99, padding: '5px 12px', cursor: 'pointer',
+                fontSize: 16, display: 'flex', alignItems: 'center', gap: 6,
+                transition: 'all 0.15s ease', userSelect: 'none',
+              }}
+            >
+              {r.emoji}
+              {reactions[r.emoji] > 0 && (
+                <span style={{ fontSize: 11, color: '#a5b4fc', fontWeight: 700 }}>
+                  {reactions[r.emoji]}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* TESTIMONIALS SECTION */}
+      <TestimonialsSection
+        webinarId={webinar.id}
+        webinarName={webinar.name}
+        currentTime={elapsedSeconds}
+      />
 
       {/* CHAT SECTION */}
       <div className="chat-section">
@@ -568,18 +708,23 @@ export default function WebinarRoom({ webinar, events }: Props) {
           )}
           {messages.map((msg, i) => {
             const isBroadcast = (msg as any).isBroadcast
+            const isAi = msg.author?.startsWith('🤖')
             return (
               <div key={msg.id || i} className="chat-message" style={isBroadcast ? {
                 background: 'rgba(34,197,94,0.08)', borderRadius: 8, padding: '6px 8px',
                 border: '1px solid rgba(34,197,94,0.2)', margin: '2px 0'
+              } : isAi ? {
+                background: 'rgba(99,102,241,0.08)', borderRadius: 8, padding: '6px 8px',
+                border: '1px solid rgba(99,102,241,0.2)', margin: '2px 0'
               } : {}}>
                 {!isBroadcast && (
                   <div
                     className="chat-avatar"
                     style={{
-                      background: msg.isSimulated
-                        ? `hsl(${(msg.author.charCodeAt(0) * 37) % 360}, 70%, 40%)`
-                        : 'var(--brand)',
+                      background: isAi ? '#6366f1'
+                        : msg.isSimulated
+                          ? `hsl(${(msg.author.charCodeAt(0) * 37) % 360}, 70%, 40%)`
+                          : 'var(--brand)',
                       backgroundImage: msg.avatar ? `url(${msg.avatar})` : undefined,
                       backgroundSize: 'cover',
                     }}
@@ -588,7 +733,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
                   </div>
                 )}
                 <div>
-                  {!isBroadcast && <div className="chat-msg-author">{msg.author}</div>}
+                  {!isBroadcast && <div className="chat-msg-author" style={isAi ? { color: '#a5b4fc' } : {}}>{msg.author}</div>}
                   <div className="chat-msg-text" style={isBroadcast ? { color: 'var(--success)', fontWeight: 600 } : {}}>
                     {msg.text}
                   </div>
@@ -596,6 +741,16 @@ export default function WebinarRoom({ webinar, events }: Props) {
               </div>
             )
           })}
+          {/* AI typing indicator */}
+          {aiTyping && (
+            <div className="chat-message" style={{ background: 'rgba(99,102,241,0.05)', borderRadius: 8, padding: '6px 8px' }}>
+              <div className="chat-avatar" style={{ background: '#6366f1' }}>🤖</div>
+              <div>
+                <div className="chat-msg-author" style={{ color: '#a5b4fc' }}>🤖 Assistente</div>
+                <div className="chat-msg-text" style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>digitando...</div>
+              </div>
+            </div>
+          )}
           <div ref={chatEndRef} />
         </div>
 
@@ -614,8 +769,21 @@ export default function WebinarRoom({ webinar, events }: Props) {
         </div>
       </div>
 
-      {/* Inject video style to hide controls */}
+      {/* QUIZ MODAL */}
+      <WebinarQuiz
+        webinarId={webinar.id}
+        webinarName={webinar.name}
+        open={quizOpen}
+        onClose={() => setQuizOpen(false)}
+      />
+
+      {/* Inject CSS for emoji float animation */}
       <style>{`
+        @keyframes emojiFloat {
+          0%   { transform: translateY(0) scale(1); opacity: 1; }
+          80%  { transform: translateY(-80px) scale(1.3); opacity: 0.8; }
+          100% { transform: translateY(-120px) scale(0.8); opacity: 0; }
+        }
         video::-webkit-media-controls { display: none !important; }
         video::-webkit-media-controls-enclosure { display: none !important; }
         video::-webkit-media-controls-panel { display: none !important; }

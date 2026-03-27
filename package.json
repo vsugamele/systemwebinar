@@ -12,6 +12,7 @@
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.100.0",
     "@types/pusher-js": "^4.2.2",
+    "html2canvas": "^1.4.1",
     "next": "16.2.1",
     "pusher": "^5.3.3",
     "pusher-js": "^8.4.3",

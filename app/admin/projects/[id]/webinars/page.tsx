@@ -182,6 +182,15 @@ export default function WebinarsPage() {
                           <Link href={`/admin/projects/${projectId}/webinars/${w.id}/chat`} className="btn btn-secondary btn-sm">
                             💬 Chat
                           </Link>
+                          <Link href={`/admin/projects/${projectId}/webinars/${w.id}/ai-config`} className="btn btn-secondary btn-sm">
+                            🤖 IA no Chat
+                          </Link>
+                          <Link href={`/admin/projects/${projectId}/webinars/${w.id}/quiz`} className="btn btn-secondary btn-sm">
+                            📝 Quiz
+                          </Link>
+                          <Link href={`/admin/projects/${projectId}/webinars/${w.id}/testimonials`} className="btn btn-secondary btn-sm">
+                            💬 Depoimentos
+                          </Link>
                           <Link href={`/admin/projects/${projectId}/webinars/${w.id}/logs`} className="btn btn-secondary btn-sm">
                             📓 LOGs
                           </Link>
