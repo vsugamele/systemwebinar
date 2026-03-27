@@ -1,6 +1,23 @@
 import { Resend } from 'resend'
 
-export const resend = new Resend(process.env.RESEND_API_KEY)
+// Lazy initialization — avoids "Missing API key" crash during build-time module evaluation
+let _resend: Resend | null = null
+export function getResend(): Resend {
+  if (!_resend) {
+    const key = process.env.RESEND_API_KEY
+    if (!key) throw new Error('RESEND_API_KEY environment variable is not set')
+    _resend = new Resend(key)
+  }
+  return _resend
+}
+
+// Keep backward-compatible named export as a proxy object
+export const resend = new Proxy({} as Resend, {
+  get(_target, prop) {
+    return (getResend() as any)[prop]
+  },
+})
+
 
 export type EmailType = 'confirmation' | 'reminder_24h' | 'reminder_1h' | 'followup'
 
