@@ -32,5 +32,5 @@ export default async function RegisterPage({ params }: { params: Promise<{ slug:
 
   if (!webinar) return notFound()
 
-  return <RegisterForm webinar={webinar} />
+  return <RegisterForm webinar={webinar} slug={slug} />
 }

@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import type { Webinar } from '@/types'
 
 interface Props {
   webinar: Webinar & { webi_projects?: { name?: string; accent_color?: string }; form_fields?: any[] }
+  slug: string
 }
 
 const FIELD_META: Record<string, { label: string; placeholder: string; type?: string }> = {
@@ -16,7 +18,8 @@ const FIELD_META: Record<string, { label: string; placeholder: string; type?: st
   custom_1: { label: 'Informação adicional', placeholder: 'Resposta...' },
 }
 
-export default function RegisterForm({ webinar }: Props) {
+export default function RegisterForm({ webinar, slug }: Props) {
+  const router = useRouter()
   const accent = (webinar as any).webi_projects?.accent_color || (webinar as any).projects?.accent_color || '#6366f1'
 
   // Parse form_fields config
@@ -32,7 +35,6 @@ export default function RegisterForm({ webinar }: Props) {
       .filter(f => f.key !== 'name' && f.key !== 'email') // name & email are always present
   const [form, setForm] = useState<Record<string, string>>({ name: '', email: '' })
   const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
   const [error, setError] = useState('')
 
   async function handleSubmit(e: React.FormEvent) {
@@ -47,36 +49,20 @@ export default function RegisterForm({ webinar }: Props) {
         body: JSON.stringify({ ...form, webinar_id: webinar.id }),
       })
 
-      if (!res.ok) throw new Error('Erro ao registrar')
-      setSuccess(true)
-    } catch (err) {
-      setError('Erro ao realizar inscrição. Tente novamente.')
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        throw new Error(data.error || 'Erro ao registrar')
+      }
+
+      // Redirect to live webinar room
+      router.push(`/w/${slug}`)
+    } catch (err: any) {
+      setError(err.message || 'Erro ao realizar inscrição. Tente novamente.')
     } finally {
       setLoading(false)
     }
   }
 
-  if (success) {
-    return (
-      <div style={{
-        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'var(--bg)', flexDirection: 'column', gap: 24, textAlign: 'center', padding: 24
-      }}>
-        <div style={{ fontSize: 64 }}>🎉</div>
-        <h1 style={{ fontSize: 28, fontWeight: 800 }}>Inscrição confirmada!</h1>
-        <p style={{ color: 'var(--text-secondary)', maxWidth: 400 }}>
-          Você receberá um e-mail de confirmação em breve com o link de acesso ao webinar.
-        </p>
-        <div style={{
-          background: 'var(--bg-card)', border: '1px solid var(--border)',
-          borderRadius: 16, padding: 24, maxWidth: 360
-        }}>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>Webinar</div>
-          <div style={{ fontWeight: 700, fontSize: 16 }}>{webinar.name}</div>
-        </div>
-      </div>
-    )
-  }
 
   return (
     <div className="register-page">

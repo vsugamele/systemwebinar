@@ -40,6 +40,42 @@ function formatCountdown(secs: number) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
+/** Converts any YouTube watch/share URL into an embed URL */
+function getYouTubeEmbedUrl(url: string, startSeconds = 0): string | null {
+  try {
+    const u = new URL(url)
+    let videoId: string | null = null
+
+    if (u.hostname === 'youtu.be') {
+      videoId = u.pathname.slice(1)
+    } else if (
+      u.hostname === 'www.youtube.com' ||
+      u.hostname === 'youtube.com' ||
+      u.hostname === 'm.youtube.com'
+    ) {
+      videoId = u.searchParams.get('v')
+      if (!videoId && u.pathname.startsWith('/embed/')) {
+        videoId = u.pathname.split('/embed/')[1]?.split('?')[0]
+      }
+    }
+
+    if (!videoId) return null
+    const start = startSeconds > 0 ? `&start=${startSeconds}` : ''
+    return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&controls=0&modestbranding=1&rel=0&disablekb=1${start}`
+  } catch {
+    return null
+  }
+}
+
+function isYouTubeUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    return ['youtu.be', 'www.youtube.com', 'youtube.com', 'm.youtube.com'].includes(u.hostname)
+  } catch {
+    return false
+  }
+}
+
 // Pool of chat messages for CPM simulation
 const GENERIC_CHAT_PHRASES = [
   'Incrível! Adorando o conteúdo 🔥',
@@ -404,19 +440,29 @@ export default function WebinarRoom({ webinar, events }: Props) {
 
         <div className="video-wrapper">
           {webinar.video_url ? (
-            <video
-              ref={videoRef}
-              src={webinar.video_url}
-              autoPlay
-              playsInline
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-              }}
-              onError={() => setVideoError(true)}
-              onContextMenu={e => e.preventDefault()}
-            />
+            isYouTubeUrl(webinar.video_url) ? (
+              <iframe
+                src={getYouTubeEmbedUrl(webinar.video_url, webinar.evergreen_offset_seconds) || ''}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen={false}
+                title={webinar.name}
+              />
+            ) : (
+              <video
+                ref={videoRef}
+                src={webinar.video_url}
+                autoPlay
+                playsInline
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'contain',
+                }}
+                onError={() => setVideoError(true)}
+                onContextMenu={e => e.preventDefault()}
+              />
+            )
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 16, color: 'var(--text-muted)' }}>
               <div style={{ fontSize: 48 }}>🎬</div>
