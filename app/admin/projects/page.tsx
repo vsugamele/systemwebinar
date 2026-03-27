@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
+import Modal from '@/components/Modal'
 import type { Project } from '@/types'
 
 export default function ProjectsPage() {
@@ -109,48 +110,58 @@ export default function ProjectsPage() {
         )}
       </div>
 
-      {showModal && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowModal(false)}>
-          <div className="modal">
-            <div className="modal-header">
-              <h2 className="modal-title">{editProject ? 'Editar Projeto' : 'Novo Projeto'}</h2>
-              <button className="modal-close" onClick={() => setShowModal(false)}>✕</button>
-            </div>
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={editProject ? 'Editar Projeto' : 'Novo Projeto'}
+        footer={
+          <>
+            <button className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancelar</button>
+            <button className="btn btn-primary" onClick={save} disabled={!form.name || saving}>
+              {saving ? <span className="spinner" /> : editProject ? 'Salvar' : 'Criar Projeto'}
+            </button>
+          </>
+        }
+      >
+        <div className="form-group">
+          <label className="form-label">Nome do Projeto</label>
+          <input
+            className="form-input"
+            placeholder="Ex: Marketing Digital 2025"
+            value={form.name}
+            onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+            autoFocus
+          />
+        </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-              <div className="form-group">
-                <label className="form-label">Nome do Projeto</label>
-                <input className="form-input" placeholder="Ex: Marketing Digital 2025" value={form.name}
-                  onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">Cor de Destaque</label>
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                  <input type="color" value={form.accent_color}
-                    onChange={e => setForm(f => ({ ...f, accent_color: e.target.value }))}
-                    style={{ width: 48, height: 40, border: 'none', borderRadius: 8, cursor: 'pointer', background: 'none' }} />
-                  <input className="form-input" value={form.accent_color} style={{ flex: 1 }}
-                    onChange={e => setForm(f => ({ ...f, accent_color: e.target.value }))} />
-                </div>
-              </div>
-
-              <div className="form-group">
-                <label className="form-label">E-mail Remetente (Resend)</label>
-                <input className="form-input" placeholder="webinar@seudominio.com" value={form.resend_from_email}
-                  onChange={e => setForm(f => ({ ...f, resend_from_email: e.target.value }))} />
-              </div>
-            </div>
-
-            <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={() => setShowModal(false)}>Cancelar</button>
-              <button className="btn btn-primary" onClick={save} disabled={!form.name || saving}>
-                {saving ? <span className="spinner" /> : editProject ? 'Salvar' : 'Criar Projeto'}
-              </button>
-            </div>
+        <div className="form-group">
+          <label className="form-label">Cor de Destaque</label>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <input
+              type="color"
+              value={form.accent_color}
+              onChange={e => setForm(f => ({ ...f, accent_color: e.target.value }))}
+              style={{ width: 48, height: 40, border: 'none', borderRadius: 8, cursor: 'pointer', background: 'none' }}
+            />
+            <input
+              className="form-input"
+              value={form.accent_color}
+              style={{ flex: 1 }}
+              onChange={e => setForm(f => ({ ...f, accent_color: e.target.value }))}
+            />
           </div>
         </div>
-      )}
+
+        <div className="form-group">
+          <label className="form-label">E-mail Remetente (Resend)</label>
+          <input
+            className="form-input"
+            placeholder="webinar@seudominio.com"
+            value={form.resend_from_email}
+            onChange={e => setForm(f => ({ ...f, resend_from_email: e.target.value }))}
+          />
+        </div>
+      </Modal>
     </>
   )
 }
