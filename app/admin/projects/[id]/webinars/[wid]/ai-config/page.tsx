@@ -29,6 +29,8 @@ export default function AIConfigPage() {
     ai_model: 'google/gemini-flash-1.5',
     ai_knowledge_base: '',
     ai_system_prompt: '',
+    ai_persona_name: '',
+    ai_persona_avatar: '',
   })
 
   useEffect(() => {
@@ -45,6 +47,8 @@ export default function AIConfigPage() {
           ai_model: webinar.ai_model || 'google/gemini-flash-1.5',
           ai_knowledge_base: webinar.ai_knowledge_base || '',
           ai_system_prompt: webinar.ai_system_prompt || '',
+          ai_persona_name: (webinar as any).ai_persona_name || '',
+          ai_persona_avatar: (webinar as any).ai_persona_avatar || '',
         })
       }
       if (project) setProjectApiKey(project.openrouter_api_key || '')
@@ -186,6 +190,57 @@ export default function AIConfigPage() {
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
             Como a IA deve se comportar. Deixe em branco para usar o padrão.
           </div>
+
+          {/* Persona section */}
+          <div style={{
+            background: 'var(--bg-elevated)', borderRadius: 10, padding: 14,
+            border: '1px solid var(--border)', marginBottom: 8,
+          }}>
+            <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>🧑‍💼 Identidade do Assistente</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+              Configure um nome e foto para que a IA pareça uma pessoa real no chat, como um "suporte" ou "moderador".
+              Deixe em branco para usar o padrão ("🤖 Assistente").
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">Nome do Suporte</label>
+                <input
+                  className="form-input"
+                  placeholder="Ex: Ana — Suporte"
+                  value={form.ai_persona_name}
+                  onChange={e => setForm(f => ({ ...f, ai_persona_name: e.target.value }))}
+                />
+              </div>
+              <div className="form-group" style={{ margin: 0 }}>
+                <label className="form-label">URL da Foto do Suporte</label>
+                <input
+                  className="form-input"
+                  placeholder="https://... (opcional)"
+                  value={form.ai_persona_avatar}
+                  onChange={e => setForm(f => ({ ...f, ai_persona_avatar: e.target.value }))}
+                />
+              </div>
+            </div>
+            {form.ai_persona_name && (
+              <div style={{ marginTop: 12, padding: '10px 14px', background: 'var(--bg-card)', borderRadius: 8, border: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Preview no chat:</div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  {form.ai_persona_avatar ? (
+                    <img src={form.ai_persona_avatar} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 14, fontWeight: 800 }}>
+                      {form.ai_persona_name[0]?.toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 13 }}>{form.ai_persona_name}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Olá! Fico feliz em ajudar. 😊</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           <textarea
             className="form-input"
             rows={5}

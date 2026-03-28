@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import AdminToasts from '@/components/AdminToasts'
 
 const navItems = [
   { href: '/admin', icon: '📊', label: 'Dashboard', exact: true },
@@ -90,6 +91,7 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
       <main className="main-content">
         {children}
       </main>
+      <AdminToasts />
     </div>
   )
 }

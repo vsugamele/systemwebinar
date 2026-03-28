@@ -97,9 +97,15 @@ export default function ProjectsPage() {
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                   <Link href={`/admin/projects/${p.id}/webinars`} className="btn btn-primary btn-sm" style={{ flex: 1, textAlign: 'center' }}>
                     Webinars
+                  </Link>
+                  <Link href={`/admin/projects/${p.id}/analytics`} className="btn btn-secondary btn-sm" title="Analytics">
+                    📊
+                  </Link>
+                  <Link href={`/admin/projects/${p.id}/branding`} className="btn btn-secondary btn-sm" title="Branding">
+                    🎨
                   </Link>
                   <button className="btn btn-secondary btn-sm" onClick={() => openEdit(p)}>Editar</button>
                   <button className="btn btn-danger btn-sm" onClick={() => deleteProject(p.id)}>🗑</button>

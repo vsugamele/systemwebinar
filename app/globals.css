@@ -633,12 +633,22 @@ tbody tr:hover td { background: var(--bg-hover); }
 /* =============================================
    WEBINAR ROOM
    ============================================= */
+/* Outer scrollable wrapper: video+chat grid on top, testimonials below */
+.webinar-page-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: #050508;
+  overflow-y: auto;
+}
+
 .webinar-room {
   display: grid;
   grid-template-columns: 1fr 360px;
   height: 100vh;
   background: #050508;
   overflow: hidden;
+  flex-shrink: 0;
 }
 
 .video-section {
@@ -1263,6 +1273,11 @@ tbody tr:hover td { background: var(--bg-hover); }
   .webinar-room {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(250px, 40vh) 1fr;
+    height: auto;
+    min-height: 100vh;
+  }
+  .webinar-page-wrapper {
+    overflow-y: auto;
   }
   /* Ensure the video header takes less space on mobile if needed */
   .video-header { padding: 10px 16px; }

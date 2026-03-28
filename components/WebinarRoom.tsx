@@ -8,6 +8,7 @@ import dynamic from 'next/dynamic'
 
 const WebinarQuiz = dynamic(() => import('./WebinarQuiz'), { ssr: false })
 const TestimonialsSection = dynamic(() => import('./TestimonialsSection'), { ssr: false })
+const WaitingRoom = dynamic(() => import('./WaitingRoom'), { ssr: false })
 
 // Extend PitchButtonPayload for new fields
 interface ExtendedPitchPayload extends PitchButtonPayload {
@@ -18,12 +19,24 @@ interface ExtendedPitchPayload extends PitchButtonPayload {
   broadcast_names?: string
 }
 
+interface Material {
+  id: string
+  label: string
+  url: string
+  icon: string
+  show_at_seconds: number
+}
+
 interface WebinarConfig {
   chat_cpm?: number
   chat_names?: string[]
   tracking_head_code?: string
   tracking_body_code?: string
   ai_enabled?: boolean
+  brand_color?: string
+  waiting_room_enabled?: boolean
+  waiting_room_message?: string
+  waiting_delay_seconds?: number
 }
 
 interface Props {
@@ -149,6 +162,67 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [aiTyping, setAiTyping] = useState(false)
 
+  // Waiting room
+  const brandColor = (webinar as any).brand_color || '#6366f1'
+  const waitEnabled = !!(webinar as any).waiting_room_enabled
+  const [waitingDone, setWaitingDone] = useState(!waitEnabled)
+
+  // Chat tabs
+  type ChatTab = 'chat' | 'qa' | 'materials'
+  const [chatTab, setChatTab] = useState<ChatTab>('chat')
+  const [qaMessages, setQaMessages] = useState<{ id: string; author: string; text: string; answered?: string }[]>([])
+  const [qaInput, setQaInput] = useState('')
+  const [materials, setMaterials] = useState<Material[]>([])
+  const [visibleMaterials, setVisibleMaterials] = useState<Material[]>([])
+
+  // Load materials
+  useEffect(() => {
+    fetch(`/api/materials?webinar_id=${webinar.id}`)
+      .then(r => r.json())
+      .then(data => setMaterials(data || []))
+      .catch(() => {})
+  }, [webinar.id])
+
+  // Reveal materials as time progresses
+  useEffect(() => {
+    setVisibleMaterials(materials.filter(m => m.show_at_seconds <= elapsedSeconds))
+  }, [elapsedSeconds, materials])
+
+  // ---- Inject brand color as CSS variable ----
+  useEffect(() => {
+    document.documentElement.style.setProperty('--brand', brandColor)
+    document.documentElement.style.setProperty('--brand-dark', brandColor)
+    document.documentElement.style.setProperty('--brand-glow', `${brandColor}4d`)
+    return () => {
+      document.documentElement.style.removeProperty('--brand')
+      document.documentElement.style.removeProperty('--brand-dark')
+      document.documentElement.style.removeProperty('--brand-glow')
+    }
+  }, [brandColor])
+
+  // ---- Inject animation CSS ----
+  useEffect(() => {
+    const style = document.createElement('style')
+    style.id = 'webinar-room-animations'
+    style.textContent = [
+      '@keyframes emojiFloat {',
+      '  0%   { transform: translateY(0) scale(1); opacity: 1; }',
+      '  80%  { transform: translateY(-80px) scale(1.3); opacity: 0.8; }',
+      '  100% { transform: translateY(-120px) scale(0.8); opacity: 0; }',
+      '}',
+      'video::-webkit-media-controls { display: none !important; }',
+      'video::-webkit-media-controls-enclosure { display: none !important; }',
+      'video::-webkit-media-controls-panel { display: none !important; }',
+      'video { pointer-events: none; }',
+    ].join('\n')
+    if (!document.getElementById('webinar-room-animations')) {
+      document.head.appendChild(style)
+    }
+    return () => {
+      document.getElementById('webinar-room-animations')?.remove()
+    }
+  }, [])
+
   // ---- Elapsed time counter (works for both HTML video & YouTube iframe) ----
   useEffect(() => {
     elapsedIntervalRef.current = setInterval(() => {
@@ -156,7 +230,6 @@ export default function WebinarRoom({ webinar, events }: Props) {
       if (videoEl && !videoEl.paused) {
         elapsedRef.current = Math.floor(videoEl.currentTime)
       } else {
-        // For YouTube iframes — just increment elapsed wall time
         elapsedRef.current += 1
       }
       setElapsedSeconds(elapsedRef.current)
@@ -364,6 +437,8 @@ export default function WebinarRoom({ webinar, events }: Props) {
       }
     }
 
+    const progress50FiredRef = { fired: false }
+
     const onTimeUpdate = () => {
       const t = Math.floor(video.currentTime)
       engineRef.current?.tick(t)
@@ -371,6 +446,12 @@ export default function WebinarRoom({ webinar, events }: Props) {
       // Track watch_second every 10s
       if (t % 10 === 0 && t > 0) {
         trackEvent('watch_second', t)
+      }
+
+      // Track progress_50 once when viewer watches past 50% of the video
+      if (!progress50FiredRef.fired && video.duration > 0 && video.currentTime > video.duration * 0.5) {
+        progress50FiredRef.fired = true
+        trackEvent('progress_50', t)
       }
     }
 
@@ -453,6 +534,8 @@ export default function WebinarRoom({ webinar, events }: Props) {
     if ((webinar as any).ai_enabled) {
       const isQ = text.endsWith('?') || /como|quando|qual|quanto|posso|consigo|funciona|o que|por que|porque|dúvida|ajuda|não entendi/i.test(text)
       if (isQ) {
+        const aiName = (webinar as any).ai_persona_name || '🤖 Assistente'
+        const aiAvatar = (webinar as any).ai_persona_avatar || ''
         setAiTyping(true)
         setTimeout(async () => {
           try {
@@ -465,7 +548,8 @@ export default function WebinarRoom({ webinar, events }: Props) {
             if (data.answer) {
               setMessages(m => [...m, {
                 id: `ai-${Date.now()}`,
-                author: '🤖 Assistente',
+                author: aiName,
+                avatar: aiAvatar || undefined,
                 text: data.answer,
                 timestamp: Math.floor(elapsedRef.current),
                 isSimulated: true,
@@ -502,8 +586,52 @@ export default function WebinarRoom({ webinar, events }: Props) {
     window.open(popupPayload.cta_url, '_blank')
   }
 
+  async function sendQaMessage() {
+    if (!qaInput.trim()) return
+    const text = qaInput.trim()
+    const qId = `qa-${Date.now()}`
+    setQaMessages(q => [...q, { id: qId, author: userName, text }])
+    setQaInput('')
+
+    // Try AI response if enabled
+    if ((webinar as any).ai_enabled) {
+      const aiName = (webinar as any).ai_persona_name || '🤖 Assistente'
+      setAiTyping(true)
+      setTimeout(async () => {
+        try {
+          const res = await fetch('/api/ai-chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ question: text, webinar_id: webinar.id }),
+          })
+          const data = await res.json()
+          if (data.answer) {
+            setQaMessages(q => q.map(m => m.id === qId ? { ...m, answered: `${aiName}: ${data.answer}` } : m))
+          }
+        } catch {}
+        setAiTyping(false)
+      }, 1500 + Math.random() * 1000)
+    }
+  }
+
   return (
-    <div className="webinar-room">
+    <>
+      {/* WAITING ROOM — shown before entering if enabled */}
+      {!waitingDone && (
+        <WaitingRoom
+          message={(webinar as any).waiting_room_message || 'O webinar começa em instantes! Prepare-se. 🚀'}
+          delaySeconds={(webinar as any).waiting_delay_seconds ?? 120}
+          webinarName={webinar.name}
+          brandColor={brandColor}
+          onEnter={() => setWaitingDone(true)}
+        />
+      )}
+
+      {/* MAIN ROOM — shown after waiting */}
+      {waitingDone && (
+      <>
+      <div className="webinar-page-wrapper">
+      <div className="webinar-room">
       {/* VIDEO SECTION */}
       <div className="video-section">
         <div className="video-header">
@@ -532,12 +660,24 @@ export default function WebinarRoom({ webinar, events }: Props) {
           </div>
         </div>
 
-        <div className="video-wrapper">
+        <div className="video-wrapper" style={{ position: 'relative' }}>
+          {/* Camada invisível para capturar qualquer clique/hover indevido */}
+          <div 
+            style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'transparent' }}
+            onClick={(e) => {
+              e.preventDefault();
+              if (videoRef.current && videoRef.current.paused) {
+                videoRef.current.play().catch(() => {});
+              }
+            }}
+            onContextMenu={e => e.preventDefault()}
+          />
+
           {webinar.video_url ? (
             isYouTubeUrl(webinar.video_url) ? (
               <iframe
                 src={getYouTubeEmbedUrl(webinar.video_url, webinar.evergreen_offset_seconds) || ''}
-                style={{ width: '100%', height: '100%', border: 'none' }}
+                style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen={false}
                 title={webinar.name}
@@ -552,6 +692,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
                   width: '100%',
                   height: '100%',
                   objectFit: 'contain',
+                  pointerEvents: 'none',
                 }}
                 onError={() => setVideoError(true)}
                 onContextMenu={e => e.preventDefault()}
@@ -683,91 +824,225 @@ export default function WebinarRoom({ webinar, events }: Props) {
         </div>
       </div>
 
-      {/* TESTIMONIALS SECTION */}
+      {/* CHAT SECTION */}
+      <div className="chat-section">
+        {/* TABS HEADER */}
+        <div style={{
+          display: 'flex', borderBottom: '1px solid var(--border)',
+          background: 'var(--bg-card)',
+        }}>
+          {([
+            { id: 'chat', label: '💬 Chat', count: messages.filter(m => !(m as any).isBroadcast).length },
+            { id: 'qa', label: '❓ Q&A', count: qaMessages.length },
+            { id: 'materials', label: '📂 Materiais', count: visibleMaterials.length },
+          ] as const).map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setChatTab(tab.id)}
+              style={{
+                flex: 1, padding: '10px 4px', fontSize: 12, fontWeight: 600,
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: chatTab === tab.id ? 'var(--brand)' : 'var(--text-muted)',
+                borderBottom: chatTab === tab.id ? '2px solid var(--brand)' : '2px solid transparent',
+                transition: 'all 0.15s ease',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+              }}
+            >
+              {tab.label}
+              {tab.count > 0 && (
+                <span style={{
+                  background: chatTab === tab.id ? 'var(--brand)' : 'var(--border)',
+                  color: chatTab === tab.id ? '#fff' : 'var(--text-muted)',
+                  borderRadius: 99, padding: '0px 6px', fontSize: 10, fontWeight: 700,
+                }}>{tab.count}</span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* VIEWER COUNT (smaller, below tabs) */}
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '6px', borderBottom: '1px solid var(--border)' }}>
+          <div className="viewer-count" style={{ fontSize: 11 }}>
+            <div className="viewer-dot" />
+            <span className={viewersPulse ? 'bump-anim' : ''}>{viewers.toLocaleString()}</span> assistindo
+          </div>
+        </div>
+
+        {/* CHAT TAB */}
+        {chatTab === 'chat' && (
+          <div className="chat-messages">
+            {messages.length === 0 && (
+              <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, paddingTop: 32 }}>
+                Seja o primeiro a comentar! 👋
+              </div>
+            )}
+            {messages.map((msg, i) => {
+              const isBroadcast = (msg as any).isBroadcast
+              const isAi = msg.author?.startsWith('🤖')
+              return (
+                <div key={msg.id || i} className="chat-message" style={isBroadcast ? {
+                  background: 'rgba(34,197,94,0.08)', borderRadius: 8, padding: '6px 8px',
+                  border: '1px solid rgba(34,197,94,0.2)', margin: '2px 0'
+                } : isAi ? {
+                  background: 'rgba(99,102,241,0.08)', borderRadius: 8, padding: '6px 8px',
+                  border: '1px solid rgba(99,102,241,0.2)', margin: '2px 0'
+                } : {}}>
+                  {!isBroadcast && (
+                    <div
+                      className="chat-avatar"
+                      style={{
+                        background: isAi ? 'var(--brand)'
+                          : msg.isSimulated
+                            ? `hsl(${(msg.author.charCodeAt(0) * 37) % 360}, 70%, 40%)`
+                            : 'var(--brand)',
+                        backgroundImage: msg.avatar ? `url(${msg.avatar})` : undefined,
+                        backgroundSize: 'cover',
+                      }}
+                    >
+                      {!msg.avatar && getInitials(msg.author)}
+                    </div>
+                  )}
+                  <div>
+                    {!isBroadcast && <div className="chat-msg-author" style={isAi ? { color: 'var(--brand)' } : {}}>{msg.author}</div>}
+                    <div className="chat-msg-text" style={isBroadcast ? { color: 'var(--success)', fontWeight: 600 } : {}}>
+                      {msg.text}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+            {aiTyping && (
+              <div className="chat-message" style={{ background: 'rgba(99,102,241,0.05)', borderRadius: 8, padding: '6px 8px' }}>
+                <div className="chat-avatar" style={{ background: 'var(--brand)' }}>🤖</div>
+                <div>
+                  <div className="chat-msg-author" style={{ color: 'var(--brand)' }}>🤖 Assistente</div>
+                  <div className="chat-msg-text" style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>digitando...</div>
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+        )}
+
+        {/* Q&A TAB */}
+        {chatTab === 'qa' && (
+          <div className="chat-messages">
+            {qaMessages.length === 0 && (
+              <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, paddingTop: 32, lineHeight: 1.6 }}>
+                ❓ Envie sua dúvida aqui<br />
+                <span style={{ fontSize: 11 }}>A IA ou o apresentador irá responder</span>
+              </div>
+            )}
+            {qaMessages.map(q => (
+              <div key={q.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', gap: 8, marginBottom: q.answered ? 6 : 0 }}>
+                  <div className="chat-avatar" style={{ background: 'var(--brand)', flexShrink: 0 }}>
+                    {getInitials(q.author)}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div className="chat-msg-author">{q.author}</div>
+                    <div className="chat-msg-text">{q.text}</div>
+                  </div>
+                </div>
+                {q.answered && (
+                  <div style={{
+                    marginLeft: 40, background: 'rgba(99,102,241,0.08)',
+                    borderLeft: '3px solid var(--brand)',
+                    padding: '8px 10px', borderRadius: '0 8px 8px 0',
+                    fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5,
+                  }}>
+                    <span style={{ fontSize: 11, color: 'var(--brand)', fontWeight: 700, display: 'block', marginBottom: 2 }}>🤖 Assistente</span>
+                    {q.answered}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* MATERIALS TAB */}
+        {chatTab === 'materials' && (
+          <div className="chat-messages">
+            {visibleMaterials.length === 0 && (
+              <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, paddingTop: 32, lineHeight: 1.6 }}>
+                📂 Nenhum material disponível ainda<br />
+                <span style={{ fontSize: 11 }}>Os materiais serão liberados durante o webinar</span>
+              </div>
+            )}
+            {visibleMaterials.map(m => (
+              <a
+                key={m.id}
+                href={m.url}
+                target="_blank"
+                rel="noopener"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12, padding: 12,
+                  borderRadius: 10, border: '1px solid var(--border)',
+                  background: 'var(--bg-card)', margin: '4px 0',
+                  transition: 'border-color 0.15s', textDecoration: 'none',
+                }}
+                onMouseOver={e => (e.currentTarget.style.borderColor = 'var(--brand)')}
+                onMouseOut={e => (e.currentTarget.style.borderColor = 'var(--border)')}
+              >
+                <span style={{ fontSize: 24 }}>{m.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{m.label}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Clique para baixar / acessar</div>
+                </div>
+                <span style={{ fontSize: 18, color: 'var(--brand)' }}>↗</span>
+              </a>
+            ))}
+            {materials.filter(m => m.show_at_seconds > elapsedSeconds).length > 0 && (
+              <div style={{ padding: 12, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+                🔒 {materials.filter(m => m.show_at_seconds > elapsedSeconds).length} material(is) ainda serão liberados...
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* DYNAMIC INPUT BY TAB */}
+        <div className="chat-input-area">
+          {chatTab === 'chat' && (
+            <>
+              <input
+                type="text"
+                className="chat-input"
+                placeholder="Digite sua mensagem..."
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && sendChatMessage()}
+              />
+              <button className="btn btn-primary btn-sm" onClick={sendChatMessage}>→</button>
+            </>
+          )}
+          {chatTab === 'qa' && (
+            <>
+              <input
+                type="text"
+                className="chat-input"
+                placeholder="Envie sua dúvida..."
+                value={qaInput}
+                onChange={e => setQaInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && sendQaMessage()}
+              />
+              <button className="btn btn-primary btn-sm" onClick={sendQaMessage}>→</button>
+            </>
+          )}
+          {chatTab === 'materials' && (
+            <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)', flex: 1 }}>
+              🔒 Materiais são liberados pelo apresentador durante o webinar
+            </div>
+          )}
+        </div>
+      </div>{/* end .chat-section */}
+      </div>{/* end .webinar-room */}
+
+      {/* TESTIMONIALS SECTION — full width below the main grid */}
       <TestimonialsSection
         webinarId={webinar.id}
         webinarName={webinar.name}
         currentTime={elapsedSeconds}
       />
-
-      {/* CHAT SECTION */}
-      <div className="chat-section">
-        <div className="chat-header">
-          <div className="chat-title">💬 Chat ao Vivo</div>
-          <div className="viewer-count">
-            <div className="viewer-dot" />
-            <span className={viewersPulse ? 'bump-anim' : ''}>{viewers.toLocaleString()}</span>
-          </div>
-        </div>
-
-        <div className="chat-messages">
-          {messages.length === 0 && (
-            <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, paddingTop: 32 }}>
-              Seja o primeiro a comentar! 👋
-            </div>
-          )}
-          {messages.map((msg, i) => {
-            const isBroadcast = (msg as any).isBroadcast
-            const isAi = msg.author?.startsWith('🤖')
-            return (
-              <div key={msg.id || i} className="chat-message" style={isBroadcast ? {
-                background: 'rgba(34,197,94,0.08)', borderRadius: 8, padding: '6px 8px',
-                border: '1px solid rgba(34,197,94,0.2)', margin: '2px 0'
-              } : isAi ? {
-                background: 'rgba(99,102,241,0.08)', borderRadius: 8, padding: '6px 8px',
-                border: '1px solid rgba(99,102,241,0.2)', margin: '2px 0'
-              } : {}}>
-                {!isBroadcast && (
-                  <div
-                    className="chat-avatar"
-                    style={{
-                      background: isAi ? '#6366f1'
-                        : msg.isSimulated
-                          ? `hsl(${(msg.author.charCodeAt(0) * 37) % 360}, 70%, 40%)`
-                          : 'var(--brand)',
-                      backgroundImage: msg.avatar ? `url(${msg.avatar})` : undefined,
-                      backgroundSize: 'cover',
-                    }}
-                  >
-                    {!msg.avatar && getInitials(msg.author)}
-                  </div>
-                )}
-                <div>
-                  {!isBroadcast && <div className="chat-msg-author" style={isAi ? { color: '#a5b4fc' } : {}}>{msg.author}</div>}
-                  <div className="chat-msg-text" style={isBroadcast ? { color: 'var(--success)', fontWeight: 600 } : {}}>
-                    {msg.text}
-                  </div>
-                </div>
-              </div>
-            )
-          })}
-          {/* AI typing indicator */}
-          {aiTyping && (
-            <div className="chat-message" style={{ background: 'rgba(99,102,241,0.05)', borderRadius: 8, padding: '6px 8px' }}>
-              <div className="chat-avatar" style={{ background: '#6366f1' }}>🤖</div>
-              <div>
-                <div className="chat-msg-author" style={{ color: '#a5b4fc' }}>🤖 Assistente</div>
-                <div className="chat-msg-text" style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>digitando...</div>
-              </div>
-            </div>
-          )}
-          <div ref={chatEndRef} />
-        </div>
-
-        <div className="chat-input-area">
-          <input
-            type="text"
-            className="chat-input"
-            placeholder="Digite sua mensagem..."
-            value={chatInput}
-            onChange={e => setChatInput(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && sendChatMessage()}
-          />
-          <button className="btn btn-primary btn-sm" onClick={sendChatMessage}>
-            →
-          </button>
-        </div>
-      </div>
 
       {/* QUIZ MODAL */}
       <WebinarQuiz
@@ -777,18 +1052,9 @@ export default function WebinarRoom({ webinar, events }: Props) {
         onClose={() => setQuizOpen(false)}
       />
 
-      {/* Inject CSS for emoji float animation */}
-      <style>{`
-        @keyframes emojiFloat {
-          0%   { transform: translateY(0) scale(1); opacity: 1; }
-          80%  { transform: translateY(-80px) scale(1.3); opacity: 0.8; }
-          100% { transform: translateY(-120px) scale(0.8); opacity: 0; }
-        }
-        video::-webkit-media-controls { display: none !important; }
-        video::-webkit-media-controls-enclosure { display: none !important; }
-        video::-webkit-media-controls-panel { display: none !important; }
-        video { pointer-events: none; }
-      `}</style>
-    </div>
+      </div>
+      </>
+      )}
+    </>
   )
 }

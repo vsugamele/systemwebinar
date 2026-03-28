@@ -79,8 +79,6 @@ export default function TestimonialsSection({ webinarId, webinarName, currentTim
     setShowForm(false)
   }
 
-  if (visible.length === 0 && !showForm) return null
-
   return (
     <div style={{ padding: '32px 24px', borderTop: '1px solid var(--border)' }}>
       <div style={{ maxWidth: 820, margin: '0 auto' }}>
@@ -163,7 +161,7 @@ export default function TestimonialsSection({ webinarId, webinarName, currentTim
         )}
 
         {/* Testimonials grid */}
-        {visible.length > 0 && (
+        {visible.length > 0 ? (
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
@@ -192,7 +190,14 @@ export default function TestimonialsSection({ webinarId, webinarName, currentTim
               </div>
             ))}
           </div>
-        )}
+        ) : !showForm && !submitted ? (
+          <div style={{
+            textAlign: 'center', padding: '24px 16px',
+            color: 'var(--text-muted)', fontSize: 13, lineHeight: 1.6,
+          }}>
+            ✍️ Seja o primeiro a deixar um depoimento sobre este webinar!
+          </div>
+        ) : null}
       </div>
     </div>
   )

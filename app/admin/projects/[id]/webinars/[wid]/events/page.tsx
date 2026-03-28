@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -41,6 +41,105 @@ function parseTime(str: string): number {
   return Number(str)
 }
 
+// ---- Draggable chip for the visual timeline ----
+interface DraggableChipProps {
+  ev: WebinarEvent
+  pct: number
+  chipClass: string
+  icon: string
+  label: string
+  duration: number
+  onDrop: (newSecs: number) => Promise<void>
+  onClick: () => void
+}
+
+function DraggableChip({ ev, pct, chipClass, icon, label, duration, onDrop, onClick }: DraggableChipProps) {
+  const [dragging, setDragging] = useState(false)
+  const [previewPct, setPreviewPct] = useState(pct)
+  const [previewSecs, setPreviewSecs] = useState(ev.timestamp_seconds)
+  const dragStartX = { x: 0, origPct: pct }
+  const didMoveRef = { moved: false }
+
+  function handlePointerDown(e: React.PointerEvent) {
+    e.stopPropagation()
+    const chip = e.currentTarget as HTMLElement
+    chip.setPointerCapture(e.pointerId)
+    dragStartX.x = e.clientX
+    dragStartX.origPct = previewPct
+    didMoveRef.moved = false
+    setDragging(false)
+  }
+
+  function handlePointerMove(e: React.PointerEvent) {
+    const parent = (e.currentTarget as HTMLElement).parentElement
+    if (!parent) return
+    const rect = parent.getBoundingClientRect()
+    const dx = e.clientX - dragStartX.x
+    if (Math.abs(dx) < 4 && !dragging) return
+    didMoveRef.moved = true
+    if (!dragging) setDragging(true)
+    const newPct = Math.min(Math.max(dragStartX.origPct + (dx / rect.width) * 100, 0), 98)
+    const newSecs = Math.round((newPct / 100) * duration)
+    setPreviewPct(newPct)
+    setPreviewSecs(newSecs)
+  }
+
+  async function handlePointerUp(e: React.PointerEvent) {
+    e.stopPropagation()
+    if (!didMoveRef.moved) {
+      setDragging(false)
+      onClick()
+      return
+    }
+    setDragging(false)
+    await onDrop(previewSecs)
+  }
+
+  return (
+    <div
+      className={`timeline-event-chip ${chipClass}`}
+      style={{
+        left: `${previewPct}%`,
+        cursor: dragging ? 'grabbing' : 'grab',
+        opacity: dragging ? 0.85 : 1,
+        transform: dragging ? 'scale(1.08) translateY(-2px)' : 'scale(1)',
+        transition: dragging ? 'none' : 'all 0.15s',
+        boxShadow: dragging ? '0 4px 20px rgba(0,0,0,0.4)' : undefined,
+        zIndex: dragging ? 10 : 1,
+        touchAction: 'none',
+      }}
+      title={`${label} @ ${formatTime(ev.timestamp_seconds)} — arraste para reposicionar`}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+    >
+      {icon}
+      <span style={{ fontSize: 10, marginLeft: 3, fontFamily: 'monospace', fontWeight: 700 }}>
+        {formatTime(previewSecs)}
+      </span>
+      {dragging && (
+        <div style={{
+          position: 'absolute',
+          bottom: '110%',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(0,0,0,0.85)',
+          color: '#fff',
+          padding: '3px 8px',
+          borderRadius: 6,
+          fontSize: 11,
+          whiteSpace: 'nowrap',
+          fontFamily: 'monospace',
+          pointerEvents: 'none',
+        }}>
+          ⏱ {formatTime(previewSecs)}
+        </div>
+      )}
+    </div>
+  )
+}
+
+
 export default function EventsPage() {
   const { id: projectId, wid: webinarId } = useParams<{ id: string; wid: string }>()
   const [events, setEvents] = useState<WebinarEvent[]>([])
@@ -54,6 +153,26 @@ export default function EventsPage() {
   })
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+
+  async function uploadImage(file: File, field: 'image_url'): Promise<string | null> {
+    setUploading(true)
+    try {
+      const ext = file.name.split('.').pop()
+      const path = `webinar-events/${webinarId}/${Date.now()}.${ext}`
+      const { error } = await supabase.storage
+        .from('webinar-images')
+        .upload(path, file, { upsert: true, contentType: file.type })
+      if (error) throw error
+      const { data: pub } = supabase.storage.from('webinar-images').getPublicUrl(path)
+      return pub?.publicUrl || null
+    } catch {
+      return null
+    } finally {
+      setUploading(false)
+    }
+  }
 
   async function load() {
     const { data: webinar } = await supabase.from('webi_webinars').select('name, duration_seconds').eq('id', webinarId).single()
@@ -162,40 +281,75 @@ export default function EventsPage() {
             <span className="timeline-title">Timeline Visual</span>
             <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Duração: {formatTime(duration)}</span>
           </div>
-          <div className="timeline-track">
+          <div
+            className="timeline-track"
+            id="timeline-track-root"
+            style={{ position: 'relative', userSelect: 'none' }}
+          >
             {/* Ruler */}
-            <div className="timeline-ruler" style={{ width: timelineWidth, marginBottom: 12 }}>
+            <div className="timeline-ruler" style={{ marginBottom: 12, position: 'relative', height: 24 }}>
               {Array.from({ length: Math.ceil(duration / 60) + 1 }).map((_, i) => {
                 const pct = (i * 60 / duration) * 100
                 if (pct > 100) return null
                 return (
-                  <div key={i}>
-                    <div className="timeline-ruler-tick" style={{ left: `${pct}%` }} />
-                    <span className="timeline-ruler-label" style={{ left: `${pct}%` }}>{i}m</span>
+                  <div key={i} style={{ position: 'absolute', left: `${pct}%` }}>
+                    <div className="timeline-ruler-tick" style={{ left: 0 }} />
+                    <span className="timeline-ruler-label" style={{ left: 0 }}>{i}m</span>
                   </div>
                 )
               })}
             </div>
 
-            {/* Event rows per type */}
+            {/* Drop hint when empty */}
+            {events.length === 0 && (
+              <div style={{
+                textAlign: 'center', padding: '20px 0',
+                color: 'var(--text-muted)', fontSize: 13,
+                border: '2px dashed var(--border)', borderRadius: 10,
+              }}>
+                Adicione eventos e arraste-os para posicioná-los na timeline
+              </div>
+            )}
+
+            {/* Draggable event rows per type */}
             {eventsGrouped.map(group => (
-              <div key={group.type} style={{ position: 'relative', height: 40, marginBottom: 8, width: timelineWidth }}>
-                <div style={{
-                  position: 'absolute', inset: 0,
-                  background: 'var(--bg-elevated)', borderRadius: 6,
-                }} />
+              <div
+                key={group.type}
+                style={{
+                  position: 'relative',
+                  height: 44,
+                  marginBottom: 8,
+                  borderRadius: 8,
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border)',
+                }}
+              >
+                {/* Row label */}
+                <span style={{
+                  position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)',
+                  fontSize: 10, color: 'var(--text-muted)', pointerEvents: 'none',
+                  whiteSpace: 'nowrap',
+                }}>
+                  {group.icon}
+                </span>
+
                 {group.items.map(ev => {
-                  const pct = (ev.timestamp_seconds / duration) * 100
+                  const pct = Math.min((ev.timestamp_seconds / duration) * 100, 98)
                   return (
-                    <div
+                    <DraggableChip
                       key={ev.id}
-                      className={`timeline-event-chip ${group.chipClass}`}
-                      style={{ left: `${Math.min(pct, 95)}%` }}
+                      ev={ev}
+                      pct={pct}
+                      chipClass={group.chipClass}
+                      icon={group.icon}
+                      label={group.label}
+                      duration={duration}
+                      onDrop={async (newSecs) => {
+                        await supabase.from('webi_events').update({ timestamp_seconds: newSecs }).eq('id', ev.id)
+                        load()
+                      }}
                       onClick={() => openEdit(ev)}
-                      title={`${group.label} @ ${formatTime(ev.timestamp_seconds)}`}
-                    >
-                      {group.icon} {formatTime(ev.timestamp_seconds)}
-                    </div>
+                    />
                   )
                 })}
               </div>
@@ -343,9 +497,38 @@ export default function EventsPage() {
               {form.type === 'pitch_button' && (
                 <>
                   <div className="form-group">
-                    <label className="form-label">Imagem do Produto URL</label>
-                    <input className="form-input" placeholder="https://..." value={form.payload.image_url || ''}
-                      onChange={e => updatePayload('image_url', e.target.value)} />
+                    <label className="form-label">Imagem do Produto</label>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input className="form-input" placeholder="https://... ou faça upload abaixo" value={form.payload.image_url || ''}
+                        onChange={e => updatePayload('image_url', e.target.value)}
+                        style={{ flex: 1 }}
+                      />
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ whiteSpace: 'nowrap' }}
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                      >
+                        {uploading ? <span className="spinner" /> : '📁 Upload'}
+                      </button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          const url = await uploadImage(file, 'image_url')
+                          if (url) updatePayload('image_url', url)
+                          e.target.value = ''
+                        }}
+                      />
+                    </div>
+                    {form.payload.image_url && (
+                      <img src={form.payload.image_url} alt="preview" style={{ marginTop: 8, height: 80, borderRadius: 8, objectFit: 'contain', border: '1px solid var(--border)' }} />
+                    )}
                   </div>
                   <div className="form-group">
                     <label className="form-label">Texto Acima do Botão</label>

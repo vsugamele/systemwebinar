@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     // Get webinar + project data (allowed by webi_webinars_public_read RLS)
     const { data: webinar, error: webinarError } = await supabase
       .from('webi_webinars')
-      .select('*, webi_projects(name, resend_from_email, accent_color)')
+      .select('*, webi_projects(name, resend_from_email, accent_color, webhook_url)')
       .eq('id', webinar_id)
       .single()
 
@@ -40,6 +40,24 @@ export async function POST(req: NextRequest) {
     if (leadError) {
       console.error('Lead upsert error:', leadError)
       return NextResponse.json({ error: leadError.message }, { status: 500 })
+    }
+
+    // Fire webhook if configured (fire-and-forget)
+    const webhookUrl = webinar.webi_projects?.webhook_url
+    if (webhookUrl) {
+      fetch(webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: 'lead_registered',
+          name,
+          email,
+          phone: phone || null,
+          webinar_id,
+          webinar_name: webinar.name,
+          timestamp: new Date().toISOString(),
+        }),
+      }).catch(() => {}) // swallow errors — does not block lead registration
     }
 
     // Send email via Resend if configured and API key is real

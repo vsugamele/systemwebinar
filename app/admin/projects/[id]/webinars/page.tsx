@@ -182,6 +182,12 @@ export default function WebinarsPage() {
                           <Link href={`/admin/projects/${projectId}/webinars/${w.id}/chat`} className="btn btn-secondary btn-sm">
                             💬 Chat
                           </Link>
+                          <Link href={`/admin/projects/${projectId}/webinars/${w.id}/waiting-room`} className="btn btn-secondary btn-sm">
+                            ⏳ Sala de Espera
+                          </Link>
+                          <Link href={`/admin/projects/${projectId}/webinars/${w.id}/materials`} className="btn btn-secondary btn-sm">
+                            📂 Materiais
+                          </Link>
                           <Link href={`/admin/projects/${projectId}/webinars/${w.id}/ai-config`} className="btn btn-secondary btn-sm">
                             🤖 IA no Chat
                           </Link>
@@ -297,7 +303,7 @@ export default function WebinarsPage() {
       {/* Links Modal */}
       {linksWebinar && (
         <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setLinksWebinar(null)}>
-          <div className="modal" style={{ maxWidth: 520 }}>
+          <div className="modal" style={{ maxWidth: 600, maxHeight: '90vh', overflow: 'auto' }}>
             <div className="modal-header">
               <h2 className="modal-title">🔗 Links do Webinar</h2>
               <button className="modal-close" onClick={() => setLinksWebinar(null)}>✕</button>
@@ -307,7 +313,7 @@ export default function WebinarsPage() {
                 { label: '📋 Página de Registro (Landing Page)', url: `${typeof window !== 'undefined' ? window.location.origin : ''}/register/${linksWebinar.slug}` },
                 { label: '🎬 Sala do Webinar (Live Room)', url: `${typeof window !== 'undefined' ? window.location.origin : ''}/w/${linksWebinar.slug}` },
                 { label: '🔁 Sala de Replay', url: `${typeof window !== 'undefined' ? window.location.origin : ''}/replay/${linksWebinar.slug}` },
-                { label: '▶ Sala de Teste', url: `${typeof window !== 'undefined' ? window.location.origin : ''}/w/${linksWebinar.slug}?test=1` },
+                { label: '▶ Sala de Teste (acesso sem estar ativo)', url: `${typeof window !== 'undefined' ? window.location.origin : ''}/w/${linksWebinar.slug}?test=1` },
               ].map((link, i) => (
                 <div key={i}>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>{link.label}</div>
@@ -329,6 +335,86 @@ export default function WebinarsPage() {
                   </div>
                 </div>
               ))}
+
+              {/* WEBHOOK / EXTERNAL REGISTRATION SECTION */}
+              <div style={{
+                background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.25)',
+                borderRadius: 12, padding: 16, marginTop: 8,
+              }}>
+                <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>🪝 Webhook — Página de Cadastro Externa</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12, lineHeight: 1.6 }}>
+                  Quer usar uma landing page própria (no PageBuilder, Webflow, Elementor, etc.) e capturar os leads direto aqui?
+                  Basta fazer um <strong>POST</strong> para a URL abaixo com os dados do formulário:
+                </div>
+
+                {/* Endpoint URL */}
+                <div style={{ marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Endpoint:</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      className="form-input"
+                      value={`https://tkbivipqiewkfnhktmqq.supabase.co/functions/v1/webi-capture-lead?slug=${linksWebinar.slug}`}
+                      readOnly
+                      style={{ fontSize: 11, fontFamily: 'monospace' }}
+                      onClick={e => (e.target as HTMLInputElement).select()}
+                    />
+                    <button className="btn btn-secondary btn-sm" style={{ whiteSpace: 'nowrap' }}
+                      onClick={() => navigator.clipboard.writeText(`https://tkbivipqiewkfnhktmqq.supabase.co/functions/v1/webi-capture-lead?slug=${linksWebinar.slug}`)}>
+                      📋
+                    </button>
+                  </div>
+                </div>
+
+                {/* Payload example */}
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>Body JSON (POST):</div>
+                  <pre style={{
+                    background: 'var(--bg)', borderRadius: 8, padding: 12,
+                    fontSize: 11, fontFamily: 'monospace', color: 'var(--text-secondary)',
+                    overflow: 'auto', margin: 0,
+                  }}>{`{
+  "name": "João Silva",        // obrigatório
+  "email": "joao@email.com",  // obrigatório
+  "phone": "(11) 99999-9999", // opcional
+  "company": "Empresa Ltda",  // opcional
+  "custom_1": "valor extra"   // opcional
+}`}</pre>
+                </div>
+
+                {/* AI prompt to generate a capture page */}
+                <div style={{
+                  background: 'var(--bg-card)', border: '1px solid var(--border)',
+                  borderRadius: 10, padding: 12,
+                }}>
+                  <div style={{ fontWeight: 700, fontSize: 12, marginBottom: 6 }}>
+                    🤖 Prompt para criar a página de captura com IA
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+                    Copie o prompt abaixo e cole em qualquer IA (ChatGPT, Claude, etc.) para gerar o HTML/JS da sua página de captura:
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <textarea
+                      readOnly
+                      rows={6}
+                      style={{
+                        width: '100%', fontFamily: 'monospace', fontSize: 11,
+                        background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                        borderRadius: 8, padding: 10, color: 'var(--text-secondary)',
+                        resize: 'none', boxSizing: 'border-box',
+                      }}
+                      value={`Crie uma página de captura HTML completa (single file, sem frameworks) para um webinar chamado "${linksWebinar.name}". A página deve ter: título chamativo, campo Nome, campo Email e campo WhatsApp, e um botão de envio. Ao enviar, deve fazer um fetch POST para: https://tkbivipqiewkfnhktmqq.supabase.co/functions/v1/webi-capture-lead?slug=${linksWebinar.slug} com o body JSON: {"name": "...", "email": "...", "phone": "..."}. Após sucesso, redirecionar para: ${typeof window !== 'undefined' ? window.location.origin : ''}/w/${linksWebinar.slug}. Design moderno, dark mode, cor primária roxo (#6366f1).`}
+                      onClick={e => (e.target as HTMLTextAreaElement).select()}
+                    />
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      style={{ position: 'absolute', top: 8, right: 8, fontSize: 11 }}
+                      onClick={() => navigator.clipboard.writeText(`Crie uma página de captura HTML completa (single file, sem frameworks) para um webinar chamado "${linksWebinar.name}". A página deve ter: título chamativo, campo Nome, campo Email e campo WhatsApp, e um botão de envio. Ao enviar, deve fazer um fetch POST para: https://tkbivipqiewkfnhktmqq.supabase.co/functions/v1/webi-capture-lead?slug=${linksWebinar.slug} com o body JSON: {"name": "...", "email": "...", "phone": "..."}. Após sucesso, redirecionar para: ${typeof window !== 'undefined' ? window.location.origin : ''}/w/${linksWebinar.slug}. Design moderno, dark mode, cor primária roxo (#6366f1).`)}
+                    >
+                      📋 Copiar
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
             <div className="modal-footer">
               <button className="btn btn-primary" onClick={() => setLinksWebinar(null)}>Fechar</button>

@@ -1,0 +1,53 @@
+{
+  "folders": [
+    {
+      "name": "📦 Webinar System (Next.js)",
+      "path": "."
+    }
+  ],
+  "settings": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true,
+    "editor.tabSize": 2,
+    "typescript.preferences.importModuleSpecifier": "non-relative",
+    "tailwindCSS.experimental.classRegex": [],
+    "files.exclude": {
+      "**/.next": true,
+      "**/node_modules": true,
+      "**/.git": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/.next": true
+    },
+    "explorer.fileNesting.enabled": true,
+    "explorer.fileNesting.patterns": {
+      "*.ts": "${capture}.js",
+      "*.tsx": "${capture}.test.tsx, ${capture}.stories.tsx",
+      "package.json": "package-lock.json, .eslintrc*, .prettierrc*, tsconfig*, next.config*, postcss.config*, tailwind.config*"
+    }
+  },
+  "extensions": {
+    "recommendations": [
+      "esbenp.prettier-vscode",
+      "dbaeumer.vscode-eslint",
+      "bradlc.vscode-tailwindcss",
+      "prisma.prisma",
+      "supabase.vscode-supabase",
+      "ms-vscode.vscode-typescript-next"
+    ]
+  },
+  "launch": {
+    "configurations": [
+      {
+        "name": "▶ Dev Server (npm run dev)",
+        "type": "node",
+        "request": "launch",
+        "runtimeExecutable": "npm",
+        "runtimeArgs": ["run", "dev"],
+        "cwd": "${workspaceFolder}",
+        "console": "integratedTerminal"
+      }
+    ]
+  }
+}
