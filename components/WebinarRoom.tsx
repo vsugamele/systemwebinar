@@ -37,6 +37,44 @@ interface WebinarConfig {
   waiting_room_enabled?: boolean
   waiting_room_message?: string
   waiting_delay_seconds?: number
+  // 004
+  session_started_at?: string | null
+  fake_viewers_start?: number
+  fake_viewers_peak?: number
+  fake_viewers_end?: number
+  fake_viewers_peak_at_pct?: number
+  chat_default_tab?: 'chat' | 'qa'
+}
+
+/** Compute seconds elapsed since session_started_at (0 if not set). */
+function getStartOffset(sessionStartedAt: string | null | undefined): number {
+  if (!sessionStartedAt) return 0
+  const elapsed = Math.floor((Date.now() - new Date(sessionStartedAt).getTime()) / 1000)
+  return Math.max(0, elapsed)
+}
+
+/** 4-phase viewer curve: ramp → peak → decline → plateau */
+function getTargetViewers(
+  elapsedPct: number,   // 0..1  (elapsed / duration)
+  start: number,
+  peak: number,
+  end: number,
+  peakAtPct: number,    // 0..100
+): number {
+  const p = elapsedPct * 100
+  const peakEnd = Math.min(peakAtPct + 15, 80)
+  const declineEnd = 85
+  if (p <= peakAtPct) {
+    const t = peakAtPct > 0 ? p / peakAtPct : 1
+    return Math.round(start + (peak - start) * t)
+  } else if (p <= peakEnd) {
+    return peak
+  } else if (p <= declineEnd) {
+    const t = (p - peakEnd) / (declineEnd - peakEnd)
+    return Math.round(peak + (end - peak) * t)
+  } else {
+    return end
+  }
 }
 
 interface Props {
@@ -162,14 +200,17 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [aiTyping, setAiTyping] = useState(false)
 
-  // Waiting room
-  const brandColor = (webinar as any).brand_color || '#6366f1'
-  const waitEnabled = !!(webinar as any).waiting_room_enabled
+  // Waiting room + session clock
+  const brandColor = webinar.brand_color || '#6366f1'
+  const startOffset = getStartOffset(webinar.session_started_at)
+  const waitDelay = webinar.waiting_delay_seconds ?? 120
+  const waitEnabled = !!webinar.waiting_room_enabled && startOffset < waitDelay
   const [waitingDone, setWaitingDone] = useState(!waitEnabled)
 
   // Chat tabs
   type ChatTab = 'chat' | 'qa' | 'materials'
-  const [chatTab, setChatTab] = useState<ChatTab>('chat')
+  const defaultTab: ChatTab = webinar.chat_default_tab ?? 'chat'
+  const [chatTab, setChatTab] = useState<ChatTab>(defaultTab)
   const [qaMessages, setQaMessages] = useState<{ id: string; author: string; text: string; answered?: string }[]>([])
   const [qaInput, setQaInput] = useState('')
   const [materials, setMaterials] = useState<Material[]>([])
@@ -223,8 +264,11 @@ export default function WebinarRoom({ webinar, events }: Props) {
     }
   }, [])
 
-  // ---- Elapsed time counter (works for both HTML video & YouTube iframe) ----
+  // ---- Elapsed time counter (wall-clock aware) ----
   useEffect(() => {
+    // Seed with startOffset so the counter reflects real session time
+    elapsedRef.current = startOffset
+    setElapsedSeconds(startOffset)
     elapsedIntervalRef.current = setInterval(() => {
       const videoEl = videoRef.current
       if (videoEl && !videoEl.paused) {
@@ -241,23 +285,34 @@ export default function WebinarRoom({ webinar, events }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ---- Viewer counter simulation ----
+  // ---- Viewer counter simulation (4-phase curve) ----
   useEffect(() => {
-    const min = webinar.peak_viewers_min
-    const max = webinar.peak_viewers_max
-    setViewers(min)
+    const vStart  = webinar.fake_viewers_start  ?? webinar.peak_viewers_min
+    const vPeak   = webinar.fake_viewers_peak   ?? webinar.peak_viewers_max
+    const vEnd    = webinar.fake_viewers_end    ?? webinar.peak_viewers_min
+    const peakPct = webinar.fake_viewers_peak_at_pct ?? 30
+    const duration = webinar.duration_seconds || 3600
+
+    const initial = getTargetViewers(startOffset / duration, vStart, vPeak, vEnd, peakPct)
+    setViewers(initial)
+
     const interval = setInterval(() => {
-      setViewers(v => {
-        const delta = Math.floor(Math.random() * 5) - 2
-        const next = Math.max(min, Math.min(max, v + delta))
-        if (next !== v) {
+      const elapsed = elapsedRef.current
+      const pct = Math.min(elapsed / duration, 1)
+      const target = getTargetViewers(pct, vStart, vPeak, vEnd, peakPct)
+      // Add small noise (±2%) so the number feels organic
+      const noise = Math.floor((Math.random() * 0.04 - 0.02) * target)
+      const next = Math.max(1, target + noise)
+      setViewers(prev => {
+        if (next !== prev) {
           setViewersPulse(true)
           setTimeout(() => setViewersPulse(false), 400)
         }
         return next
       })
-    }, 4000)
+    }, 8000)
     return () => clearInterval(interval)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [webinar])
 
   // ---- CPM-based chat simulation ----
@@ -432,8 +487,10 @@ export default function WebinarRoom({ webinar, events }: Props) {
     if (!video) return
 
     const onLoaded = () => {
-      if (webinar.evergreen_offset_seconds > 0) {
-        video.currentTime = webinar.evergreen_offset_seconds
+      // Prefer session wall-clock offset; fall back to evergreen_offset_seconds
+      const seekTo = startOffset > 0 ? startOffset : webinar.evergreen_offset_seconds
+      if (seekTo > 0) {
+        video.currentTime = seekTo
       }
     }
 
@@ -619,8 +676,9 @@ export default function WebinarRoom({ webinar, events }: Props) {
       {/* WAITING ROOM — shown before entering if enabled */}
       {!waitingDone && (
         <WaitingRoom
-          message={(webinar as any).waiting_room_message || 'O webinar começa em instantes! Prepare-se. 🚀'}
-          delaySeconds={(webinar as any).waiting_delay_seconds ?? 120}
+          message={webinar.waiting_room_message || 'O webinar começa em instantes! Prepare-se. 🚀'}
+          delaySeconds={waitDelay}
+          startOffset={startOffset}
           webinarName={webinar.name}
           brandColor={brandColor}
           onEnter={() => setWaitingDone(true)}
@@ -639,6 +697,9 @@ export default function WebinarRoom({ webinar, events }: Props) {
             <div className="live-badge">
               <div className="live-dot" />
               AO VIVO
+              <span style={{ opacity: 0.7, fontWeight: 400, marginLeft: 4 }}>
+                {String(Math.floor(elapsedSeconds / 3600)).padStart(2, '0')}:{String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2, '0')}:{String(elapsedSeconds % 60).padStart(2, '0')}
+              </span>
             </div>
             <span style={{ fontSize: 14, fontWeight: 600 }}>{webinar.name}</span>
           </div>
@@ -676,7 +737,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
           {webinar.video_url ? (
             isYouTubeUrl(webinar.video_url) ? (
               <iframe
-                src={getYouTubeEmbedUrl(webinar.video_url, webinar.evergreen_offset_seconds) || ''}
+                src={getYouTubeEmbedUrl(webinar.video_url, startOffset > 0 ? startOffset : webinar.evergreen_offset_seconds) || ''}
                 style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                 allowFullScreen={false}
@@ -784,44 +845,6 @@ export default function WebinarRoom({ webinar, events }: Props) {
           )}
         </div>
 
-        {/* EMOJI REACTIONS BAR */}
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px',
-          borderTop: '1px solid var(--border)', background: 'var(--bg)',
-          position: 'relative', overflow: 'hidden',
-        }}>
-          {/* Flying emojis */}
-          {flyingEmojis.map(fe => (
-            <span key={fe.id} style={{
-              position: 'absolute', bottom: '100%', left: `${fe.x}%`,
-              fontSize: 24, animation: 'emojiFloat 2s ease-out forwards',
-              pointerEvents: 'none', userSelect: 'none',
-            }}>{fe.emoji}</span>
-          ))}
-
-          <span style={{ fontSize: 12, color: 'var(--text-muted)', marginRight: 4 }}>Reações:</span>
-          {EMOJI_REACTIONS.map(r => (
-            <button
-              key={r.emoji}
-              title={r.label}
-              onClick={() => fireReaction(r.emoji)}
-              style={{
-                background: reactions[r.emoji] > 0 ? 'rgba(99,102,241,0.15)' : 'var(--bg-card)',
-                border: `1px solid ${reactions[r.emoji] > 0 ? 'rgba(99,102,241,0.4)' : 'var(--border)'}`,
-                borderRadius: 99, padding: '5px 12px', cursor: 'pointer',
-                fontSize: 16, display: 'flex', alignItems: 'center', gap: 6,
-                transition: 'all 0.15s ease', userSelect: 'none',
-              }}
-            >
-              {r.emoji}
-              {reactions[r.emoji] > 0 && (
-                <span style={{ fontSize: 11, color: '#a5b4fc', fontWeight: 700 }}>
-                  {reactions[r.emoji]}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* CHAT SECTION */}
@@ -834,7 +857,9 @@ export default function WebinarRoom({ webinar, events }: Props) {
           {([
             { id: 'chat', label: '💬 Chat', count: messages.filter(m => !(m as any).isBroadcast).length },
             { id: 'qa', label: '❓ Q&A', count: qaMessages.length },
-            { id: 'materials', label: '📂 Materiais', count: visibleMaterials.length },
+            ...(visibleMaterials.length > 0 || materials.length > 0
+              ? [{ id: 'materials' as const, label: '📂 Materiais', count: visibleMaterials.length }]
+              : []),
           ] as const).map(tab => (
             <button
               key={tab.id}
@@ -858,14 +883,6 @@ export default function WebinarRoom({ webinar, events }: Props) {
               )}
             </button>
           ))}
-        </div>
-
-        {/* VIEWER COUNT (smaller, below tabs) */}
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '6px', borderBottom: '1px solid var(--border)' }}>
-          <div className="viewer-count" style={{ fontSize: 11 }}>
-            <div className="viewer-dot" />
-            <span className={viewersPulse ? 'bump-anim' : ''}>{viewers.toLocaleString()}</span> assistindo
-          </div>
         </div>
 
         {/* CHAT TAB */}
@@ -997,6 +1014,44 @@ export default function WebinarRoom({ webinar, events }: Props) {
                 🔒 {materials.filter(m => m.show_at_seconds > elapsedSeconds).length} material(is) ainda serão liberados...
               </div>
             )}
+          </div>
+        )}
+
+        {/* EMOJI REACTIONS — só na aba chat */}
+        {chatTab === 'chat' && (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
+            borderTop: '1px solid var(--border)', background: 'var(--bg-card)',
+            position: 'relative', overflow: 'hidden', flexWrap: 'wrap',
+          }}>
+            {flyingEmojis.map(fe => (
+              <span key={fe.id} style={{
+                position: 'absolute', bottom: '100%', left: `${fe.x}%`,
+                fontSize: 22, animation: 'emojiFloat 2s ease-out forwards',
+                pointerEvents: 'none', userSelect: 'none',
+              }}>{fe.emoji}</span>
+            ))}
+            {EMOJI_REACTIONS.map(r => (
+              <button
+                key={r.emoji}
+                title={r.label}
+                onClick={() => fireReaction(r.emoji)}
+                style={{
+                  background: reactions[r.emoji] > 0 ? 'rgba(99,102,241,0.15)' : 'transparent',
+                  border: `1px solid ${reactions[r.emoji] > 0 ? 'rgba(99,102,241,0.4)' : 'var(--border)'}`,
+                  borderRadius: 99, padding: '3px 9px', cursor: 'pointer',
+                  fontSize: 15, display: 'flex', alignItems: 'center', gap: 4,
+                  transition: 'all 0.15s ease', userSelect: 'none',
+                }}
+              >
+                {r.emoji}
+                {reactions[r.emoji] > 0 && (
+                  <span style={{ fontSize: 10, color: '#a5b4fc', fontWeight: 700 }}>
+                    {reactions[r.emoji]}
+                  </span>
+                )}
+              </button>
+            ))}
           </div>
         )}
 

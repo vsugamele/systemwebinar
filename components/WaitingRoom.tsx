@@ -5,6 +5,8 @@ import { useEffect, useState } from 'react'
 interface Props {
   message: string
   delaySeconds: number
+  /** Seconds already elapsed since session_started_at (0 if no session clock) */
+  startOffset: number
   webinarName: string
   brandColor?: string
   onEnter: () => void
@@ -12,8 +14,11 @@ interface Props {
 
 function pad(n: number) { return String(n).padStart(2, '0') }
 
-export default function WaitingRoom({ message, delaySeconds, webinarName, brandColor = '#6366f1', onEnter }: Props) {
-  const [remaining, setRemaining] = useState(delaySeconds)
+export default function WaitingRoom({ message, delaySeconds, startOffset, webinarName, brandColor = '#6366f1', onEnter }: Props) {
+  // Remaining = how many seconds the viewer still needs to wait.
+  // If startOffset >= delaySeconds the viewer should skip waiting entirely.
+  const initialRemaining = Math.max(0, delaySeconds - startOffset)
+  const [remaining, setRemaining] = useState(initialRemaining)
   const [dots, setDots] = useState('.')
 
   // Animated dots
@@ -22,21 +27,23 @@ export default function WaitingRoom({ message, delaySeconds, webinarName, brandC
     return () => clearInterval(iv)
   }, [])
 
-  // Countdown
+  // Countdown — uses wall-clock so the remaining time is always in sync
   useEffect(() => {
-    if (remaining <= 0) { onEnter(); return }
+    if (initialRemaining <= 0) { onEnter(); return }
+    const deadline = Date.now() + initialRemaining * 1000
     const iv = setInterval(() => {
-      setRemaining(r => {
-        if (r <= 1) { clearInterval(iv); onEnter(); return 0 }
-        return r - 1
-      })
-    }, 1000)
+      const left = Math.max(0, Math.round((deadline - Date.now()) / 1000))
+      setRemaining(left)
+      if (left <= 0) { clearInterval(iv); onEnter() }
+    }, 500)
     return () => clearInterval(iv)
   }, []) // eslint-disable-line
 
   const minutes = Math.floor(remaining / 60)
   const seconds = remaining % 60
-  const progress = 1 - remaining / delaySeconds
+  // Progress based on original full delay (not startOffset-adjusted) so the
+  // arc fills from its current position rather than always starting empty.
+  const progress = delaySeconds > 0 ? 1 - remaining / delaySeconds : 1
 
   return (
     <div style={{

@@ -29,6 +29,15 @@ export interface Webinar {
   duration_seconds: number | null
   created_at: string
   updated_at: string
+  // Session clock (004)
+  session_started_at: string | null
+  // Viewer curve (004)
+  fake_viewers_start: number
+  fake_viewers_peak: number
+  fake_viewers_end: number
+  fake_viewers_peak_at_pct: number
+  // Chat (004)
+  chat_default_tab: 'chat' | 'qa'
 }
 
 // ---- Event Payloads ----

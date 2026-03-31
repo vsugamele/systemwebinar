@@ -148,6 +148,18 @@ export default function WaitingRoomConfigPage() {
           />
         </div>
 
+        {/* Link to live page */}
+        <div style={{
+          background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)',
+          borderRadius: 12, padding: '12px 16px', fontSize: 13, color: 'var(--text-secondary)',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <span>🎬 Relógio da sessão e curva de audiência estão em <strong>Ao Vivo</strong>.</span>
+          <Link href={`/admin/projects/${id}/webinars/${wid}/live`} className="btn btn-ghost btn-sm" style={{ flexShrink: 0 }}>
+            Ir para Ao Vivo →
+          </Link>
+        </div>
+
         {/* Preview note */}
         <div style={{
           background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)',

@@ -18,6 +18,7 @@ export default function ChatConfigPage() {
   const [webinarName, setWebinarName] = useState('')
   const [chatCpm, setChatCpm] = useState(0)
   const [chatNamesRaw, setChatNamesRaw] = useState('')
+  const [chatDefaultTab, setChatDefaultTab] = useState<'chat' | 'qa'>('chat')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -26,7 +27,7 @@ export default function ChatConfigPage() {
     async function load() {
       const { data } = await supabase
         .from('webi_webinars')
-        .select('name, chat_cpm, chat_names')
+        .select('name, chat_cpm, chat_names, chat_default_tab')
         .eq('id', webinarId)
         .single()
       if (data) {
@@ -36,6 +37,7 @@ export default function ChatConfigPage() {
         if (Array.isArray(names) && names.length > 0) {
           setChatNamesRaw(names.join('\n'))
         }
+        if (data.chat_default_tab === 'qa') setChatDefaultTab('qa')
       }
       setLoading(false)
     }
@@ -48,6 +50,7 @@ export default function ChatConfigPage() {
     await supabase.from('webi_webinars').update({
       chat_cpm: chatCpm,
       chat_names: namesArray,
+      chat_default_tab: chatDefaultTab,
     }).eq('id', webinarId)
     setSaving(false)
     setSaved(true)
@@ -147,6 +150,26 @@ export default function ChatConfigPage() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Default tab */}
+        <div className="card">
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>📌 Aba Padrão do Chat</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            Qual aba estará ativa quando o participante entrar na sala.
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            {(['chat', 'qa'] as const).map(tab => (
+              <button
+                key={tab}
+                type="button"
+                className={`btn btn-sm ${chatDefaultTab === tab ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setChatDefaultTab(tab)}
+              >
+                {tab === 'chat' ? '💬 Chat' : '❓ Q&A only'}
+              </button>
+            ))}
           </div>
         </div>
 

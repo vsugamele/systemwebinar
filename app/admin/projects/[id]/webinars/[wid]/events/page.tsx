@@ -140,6 +140,12 @@ function DraggableChip({ ev, pct, chipClass, icon, label, duration, onDrop, onCl
 }
 
 
+interface GeneratedChatEvent {
+  timestamp_seconds: number
+  author: string
+  text: string
+}
+
 export default function EventsPage() {
   const { id: projectId, wid: webinarId } = useParams<{ id: string; wid: string }>()
   const [events, setEvents] = useState<WebinarEvent[]>([])
@@ -148,6 +154,15 @@ export default function EventsPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editEvent, setEditEvent] = useState<WebinarEvent | null>(null)
+
+  // AI generator state
+  const [showAiModal, setShowAiModal] = useState(false)
+  const [aiScript, setAiScript] = useState('')
+  const [aiCount, setAiCount] = useState(20)
+  const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiPreview, setAiPreview] = useState<GeneratedChatEvent[]>([])
+  const [aiError, setAiError] = useState('')
+  const [aiInserting, setAiInserting] = useState(false)
   const [form, setForm] = useState<{ type: EventType; timestamp_seconds: number; timestampStr: string; payload: Record<string, any> }>({
     type: 'chat_message', timestamp_seconds: 0, timestampStr: '00:00', payload: { ...emptyPayloads.chat_message }
   })
@@ -231,6 +246,50 @@ export default function EventsPage() {
     setForm(f => ({ ...f, payload: { ...f.payload, [key]: value } }))
   }
 
+  async function generateWithAI() {
+    if (!aiScript.trim()) {
+      setAiError('Cole o roteiro do webinar antes de gerar.')
+      return
+    }
+    setAiError('')
+    setAiGenerating(true)
+    setAiPreview([])
+    try {
+      const res = await fetch('/api/generate-chat-events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webinar_id: webinarId, script: aiScript, count: aiCount, duration_seconds: duration }),
+      })
+      const json = await res.json()
+      if (!res.ok || json.error) {
+        setAiError(json.error || 'Erro ao gerar mensagens.')
+      } else {
+        setAiPreview(json.events || [])
+      }
+    } catch {
+      setAiError('Erro de conexão. Tente novamente.')
+    } finally {
+      setAiGenerating(false)
+    }
+  }
+
+  async function insertGeneratedEvents() {
+    if (aiPreview.length === 0) return
+    setAiInserting(true)
+    const rows = aiPreview.map(e => ({
+      webinar_id: webinarId,
+      type: 'chat_message' as const,
+      timestamp_seconds: e.timestamp_seconds,
+      payload: { author: e.author, text: e.text, avatar: '' },
+    }))
+    await supabase.from('webi_events').insert(rows)
+    setAiInserting(false)
+    setShowAiModal(false)
+    setAiPreview([])
+    setAiScript('')
+    load()
+  }
+
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
 
   const timelineWidth = 1200
@@ -259,6 +318,10 @@ export default function EventsPage() {
               {et.icon} {et.label}
             </button>
           ))}
+          <button className="btn btn-secondary" onClick={() => { setShowAiModal(true); setAiPreview([]); setAiError('') }}
+            style={{ gap: 6 }}>
+            ✨ Gerar com AI
+          </button>
           <button className="btn btn-primary" onClick={() => openCreate()}>+ Adicionar Evento</button>
         </div>
       </div>
@@ -399,6 +462,117 @@ export default function EventsPage() {
           </div>
         )}
       </div>
+
+      {/* AI GENERATOR MODAL */}
+      {showAiModal && (
+        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowAiModal(false)}>
+          <div className="modal" style={{ maxWidth: 680, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="modal-header">
+              <h2 className="modal-title">✨ Gerar Mensagens de Chat com AI</h2>
+              <button className="modal-close" onClick={() => setShowAiModal(false)}>✕</button>
+            </div>
+
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, padding: '0 0 4px' }}>
+              {aiPreview.length === 0 ? (
+                <>
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                    Cole o roteiro do seu webinar abaixo. A IA vai gerar mensagens de chat realistas que combinam com cada momento da apresentação.
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Roteiro do Webinar</label>
+                    <textarea
+                      className="form-input form-textarea"
+                      style={{ minHeight: 220, fontFamily: 'monospace', fontSize: 12, resize: 'vertical' }}
+                      placeholder={`Exemplo de roteiro:\n\n00:00 - Boas-vindas e apresentação pessoal\n05:00 - Por que 95% das pessoas falham em X\n15:00 - Os 3 pilares do método\n25:00 - Demonstração prática ao vivo\n40:00 - Revelação do produto/oferta\n50:00 - Bônus e garantia\n55:00 - Perguntas e respostas`}
+                      value={aiScript}
+                      onChange={e => setAiScript(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">
+                      Quantidade de mensagens — <strong style={{ color: 'var(--brand-light)' }}>{aiCount}</strong>
+                    </label>
+                    <input
+                      type="range" min={5} max={60} step={5}
+                      value={aiCount}
+                      onChange={e => setAiCount(Number(e.target.value))}
+                      style={{ width: '100%', accentColor: 'var(--brand)' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                      <span>5 — bem espaçado</span>
+                      <span>30 — moderado</span>
+                      <span>60 — chat bem ativo</span>
+                    </div>
+                  </div>
+
+                  {aiError && (
+                    <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f87171' }}>
+                      {aiError}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                      <strong style={{ color: 'var(--text-primary)' }}>{aiPreview.length} mensagens</strong> geradas — revise e confirme para inserir na timeline.
+                    </div>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setAiPreview([])}>
+                      ← Voltar e editar
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 380, overflowY: 'auto', paddingRight: 4 }}>
+                    {aiPreview.map((ev, i) => (
+                      <div key={i} style={{
+                        display: 'grid', gridTemplateColumns: '52px 110px 1fr',
+                        gap: 10, alignItems: 'start',
+                        background: 'var(--bg-elevated)', borderRadius: 8, padding: '8px 12px',
+                        border: '1px solid var(--border)',
+                      }}>
+                        <code style={{ fontSize: 11, color: 'var(--brand-light)', fontFamily: 'monospace', paddingTop: 2 }}>
+                          {formatTime(ev.timestamp_seconds)}
+                        </code>
+                        <input
+                          className="form-input"
+                          style={{ fontSize: 12, padding: '4px 8px' }}
+                          value={ev.author}
+                          onChange={e => setAiPreview(prev => prev.map((x, j) => j === i ? { ...x, author: e.target.value } : x))}
+                        />
+                        <input
+                          className="form-input"
+                          style={{ fontSize: 12, padding: '4px 8px' }}
+                          value={ev.text}
+                          onChange={e => setAiPreview(prev => prev.map((x, j) => j === i ? { ...x, text: e.target.value } : x))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                    Você pode editar qualquer texto ou nome acima antes de inserir. Depois de inserir, cada mensagem pode ser reposicionada na timeline ou editada individualmente.
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-ghost" onClick={() => setShowAiModal(false)}>Cancelar</button>
+              {aiPreview.length === 0 ? (
+                <button className="btn btn-primary" onClick={generateWithAI} disabled={aiGenerating || !aiScript.trim()}>
+                  {aiGenerating ? <><span className="spinner" /> Gerando...</> : '✨ Gerar Mensagens'}
+                </button>
+              ) : (
+                <button className="btn btn-primary" onClick={insertGeneratedEvents} disabled={aiInserting}>
+                  {aiInserting ? <><span className="spinner" /> Inserindo...</> : `Inserir ${aiPreview.length} mensagens na timeline`}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* EVENT MODAL */}
       {showModal && (

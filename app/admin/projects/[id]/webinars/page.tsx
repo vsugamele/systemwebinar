@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import type { Webinar } from '@/types'
 
 function slugify(text: string) {
@@ -23,6 +23,7 @@ const defaultForm = {
 
 export default function WebinarsPage() {
   const { id: projectId } = useParams<{ id: string }>()
+  const router = useRouter()
   const [webinars, setWebinars] = useState<Webinar[]>([])
   const [projectName, setProjectName] = useState('')
   const [loading, setLoading] = useState(true)
@@ -65,13 +66,20 @@ export default function WebinarsPage() {
 
     if (editWebinar) {
       await supabase.from('webi_webinars').update(payload).eq('id', editWebinar.id)
+      setSaving(false)
+      setShowModal(false)
+      load()
     } else {
-      await supabase.from('webi_webinars').insert(payload)
+      const { data: created } = await supabase.from('webi_webinars').insert(payload).select().single()
+      setSaving(false)
+      setShowModal(false)
+      if (created) {
+        // Redireciona para o hub do webinar recém criado
+        router.push(`/admin/projects/${projectId}/webinars/${created.id}`)
+      } else {
+        load()
+      }
     }
-
-    setSaving(false)
-    setShowModal(false)
-    load()
   }
 
   async function deleteWebinar(id: string) {
@@ -142,75 +150,47 @@ export default function WebinarsPage() {
             <button className="btn btn-primary" onClick={openCreate}>Criar Webinar</button>
           </div>
         ) : (
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Nome</th>
-                  <th>Slug / URL</th>
-                  <th>Status</th>
-                  <th>Participantes</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {webinars.map(w => (
-                  <tr key={w.id}>
-                    <td style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{w.name}</td>
-                    <td>
-                      <code style={{ fontSize: 12, color: 'var(--brand-light)' }}>/w/{w.slug}</code>
-                    </td>
-                    <td>
-                      <button onClick={() => toggleStatus(w)} className={`badge badge-${w.status}`} style={{ cursor: 'pointer', border: 'none', background: 'none' }}>
-                        {w.status === 'active' ? '● Ativo' : w.status === 'draft' ? '○ Rascunho' : '⏸ Pausado'}
-                      </button>
-                    </td>
-                    <td style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                      {w.peak_viewers_min}–{w.peak_viewers_max}
-                    </td>
-                    <td>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                          <Link href={`/admin/projects/${projectId}/webinars/${w.id}/events`} className="btn btn-primary btn-sm">
-                            ⚡ Eventos
-                          </Link>
-                          <Link href={`/admin/projects/${projectId}/webinars/${w.id}/tracking`} className="btn btn-secondary btn-sm">
-                            🎯 Tracking
-                          </Link>
-                          <Link href={`/admin/projects/${projectId}/webinars/${w.id}/form`} className="btn btn-secondary btn-sm">
-                            📋 Formulário
-                          </Link>
-                          <Link href={`/admin/projects/${projectId}/webinars/${w.id}/chat`} className="btn btn-secondary btn-sm">
-                            💬 Chat
-                          </Link>
-                          <Link href={`/admin/projects/${projectId}/webinars/${w.id}/waiting-room`} className="btn btn-secondary btn-sm">
-                            ⏳ Sala de Espera
-                          </Link>
-                          <Link href={`/admin/projects/${projectId}/webinars/${w.id}/materials`} className="btn btn-secondary btn-sm">
-                            📂 Materiais
-                          </Link>
-                          <Link href={`/admin/projects/${projectId}/webinars/${w.id}/ai-config`} className="btn btn-secondary btn-sm">
-                            🤖 IA no Chat
-                          </Link>
-                          <Link href={`/admin/projects/${projectId}/webinars/${w.id}/quiz`} className="btn btn-secondary btn-sm">
-                            📝 Quiz
-                          </Link>
-                          <Link href={`/admin/projects/${projectId}/webinars/${w.id}/testimonials`} className="btn btn-secondary btn-sm">
-                            💬 Depoimentos
-                          </Link>
-                          <Link href={`/admin/projects/${projectId}/webinars/${w.id}/logs`} className="btn btn-secondary btn-sm">
-                            📓 LOGs
-                          </Link>
-                          <button className="btn btn-secondary btn-sm" onClick={() => openEdit(w)}>✏️ Editar</button>
-                          <button className="btn btn-secondary btn-sm" onClick={() => cloneWebinar(w)}>🔁 Clonar</button>
-                          <button className="btn btn-ghost btn-sm" onClick={() => setLinksWebinar(w)}>🔗 Links</button>
-                          <Link href={`/w/${w.slug}?test=1`} target="_blank" className="btn btn-ghost btn-sm">▶ Testar</Link>
-                          <button className="btn btn-danger btn-sm" onClick={() => deleteWebinar(w.id)}>🗑</button>
-                        </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {webinars.map(w => (
+              <div key={w.id} style={{
+                background: 'var(--bg-card)', border: '1px solid var(--border)',
+                borderRadius: 16, padding: '16px 20px',
+                display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
+              }}>
+                {/* Left: info */}
+                <Link
+                  href={`/admin/projects/${projectId}/webinars/${w.id}`}
+                  style={{ flex: 1, minWidth: 200, textDecoration: 'none' }}
+                >
+                  <div style={{ fontWeight: 600, fontSize: 15, color: 'var(--text-primary)', marginBottom: 4 }}>
+                    {w.name}
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span className={`badge badge-${w.status}`} style={{ fontSize: 11 }}>
+                      {w.status === 'active' ? '● Ativo' : w.status === 'draft' ? '○ Rascunho' : '⏸ Pausado'}
+                    </span>
+                    <code style={{ fontSize: 11, color: 'var(--text-muted)' }}>/w/{w.slug}</code>
+                  </div>
+                </Link>
+
+                {/* Right: actions */}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
+                  <Link href={`/admin/projects/${projectId}/webinars/${w.id}`} className="btn btn-primary btn-sm">
+                    ⚙️ Configurar
+                  </Link>
+                  <Link href={`/admin/projects/${projectId}/webinars/${w.id}/live`} className="btn btn-secondary btn-sm">
+                    🎬 Ao Vivo
+                  </Link>
+                  <a href={`/w/${w.slug}?test=1`} target="_blank" rel="noopener noreferrer" className="btn btn-ghost btn-sm">
+                    👁 Preview
+                  </a>
+                  <button className="btn btn-ghost btn-sm" onClick={() => setLinksWebinar(w)}>🔗 Links</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => openEdit(w)}>✏️</button>
+                  <button className="btn btn-ghost btn-sm" onClick={() => cloneWebinar(w)}>🔁</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => deleteWebinar(w.id)}>🗑</button>
+                </div>
+              </div>
+            ))}
           </div>
         )}
       </div>
