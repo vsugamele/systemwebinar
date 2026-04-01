@@ -71,7 +71,12 @@ export default function TestimonialsAdminPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [webinarId])
+  useEffect(() => {
+    supabase.from('webi_webinars').select('name').eq('id', webinarId).single()
+      .then(({ data: webinar }) => setWebinarName(webinar?.name || ''))
+    supabase.from('webi_testimonials').select('*').eq('webinar_id', webinarId).order('show_at_seconds')
+      .then(({ data }) => { setTestimonials(data || []); setLoading(false) })
+  }, [webinarId])
 
   function openCreate() {
     setEditItem(null)
@@ -146,7 +151,7 @@ export default function TestimonialsAdminPage() {
             <div>
               <div style={{ fontWeight: 700, marginBottom: 4 }}>Como funciona</div>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Os depoimentos aparecem automaticamente abaixo do vídeo quando o participante atinge o tempo configurado em <strong>"Aparece no segundo"</strong>.
+                Os depoimentos aparecem automaticamente abaixo do vídeo quando o participante atinge o tempo configurado em <strong>&quot;Aparece no segundo&quot;</strong>.
                 Use isso estrategicamente — coloque depoimentos poderosos próximos ao momento da oferta para aumentar a conversão.
                 Depoimentos <strong>pendentes</strong> (enviados pelos usuários) precisam ser aprovados antes de aparecerem.
               </div>
@@ -171,6 +176,7 @@ export default function TestimonialsAdminPage() {
               }}>
                 {/* Avatar */}
                 {t.avatar_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={t.avatar_url} alt={t.name} style={{ width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }} />
                 ) : (
                   <div style={{
@@ -194,7 +200,7 @@ export default function TestimonialsAdminPage() {
                     </span>
                   </div>
                   <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5, margin: '0 0 8px' }}>
-                    "{t.text}"
+                    &quot;{t.text}&quot;
                   </p>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                     ⏱ Aparece aos <code style={{ fontFamily: 'monospace', color: 'var(--brand-light)' }}>{formatTime(t.show_at_seconds)}</code> de vídeo

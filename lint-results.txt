@@ -1,0 +1,447 @@
+﻿
+> webinar-system@0.1.0 lint
+> eslint
+
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\AdminLayoutClient.tsx
+  28:6  warning  React Hook useEffect has a missing dependency: 'supabase.auth'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    react-hooks/exhaustive-deps
+  32:5  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\AdminLayoutClient.tsx:32:5
+  30 |   // Close mobile menu on route change
+  31 |   useEffect(() => {
+> 32 |     setMobileMenuOpen(false)
+     |     ^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  33 |   }, [pathname])
+  34 |
+  35 |   async function handleLogout() {  react-hooks/set-state-in-effect
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\analytics\page.tsx
+  26:6  warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       react-hooks/exhaustive-deps
+  32:5  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\analytics\page.tsx:32:5
+  30 |     supabase.from('webi_webinars').select('*').eq('project_id', selectedProject)
+  31 |       .then(({ data }) => setWebinars(data || []))
+> 32 |     setSelectedWebinar('')
+     |     ^^^^^^^^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  33 |     setData(null)
+  34 |   }, [selectedProject])
+  35 |    react-hooks/set-state-in-effect
+  34:6  warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       react-hooks/exhaustive-deps
+  38:5  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\analytics\page.tsx:38:5
+  36 |   useEffect(() => {
+  37 |     if (!selectedWebinar) return
+> 38 |     setLoading(true)
+     |     ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  39 |     fetch(`/api/analytics?webinar_id=${selectedWebinar}`)
+  40 |       .then(r => r.json())
+  41 |       .then(d => { setData(d); setLoading(false) })  react-hooks/set-state-in-effect
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\emails\page.tsx
+  80:10  warning  'activeStep' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+  85:6   warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             react-hooks/exhaustive-deps
+  93:6   warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             react-hooks/exhaustive-deps
+  97:5   error    Error: Cannot access variable before it is declared
+
+`loadTemplates` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\emails\page.tsx:97:5
+   95 |   useEffect(() => {
+   96 |     if (!selectedWebinar) return
+>  97 |     loadTemplates()
+      |     ^^^^^^^^^^^^^ `loadTemplates` accessed before it is declared
+   98 |   }, [selectedWebinar])
+   99 |
+  100 |   async function loadTemplates() {
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\emails\page.tsx:100:3
+   98 |   }, [selectedWebinar])
+   99 |
+> 100 |   async function loadTemplates() {
+      |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 101 |     const { data } = await supabase
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 102 |       .from('webi_email_templates')
+      ÔÇª
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 113 |     }
+      | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 114 |   }
+      | ^^^^ `loadTemplates` is declared here
+  115 |
+  116 |   async function saveTemplate() {
+  117 |     if (!editTemplate) return  react-hooks/immutability
+  98:6   warning  React Hook useEffect has a missing dependency: 'loadTemplates'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        react-hooks/exhaustive-deps
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\page.tsx
+   34:38  error    Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+   38:6   warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  108:41  error    Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+  111:32  error    Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\analytics\page.tsx
+  150:6  warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\branding\page.tsx
+  39:6  warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\ai-config\page.tsx
+   50:40   error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+   51:42   error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+   58:6    warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array                                                                                                                                                                              react-hooks/exhaustive-deps
+  103:78   error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                          react/no-unescaped-entities
+  103:92   error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                          react/no-unescaped-entities
+  201:94   error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                          react/no-unescaped-entities
+  201:102  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                          react/no-unescaped-entities
+  201:107  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                          react/no-unescaped-entities
+  201:117  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                          react/no-unescaped-entities
+  202:51   error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                          react/no-unescaped-entities
+  202:65   error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                          react/no-unescaped-entities
+  229:21   warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\chat\page.tsx
+    8:7   warning  'PURCHASE_EXAMPLES' is assigned a value but never used                                                       @typescript-eslint/no-unused-vars
+   45:6   warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  186:40  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                              react/no-unescaped-entities
+  186:70  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                              react/no-unescaped-entities
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\events\page.tsx
+  112:22   error    Error: Cannot modify local variables after render completes
+
+This argument is a function which may reassign or mutate `dragStartX` after render, which can cause inconsistent behavior on subsequent renders. Consider using state instead.
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\events\page.tsx:112:22
+  110 |       }}
+  111 |       title={`${label} @ ${formatTime(ev.timestamp_seconds)} ÔÇö arraste para reposicionar`}
+> 112 |       onPointerDown={handlePointerDown}
+      |                      ^^^^^^^^^^^^^^^^^ This function may (indirectly) reassign or modify `dragStartX` after render
+  113 |       onPointerMove={handlePointerMove}
+  114 |       onPointerUp={handlePointerUp}
+  115 |     >
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\events\page.tsx:67:5
+  65 |     const chip = e.currentTarget as HTMLElement
+  66 |     chip.setPointerCapture(e.pointerId)
+> 67 |     dragStartX.x = e.clientX
+     |     ^^^^^^^^^^ This modifies `dragStartX`
+  68 |     dragStartX.origPct = previewPct
+  69 |     didMoveRef.moved = false
+  70 |     setDragging(false)                                                                                                     react-hooks/immutability
+  113:22   error    Error: Cannot modify local variables after render completes
+
+This argument is a function which may reassign or mutate `didMoveRef` after render, which can cause inconsistent behavior on subsequent renders. Consider using state instead.
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\events\page.tsx:113:22
+  111 |       title={`${label} @ ${formatTime(ev.timestamp_seconds)} ÔÇö arraste para reposicionar`}
+  112 |       onPointerDown={handlePointerDown}
+> 113 |       onPointerMove={handlePointerMove}
+      |                      ^^^^^^^^^^^^^^^^^ This function may (indirectly) reassign or modify `didMoveRef` after render
+  114 |       onPointerUp={handlePointerUp}
+  115 |     >
+  116 |       {icon}
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\events\page.tsx:79:5
+  77 |     const dx = e.clientX - dragStartX.x
+  78 |     if (Math.abs(dx) < 4 && !dragging) return
+> 79 |     didMoveRef.moved = true
+     |     ^^^^^^^^^^ This modifies `didMoveRef`
+  80 |     if (!dragging) setDragging(true)
+  81 |     const newPct = Math.min(Math.max(dragStartX.origPct + (dx / rect.width) * 100, 0), 98)
+  82 |     const newSecs = Math.round((newPct / 100) * duration)  react-hooks/immutability
+  166:128  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  174:42   warning  'field' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+  201:31   warning  React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  react-hooks/exhaustive-deps
+  205:118  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  215:54   error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  245:46   error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  295:9    warning  'timelineWidth' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+  435:60   error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  594:159  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  704:23   warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  @next/next/no-img-element
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\form\page.tsx
+  36:44  error    Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+  41:30  error    Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+  52:6   warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\live\page.tsx
+  60:6  warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           react-hooks/exhaustive-deps
+  67:5  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\live\page.tsx:67:5
+  65 |       setElapsed(elapsedLabel(sessionStartedAt))
+  66 |     }, 1000)
+> 67 |     setElapsed(elapsedLabel(sessionStartedAt))
+     |     ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  68 |     return () => { if (tickRef.current) clearInterval(tickRef.current) }
+  69 |   }, [sessionStartedAt])
+  70 |  react-hooks/set-state-in-effect
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\logs\page.tsx
+  49:26  error    Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+  53:6   warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\materials\page.tsx
+  37:21   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\materials\page.tsx:37:21
+  35 |   }
+  36 |
+> 37 |   useEffect(() => { load() }, [wid])
+     |                     ^^^^ Avoid calling setState() directly within an effect
+  38 |
+  39 |   async function add(e: React.FormEvent) {
+  40 |     e.preventDefault()  react-hooks/set-state-in-effect
+  37:31   warning  React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           react-hooks/exhaustive-deps
+  65:98   error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   react/no-unescaped-entities
+  65:108  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   react/no-unescaped-entities
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\page.tsx
+  49:9  warning  'router' is assigned a value but never used                                                                  @typescript-eslint/no-unused-vars
+  73:6  warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\quiz\page.tsx
+  74:21  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\quiz\page.tsx:74:21
+  72 |   }
+  73 |
+> 74 |   useEffect(() => { load() }, [webinarId])
+     |                     ^^^^ Avoid calling setState() directly within an effect
+  75 |
+  76 |   function openCreate() {
+  77 |     setEditItem(null)  react-hooks/set-state-in-effect
+  74:31  warning  React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          react-hooks/exhaustive-deps
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\testimonials\page.tsx
+   74:21   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\testimonials\page.tsx:74:21
+  72 |   }
+  73 |
+> 74 |   useEffect(() => { load() }, [webinarId])
+     |                     ^^^^ Avoid calling setState() directly within an effect
+  75 |
+  76 |   function openCreate() {
+  77 |     setEditItem(null)  react-hooks/set-state-in-effect
+   74:31   warning  React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  react-hooks/exhaustive-deps
+  149:133  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          react/no-unescaped-entities
+  149:152  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          react/no-unescaped-entities
+  174:19   warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  @next/next/no-img-element
+  197:21   error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          react/no-unescaped-entities
+  197:30   error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          react/no-unescaped-entities
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\tracking\page.tsx
+  33:6  warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\[wid]\waiting-room\page.tsx
+  15:10  warning  'webinarName' is assigned a value but never used                                                             @typescript-eslint/no-unused-vars
+  39:6   warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\page.tsx
+   45:21  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\[id]\webinars\page.tsx:45:21
+  43 |   }
+  44 |
+> 45 |   useEffect(() => { load() }, [projectId])
+     |                     ^^^^ Avoid calling setState() directly within an effect
+  46 |
+  47 |   function openCreate() {
+  48 |     setEditWebinar(null)  react-hooks/set-state-in-effect
+   45:31  warning  React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  react-hooks/exhaustive-deps
+  124:18  warning  'toggleStatus' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 @typescript-eslint/no-unused-vars
+  265:82  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\page.tsx
+  24:21  error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\projects\page.tsx:24:21
+  22 |   }
+  23 |
+> 24 |   useEffect(() => { load() }, [])
+     |                     ^^^^ Avoid calling setState() directly within an effect
+  25 |
+  26 |   function openCreate() {
+  27 |     setEditProject(null)  react-hooks/set-state-in-effect
+  24:31  warning  React Hook useEffect has a missing dependency: 'load'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           react-hooks/exhaustive-deps
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\registrants\page.tsx
+   25:6   warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           react-hooks/exhaustive-deps
+   33:6   warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           react-hooks/exhaustive-deps
+   37:5   error    Error: Cannot access variable before it is declared
+
+`loadLeads` is accessed before it is declared, which prevents the earlier access from updating when this value changes over time.
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\registrants\page.tsx:37:5
+  35 |   useEffect(() => {
+  36 |     if (!selectedProject) return
+> 37 |     loadLeads()
+     |     ^^^^^^^^^ `loadLeads` accessed before it is declared
+  38 |   }, [selectedWebinar, filterBehavior, selectedProject])
+  39 |
+  40 |   async function loadLeads() {
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\admin\registrants\page.tsx:40:3
+  38 |   }, [selectedWebinar, filterBehavior, selectedProject])
+  39 |
+> 40 |   async function loadLeads() {
+     |   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+> 41 |     setLoading(true)
+     | ^^^^^^^^^^^^^^^^^^^^
+> 42 |     let query = supabase.from('webi_leads').select('*').eq('project_id', selectedProject)
+     ÔÇª
+     | ^^^^^^^^^^^^^^^^^^^^
+> 61 |     setLoading(false)
+     | ^^^^^^^^^^^^^^^^^^^^
+> 62 |   }
+     | ^^^^ `loadLeads` is declared here
+  63 |
+  64 |   const filtered = leads.filter(l =>
+  65 |     !search || l.name.toLowerCase().includes(search.toLowerCase()) || l.email.toLowerCase().includes(search.toLowerCase())  react-hooks/immutability
+   38:6   warning  React Hook useEffect has a missing dependency: 'loadLeads'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          react-hooks/exhaustive-deps
+  116:87  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              @typescript-eslint/no-explicit-any
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\api\analytics\route.ts
+  19:12  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+  76:12  warning  'error' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\api\chat\route.ts
+  3:10  warning  'createServiceClient' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\api\testimonials\route.ts
+  39:12  warning  'err' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\register-admin\page.tsx
+  15:9  warning  'router' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\register\[slug]\RegisterForm.tsx
+   8:96  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  23:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  23:78  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  26:33  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  26:53  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  29:16  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  59:19  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\replay\[slug]\ReplayRoomClient.tsx
+   15:35  error    Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+   53:26  error    Unexpected any. Specify a different type                               @typescript-eslint/no-explicit-any
+  102:34  warning  Expected an assignment or function call and instead saw an expression  @typescript-eslint/no-unused-expressions
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\app\w\[slug]\page.tsx
+  59:31  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\components\AdminToasts.tsx
+  38:41  error    Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+  56:41  error    Unexpected any. Specify a different type                                                                     @typescript-eslint/no-explicit-any
+  73:6   warning  React Hook useEffect has a missing dependency: 'supabase'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\components\TestimonialsSection.tsx
+   33:5   warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @next/next/no-img-element
+   47:58  warning  'webinarName' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        @typescript-eslint/no-unused-vars
+   65:5   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\components\TestimonialsSection.tsx:65:5
+  63 |   useEffect(() => {
+  64 |     const toShow = allTestimonials.filter(t => t.show_at_seconds <= currentTime)
+> 65 |     setVisible(toShow)
+     |     ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  66 |   }, [currentTime, allTestimonials])
+  67 |
+  68 |   async function submitTestimonial(e: React.FormEvent) {  react-hooks/set-state-in-effect
+  181:19  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                react/no-unescaped-entities
+  181:28  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                react/no-unescaped-entities
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\components\WebinarQuiz.tsx
+  78:98  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\components\WebinarRoom.tsx
+  180:20  warning  'setUserName' is assigned a value but never used                                                                                                                                                                                                                                         @typescript-eslint/no-unused-vars
+  187:10  warning  'videoError' is assigned a value but never used                                                                                                                                                                                                                                          @typescript-eslint/no-unused-vars
+  356:31  warning  '_' is assigned a value but never used                                                                                                                                                                                                                                                   @typescript-eslint/no-unused-vars
+  409:12  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  482:6   warning  React Hook useEffect has missing dependencies: 'startBroadcast' and 'trackEvent'. Either include them or remove the dependency array                                                                                                                                                     react-hooks/exhaustive-deps
+  516:50  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  517:39  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  522:17  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  539:6   warning  React Hook useEffect has missing dependencies: 'startOffset' and 'trackEvent'. Either include them or remove the dependency array                                                                                                                                                        react-hooks/exhaustive-deps
+  541:92  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  591:21  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  594:36  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  595:38  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  654:21  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  655:34  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  774:17  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  833:19  warning  Using `<img>` could result in slower LCP and higher bandwidth. Consider using `<Image />` from `next/image` or a custom image loader to automatically optimize images. This may incur additional usage or cost from your provider. See: https://nextjs.org/docs/messages/no-img-element  @next/next/no-img-element
+  858:80  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+  897:43  error    Unexpected any. Specify a different type                                                                                                                                                                                                                                                 @typescript-eslint/no-explicit-any
+
+C:\Users\vsuga\Desktop\Desenvolvimento\webinar-system\lib\resend.ts
+  17:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+Ô£û 126 problems (74 errors, 52 warnings)
+

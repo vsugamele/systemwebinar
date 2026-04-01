@@ -33,6 +33,8 @@ interface WebinarConfig {
   tracking_head_code?: string
   tracking_body_code?: string
   ai_enabled?: boolean
+  ai_persona_name?: string
+  ai_persona_avatar?: string
   brand_color?: string
   waiting_room_enabled?: boolean
   waiting_room_message?: string
@@ -126,7 +128,7 @@ function getYouTubeEmbedUrl(url: string, startSeconds = 0): string | null {
 
     if (!videoId) return null
     const start = startSeconds > 0 ? `&start=${startSeconds}` : ''
-    return `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=0&controls=0&modestbranding=1&rel=0&disablekb=1${start}`
+    return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=0&controls=0&modestbranding=1&rel=0&disablekb=1&iv_load_policy=3&playsinline=1&fs=0&showinfo=0&enablejsapi=1${start}`
   } catch {
     return null
   }
@@ -174,6 +176,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const cpmTimerRef = useRef<NodeJS.Timeout | null>(null)
   const elapsedRef = useRef(0) // seconds watched (for non-YouTube videos)
   const elapsedIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const lastVideoTimeRef = useRef(0)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
@@ -206,6 +209,10 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const waitDelay = webinar.waiting_delay_seconds ?? 120
   const waitEnabled = !!webinar.waiting_room_enabled && startOffset < waitDelay
   const [waitingDone, setWaitingDone] = useState(!waitEnabled)
+
+  // YouTube overlay state
+  const ytIframeRef = useRef<HTMLIFrameElement>(null)
+  const [ytPlaying, setYtPlaying] = useState(false)
 
   // Chat tabs
   type ChatTab = 'chat' | 'qa' | 'materials'
@@ -251,6 +258,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
       '  80%  { transform: translateY(-80px) scale(1.3); opacity: 0.8; }',
       '  100% { transform: translateY(-120px) scale(0.8); opacity: 0; }',
       '}',
+      '@keyframes spin { to { transform: rotate(360deg); } }',
       'video::-webkit-media-controls { display: none !important; }',
       'video::-webkit-media-controls-enclosure { display: none !important; }',
       'video::-webkit-media-controls-panel { display: none !important; }',
@@ -324,7 +332,8 @@ export default function WebinarRoom({ webinar, events }: Props) {
       : ['Maria', 'João', 'Ana', 'Carlos', 'Luciana', 'Pedro', 'Fernanda', 'Rafael']
 
     const intervalMs = (60 / cpm) * 1000
-    const jitter = intervalMs * 0.4
+    const jitterPct = intervalMs < 500 ? 0.15 : 0.4
+    const jitter = intervalMs * jitterPct
 
     function scheduleNext() {
       const delay = intervalMs + (Math.random() * jitter * 2 - jitter)
@@ -406,7 +415,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
         timestamp: Math.floor(videoRef.current?.currentTime || 0),
         isSimulated: true,
         isBroadcast: true,
-      } as any])
+      }])
       const delay = 10000 + Math.random() * 10000 // 10–20s between each
       broadcastTimerRef.current = setTimeout(fireNext, delay)
     }
@@ -481,6 +490,38 @@ export default function WebinarRoom({ webinar, events }: Props) {
     engineRef.current = engine
   }, [events])
 
+  // ---- YouTube IFrame: auto-play via postMessage + detect playing state ----
+  useEffect(() => {
+    if (!isYouTubeUrl(webinar.video_url || '')) return
+
+    function sendPlay() {
+      ytIframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
+        '*'
+      )
+    }
+
+    // Try to play as soon as iframe is ready; retry every 500ms until it starts
+    const tryInterval = setInterval(sendPlay, 500)
+
+    function onMessage(e: MessageEvent) {
+      try {
+        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
+        // YouTube sends playerState 1 = playing
+        if (data?.event === 'infoDelivery' && data?.info?.playerState === 1) {
+          setYtPlaying(true)
+          clearInterval(tryInterval)
+        }
+      } catch { /* ignore */ }
+    }
+
+    window.addEventListener('message', onMessage)
+    return () => {
+      clearInterval(tryInterval)
+      window.removeEventListener('message', onMessage)
+    }
+  }, [webinar.video_url])
+
   // ---- Video setup (evergreen offset + block controls) ----
   useEffect(() => {
     const video = videoRef.current
@@ -513,13 +554,13 @@ export default function WebinarRoom({ webinar, events }: Props) {
     }
 
     const onSeeking = () => {
-      if (Math.abs(video.currentTime - (video as any)._lastTime || 0) > 2) {
-        video.currentTime = (video as any)._lastTime || 0
+      if (Math.abs(video.currentTime - lastVideoTimeRef.current) > 2) {
+        video.currentTime = lastVideoTimeRef.current
       }
     }
 
     const onTimeUpdateStore = () => {
-      (video as any)._lastTime = video.currentTime
+      lastVideoTimeRef.current = video.currentTime
     }
 
     video.addEventListener('loadeddata', onLoaded)
@@ -538,7 +579,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
     }
   }, [webinar.evergreen_offset_seconds])
 
-  async function trackEvent(type: string, timestampVideo: number, metadata: Record<string, any> = {}) {
+  async function trackEvent(type: string, timestampVideo: number, metadata: Record<string, unknown> = {}) {
     try {
       await fetch('/api/analytics', {
         method: 'POST',
@@ -588,11 +629,11 @@ export default function WebinarRoom({ webinar, events }: Props) {
     trackEvent('chat_sent', msg.timestamp)
 
     // AI auto-response if enabled and message is a question
-    if ((webinar as any).ai_enabled) {
+    if (webinar.ai_enabled) {
       const isQ = text.endsWith('?') || /como|quando|qual|quanto|posso|consigo|funciona|o que|por que|porque|dúvida|ajuda|não entendi/i.test(text)
       if (isQ) {
-        const aiName = (webinar as any).ai_persona_name || '🤖 Assistente'
-        const aiAvatar = (webinar as any).ai_persona_avatar || ''
+        const aiName = webinar.ai_persona_name || '🤖 Assistente'
+        const aiAvatar = webinar.ai_persona_avatar || ''
         setAiTyping(true)
         setTimeout(async () => {
           try {
@@ -651,8 +692,8 @@ export default function WebinarRoom({ webinar, events }: Props) {
     setQaInput('')
 
     // Try AI response if enabled
-    if ((webinar as any).ai_enabled) {
-      const aiName = (webinar as any).ai_persona_name || '🤖 Assistente'
+    if (webinar.ai_enabled) {
+      const aiName = webinar.ai_persona_name || '🤖 Assistente'
       setAiTyping(true)
       setTimeout(async () => {
         try {
@@ -736,13 +777,43 @@ export default function WebinarRoom({ webinar, events }: Props) {
 
           {webinar.video_url ? (
             isYouTubeUrl(webinar.video_url) ? (
-              <iframe
-                src={getYouTubeEmbedUrl(webinar.video_url, startOffset > 0 ? startOffset : webinar.evergreen_offset_seconds) || ''}
-                style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen={false}
-                title={webinar.name}
-              />
+              <>
+                <iframe
+                  ref={ytIframeRef}
+                  src={getYouTubeEmbedUrl(webinar.video_url, startOffset > 0 ? startOffset : webinar.evergreen_offset_seconds) || ''}
+                  style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen={false}
+                  title={webinar.name}
+                />
+                {/* Overlay preto cobre thumbnail/branding até o vídeo começar */}
+                {!ytPlaying && (
+                  <div style={{
+                    position: 'absolute', inset: 0, zIndex: 3,
+                    background: '#000',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexDirection: 'column', gap: 14, pointerEvents: 'none',
+                  }}>
+                    <div style={{
+                      width: 48, height: 48, borderRadius: '50%',
+                      border: '3px solid rgba(255,255,255,0.15)',
+                      borderTopColor: '#fff',
+                      animation: 'spin 0.8s linear infinite',
+                    }} />
+                    <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.04em' }}>
+                      Carregando transmissão...
+                    </span>
+                  </div>
+                )}
+                {/* Cobrir barra inferior e cantos do YouTube quando estiver tocando */}
+                {ytPlaying && (
+                  <>
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 48, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 0, left: 0, width: 200, height: 40, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 0, right: 0, width: 160, height: 40, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
+                  </>
+                )}
+              </>
             ) : (
               <video
                 ref={videoRef}
@@ -771,6 +842,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
             <div className="pitch-button">
               <button className="pitch-close" onClick={handleCTADismiss}>✕</button>
               {pitchPayload.image_url && (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={pitchPayload.image_url} alt="Oferta" className="pitch-image" />
               )}
               <div className="pitch-body">
@@ -830,6 +902,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
                   ✕
                 </button>
                 {popupPayload.image_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img src={popupPayload.image_url} alt="" className="offer-image" />
                 )}
                 <h2 className="offer-title">{popupPayload.title}</h2>
@@ -855,7 +928,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
           background: 'var(--bg-card)',
         }}>
           {([
-            { id: 'chat', label: '💬 Chat', count: messages.filter(m => !(m as any).isBroadcast).length },
+            { id: 'chat', label: '💬 Chat', count: messages.filter(m => !m.isBroadcast).length },
             { id: 'qa', label: '❓ Q&A', count: qaMessages.length },
             ...(visibleMaterials.length > 0 || materials.length > 0
               ? [{ id: 'materials' as const, label: '📂 Materiais', count: visibleMaterials.length }]
@@ -894,7 +967,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
               </div>
             )}
             {messages.map((msg, i) => {
-              const isBroadcast = (msg as any).isBroadcast
+              const isBroadcast = msg.isBroadcast
               const isAi = msg.author?.startsWith('🤖')
               return (
                 <div key={msg.id || i} className="chat-message" style={isBroadcast ? {

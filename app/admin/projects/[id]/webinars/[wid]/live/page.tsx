@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, startTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -64,7 +64,7 @@ export default function LivePage() {
     tickRef.current = setInterval(() => {
       setElapsed(elapsedLabel(sessionStartedAt))
     }, 1000)
-    setElapsed(elapsedLabel(sessionStartedAt))
+    startTransition(() => setElapsed(elapsedLabel(sessionStartedAt)))
     return () => { if (tickRef.current) clearInterval(tickRef.current) }
   }, [sessionStartedAt])
 

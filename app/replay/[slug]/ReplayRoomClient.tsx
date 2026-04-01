@@ -12,7 +12,7 @@ export default function ReplayRoomClient({ webinar }: Props) {
   const [playing, setPlaying] = useState(false)
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
-  const accentColor = (webinar as any).webi_projects?.accent_color || '#6366f1'
+  const accentColor = webinar.webi_projects?.accent_color || '#6366f1'
 
   useEffect(() => {
     document.documentElement.style.setProperty('--brand', accentColor)
@@ -50,7 +50,7 @@ export default function ReplayRoomClient({ webinar }: Props) {
           }}>🔁 REPLAY</span>
           <span style={{ color: '#e2e8f0', fontWeight: 600, fontSize: 15 }}>{webinar.name}</span>
           <span style={{ marginLeft: 'auto', color: '#64748b', fontSize: 12 }}>
-            {(webinar as any).webi_projects?.name}
+            {webinar.webi_projects?.name}
           </span>
         </div>
       </div>
@@ -99,7 +99,7 @@ export default function ReplayRoomClient({ webinar }: Props) {
             />
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <button
-                onClick={() => { playing ? videoRef.current?.pause() : videoRef.current?.play() }}
+                onClick={() => { if (playing) { videoRef.current?.pause() } else { void videoRef.current?.play() } }}
                 style={{
                   width: 44, height: 44, borderRadius: '50%',
                   background: accentColor, border: 'none', cursor: 'pointer',

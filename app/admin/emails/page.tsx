@@ -77,25 +77,7 @@ export default function EmailsPage() {
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
   const [editTemplate, setEditTemplate] = useState<EmailTemplate | null>(null)
   const [saving, setSaving] = useState(false)
-  const [activeStep, setActiveStep] = useState(0)
   const supabase = createClient()
-
-  useEffect(() => {
-    supabase.from('webi_projects').select('*').order('created_at').then(({ data }) => setProjects(data || []))
-  }, [])
-
-  useEffect(() => {
-    if (!selectedProject) return
-    supabase.from('webi_webinars').select('*').eq('project_id', selectedProject).order('created_at', { ascending: false })
-      .then(({ data }) => setWebinars(data || []))
-    setSelectedWebinar('')
-    setTemplates([])
-  }, [selectedProject])
-
-  useEffect(() => {
-    if (!selectedWebinar) return
-    loadTemplates()
-  }, [selectedWebinar])
 
   async function loadTemplates() {
     const { data } = await supabase
@@ -112,6 +94,30 @@ export default function EmailsPage() {
       setTemplates((inserted || []).sort((a, b) => a.delay_minutes - b.delay_minutes))
     }
   }
+
+  useEffect(() => {
+    supabase.from('webi_projects').select('*').order('created_at').then(({ data }) => setProjects(data || []))
+  }, [])
+
+  useEffect(() => {
+    if (!selectedProject) return
+    supabase.from('webi_webinars').select('*').eq('project_id', selectedProject).order('created_at', { ascending: false })
+      .then(({ data }) => setWebinars(data || []))
+  }, [selectedProject])
+
+  useEffect(() => {
+    if (!selectedWebinar) return
+    supabase.from('webi_email_templates').select('*').eq('webinar_id', selectedWebinar).order('delay_minutes')
+      .then(async ({ data }) => {
+        if (data && data.length > 0) {
+          setTemplates(data)
+        } else {
+          const toInsert = defaultTemplates.map(t => ({ ...t, webinar_id: selectedWebinar }))
+          const { data: inserted } = await supabase.from('webi_email_templates').insert(toInsert).select()
+          setTemplates((inserted || []).sort((a, b) => a.delay_minutes - b.delay_minutes))
+        }
+      })
+  }, [selectedWebinar])
 
   async function saveTemplate() {
     if (!editTemplate) return
@@ -146,7 +152,7 @@ export default function EmailsPage() {
         {/* Selectors */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 32, flexWrap: 'wrap' }}>
           <select className="form-input form-select" style={{ maxWidth: 220 }}
-            value={selectedProject} onChange={e => setSelectedProject(e.target.value)}>
+            value={selectedProject} onChange={e => { setSelectedProject(e.target.value); setSelectedWebinar(''); setTemplates([]) }}>
             <option value="">Selecionar projeto...</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>

@@ -75,7 +75,8 @@ export default function WebinarQuiz({ webinarId, webinarName, userName = '', use
   }
 
   async function downloadCertificate() {
-    const { default: html2canvas } = await import('html2canvas').catch(() => ({ default: null as any }))
+    const mod = await import('html2canvas').catch(() => null)
+    const html2canvas = mod?.default ?? null
     if (!html2canvas || !certRef.current) {
       window.print()
       return

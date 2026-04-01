@@ -56,7 +56,7 @@ export default async function WebinarPage({
   if (!webinar) return notFound()
 
   // Flatten project fields onto webinar for convenience
-  const project = (webinar as any).webi_projects || {}
+  const project = (webinar as Record<string, unknown> & { webi_projects?: { brand_color?: string | null; openrouter_api_key?: string | null; name?: string } | null }).webi_projects || {}
   const enrichedWebinar = {
     ...webinar,
     brand_color: project.brand_color || '#6366f1',

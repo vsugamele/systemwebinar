@@ -71,7 +71,14 @@ export default function QuizAdminPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [webinarId])
+  useEffect(() => {
+    supabase.from('webi_webinars').select('name').eq('id', webinarId).single()
+      .then(({ data: webinar }) => setWebinarName(webinar?.name || ''))
+    supabase.from('webi_quiz_questions').select('*').eq('webinar_id', webinarId).order('sort_order')
+      .then(({ data: qs }) => setQuestions(qs || []))
+    supabase.from('webi_quiz_responses').select('*').eq('webinar_id', webinarId).order('completed_at', { ascending: false }).limit(100)
+      .then(({ data: rs }) => { setResponses(rs || []); setLoading(false) })
+  }, [webinarId])
 
   function openCreate() {
     setEditItem(null)

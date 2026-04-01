@@ -86,7 +86,7 @@ export default function ChatConfigPage() {
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
             <input
-              type="range" min={0} max={30} step={1}
+              type="range" min={0} max={300} step={1}
               value={chatCpm}
               onChange={e => setChatCpm(Number(e.target.value))}
               style={{ flex: 1, accentColor: 'var(--brand)' }}
@@ -99,17 +99,42 @@ export default function ChatConfigPage() {
                 {chatCpm}
               </span>
               <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>msg/min</div>
+              {chatCpm > 0 && (
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
+                  {chatCpm > 30
+                    ? `≈ ${(chatCpm / 60).toFixed(1)}/s`
+                    : `1 a cada ${Math.round(60 / chatCpm)}s`}
+                </div>
+              )}
+              {chatCpm >= 60 && (
+                <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', marginTop: 2 }}>
+                  ENXURRADA
+                </div>
+              )}
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-            {[0, 2, 5, 10, 20].map(v => (
+            {[0, 2, 5, 10, 20, 30, 60, 120, 300].map(v => (
               <button key={v}
                 className={`btn btn-sm ${chatCpm === v ? 'btn-primary' : 'btn-ghost'}`}
                 onClick={() => setChatCpm(v)}>
-                {v === 0 ? 'Desativado' : `${v}/min`}
+                {v === 0 ? 'Desativado' : v < 60 ? `${v}/min` : `${v}/min (${v / 60}/s)`}
               </button>
             ))}
           </div>
+          {chatCpm >= 60 && (
+            <div style={{
+              marginTop: 12, padding: '10px 14px', fontSize: 12,
+              background: 'rgba(245,158,11,0.06)',
+              border: '1px solid rgba(245,158,11,0.25)',
+              borderRadius: 8, color: 'var(--text-secondary)', lineHeight: 1.6,
+            }}>
+              <strong style={{ color: '#f59e0b' }}>Modo Enxurrada ativo.</strong>{' '}
+              Com {chatCpm} CPM, uma mensagem a cada{' '}
+              <strong style={{ color: 'var(--text-primary)' }}>{Math.round((60 / chatCpm) * 1000)}ms</strong>.
+              {' '}Use um pool de nomes variado para evitar repetição.
+            </div>
+          )}
         </div>
 
         {/* Participant names pool */}
@@ -183,7 +208,7 @@ export default function ChatConfigPage() {
             <strong style={{ color: 'var(--text-primary)' }}>Como funciona o Broadcast de Vendas:</strong><br />
             Quando um evento <strong>Pitch Button</strong> disparar na sala, se o campo
             <code style={{ background: 'var(--bg-elevated)', padding: '1px 6px', borderRadius: 4, margin: '0 4px' }}>broadcast_sales</code>
-            estiver ativado, mensagens "{'{nome}'} acabou de comprar!" aparecerão automaticamente no chat a cada ~15s usando os nomes cadastrados acima.
+            estiver ativado, mensagens &quot;{'{nome}'} acabou de comprar!&quot; aparecerão automaticamente no chat a cada ~15s usando os nomes cadastrados acima.
           </div>
         </div>
       </div>

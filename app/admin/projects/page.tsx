@@ -21,7 +21,10 @@ export default function ProjectsPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    supabase.from('webi_projects').select('*').order('created_at', { ascending: false })
+      .then(({ data }) => { setProjects(data || []); setLoading(false) })
+  }, [])
 
   function openCreate() {
     setEditProject(null)

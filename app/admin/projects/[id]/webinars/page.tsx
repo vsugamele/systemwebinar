@@ -42,7 +42,12 @@ export default function WebinarsPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [projectId])
+  useEffect(() => {
+    supabase.from('webi_projects').select('name').eq('id', projectId).single()
+      .then(({ data: project }) => setProjectName(project?.name || ''))
+    supabase.from('webi_webinars').select('*').eq('project_id', projectId).order('created_at', { ascending: false })
+      .then(({ data }) => { setWebinars(data || []); setLoading(false) })
+  }, [projectId])
 
   function openCreate() {
     setEditWebinar(null)
@@ -262,7 +267,7 @@ export default function WebinarsPage() {
               <div className="form-group">
                 <label className="form-label">Status</label>
                 <select className="form-input form-select" value={form.status}
-                  onChange={e => setForm(f => ({ ...f, status: e.target.value as any }))}>
+                  onChange={e => setForm(f => ({ ...f, status: e.target.value as 'draft' | 'active' | 'paused' }))}>
                   <option value="draft">Rascunho</option>
                   <option value="active">Ativo</option>
                   <option value="paused">Pausado</option>

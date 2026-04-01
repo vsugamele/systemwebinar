@@ -29,13 +29,10 @@ export default function AnalyticsPage() {
     if (!selectedProject) return
     supabase.from('webi_webinars').select('*').eq('project_id', selectedProject)
       .then(({ data }) => setWebinars(data || []))
-    setSelectedWebinar('')
-    setData(null)
   }, [selectedProject])
 
   useEffect(() => {
     if (!selectedWebinar) return
-    setLoading(true)
     fetch(`/api/analytics?webinar_id=${selectedWebinar}`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false) })
@@ -64,13 +61,13 @@ export default function AnalyticsPage() {
         {/* Selectors */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
           <select className="form-input form-select" style={{ maxWidth: 240 }}
-            value={selectedProject} onChange={e => setSelectedProject(e.target.value)}>
+            value={selectedProject} onChange={e => { setSelectedProject(e.target.value); setSelectedWebinar(''); setData(null) }}>
             <option value="">Selecionar projeto...</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
 
           <select className="form-input form-select" style={{ maxWidth: 300 }}
-            value={selectedWebinar} onChange={e => setSelectedWebinar(e.target.value)}
+            value={selectedWebinar} onChange={e => { const v = e.target.value; setSelectedWebinar(v); if (v) setLoading(true) }}
             disabled={!selectedProject}>
             <option value="">Selecionar webinar...</option>
             {webinars.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}

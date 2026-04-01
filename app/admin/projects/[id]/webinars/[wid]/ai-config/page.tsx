@@ -36,7 +36,7 @@ export default function AIConfigPage() {
   useEffect(() => {
     async function load() {
       const [{ data: webinar }, { data: project }] = await Promise.all([
-        supabase.from('webi_webinars').select('name, ai_enabled, ai_model, ai_knowledge_base, ai_system_prompt').eq('id', wid).single(),
+        supabase.from('webi_webinars').select('name, ai_enabled, ai_model, ai_knowledge_base, ai_system_prompt, ai_persona_name, ai_persona_avatar').eq('id', wid).single(),
         supabase.from('webi_projects').select('openrouter_api_key').eq('id', id).single(),
       ])
 
@@ -47,8 +47,8 @@ export default function AIConfigPage() {
           ai_model: webinar.ai_model || 'google/gemini-flash-1.5',
           ai_knowledge_base: webinar.ai_knowledge_base || '',
           ai_system_prompt: webinar.ai_system_prompt || '',
-          ai_persona_name: (webinar as any).ai_persona_name || '',
-          ai_persona_avatar: (webinar as any).ai_persona_avatar || '',
+          ai_persona_name: (webinar as Record<string, unknown>).ai_persona_name as string || '',
+          ai_persona_avatar: (webinar as Record<string, unknown>).ai_persona_avatar as string || '',
         })
       }
       if (project) setProjectApiKey(project.openrouter_api_key || '')
@@ -100,7 +100,7 @@ export default function AIConfigPage() {
           <div>
             <div style={{ fontWeight: 700, marginBottom: 4 }}>Ativar IA no Chat</div>
             <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              A IA detecta perguntas e responde automaticamente no chat como "🤖 Assistente"
+              A IA detecta perguntas e responde automaticamente no chat como &quot;🤖 Assistente&quot;
             </div>
           </div>
           <label style={{ cursor: 'pointer', position: 'relative', display: 'inline-block', width: 48, height: 28, flexShrink: 0 }}>
@@ -198,8 +198,8 @@ export default function AIConfigPage() {
           }}>
             <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 4 }}>🧑‍💼 Identidade do Assistente</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-              Configure um nome e foto para que a IA pareça uma pessoa real no chat, como um "suporte" ou "moderador".
-              Deixe em branco para usar o padrão ("🤖 Assistente").
+              Configure um nome e foto para que a IA pareça uma pessoa real no chat, como um &quot;suporte&quot; ou &quot;moderador&quot;.
+              Deixe em branco para usar o padrão (&quot;🤖 Assistente&quot;).
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               <div className="form-group" style={{ margin: 0 }}>
@@ -226,7 +226,10 @@ export default function AIConfigPage() {
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 6 }}>Preview no chat:</div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                   {form.ai_persona_avatar ? (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img src={form.ai_persona_avatar} alt="" style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }} />
+                  </>
                   ) : (
                     <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontSize: 14, fontWeight: 800 }}>
                       {form.ai_persona_name[0]?.toUpperCase()}

@@ -35,7 +35,7 @@ export default function AdminToasts() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'webi_leads' },
         (payload) => {
-          const record = payload.new as any
+          const record = payload.new as { name?: string }
           addToast({
             icon: '👤',
             title: 'Novo Lead!',
@@ -53,7 +53,7 @@ export default function AdminToasts() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'webi_quiz_responses' },
         (payload) => {
-          const record = payload.new as any
+          const record = payload.new as { score_percent: number; user_name?: string }
           if (record.score_percent >= 70) {
             addToast({
               icon: '🎓',

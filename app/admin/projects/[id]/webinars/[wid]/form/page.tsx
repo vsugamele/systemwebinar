@@ -33,14 +33,18 @@ export default function FormPage() {
         .single()
       if (data) {
         setWebinarName(data.name)
-        const fields = data.form_fields as any
+        const fields = data.form_fields as unknown
         if (Array.isArray(fields)) {
           // Support both simple array ["phone"] and array of objects [{key:"phone",label:"..."}]
           const keys: string[] = []
           const labels: Record<string, string> = {}
-          fields.forEach((f: any) => {
+          ;(fields as unknown[]).forEach((f: unknown) => {
             if (typeof f === 'string') keys.push(f)
-            else if (f.key) { keys.push(f.key); if (f.label) labels[f.key] = f.label }
+            else if (f && typeof f === 'object' && 'key' in f) {
+              const fo = f as { key: string; label?: string }
+              keys.push(fo.key)
+              if (fo.label) labels[fo.key] = fo.label
+            }
           })
           setFormFields(keys.length ? keys : ['name', 'email', 'phone'])
           setFieldLabels(labels)

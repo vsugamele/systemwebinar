@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, startTransition } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -29,7 +29,7 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
 
   // Close mobile menu on route change
   useEffect(() => {
-    setMobileMenuOpen(false)
+    startTransition(() => setMobileMenuOpen(false))
   }, [pathname])
 
   async function handleLogout() {

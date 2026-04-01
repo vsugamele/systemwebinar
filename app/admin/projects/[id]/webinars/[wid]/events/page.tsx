@@ -57,16 +57,16 @@ function DraggableChip({ ev, pct, chipClass, icon, label, duration, onDrop, onCl
   const [dragging, setDragging] = useState(false)
   const [previewPct, setPreviewPct] = useState(pct)
   const [previewSecs, setPreviewSecs] = useState(ev.timestamp_seconds)
-  const dragStartX = { x: 0, origPct: pct }
-  const didMoveRef = { moved: false }
+  const dragStartRef = useRef({ x: 0, origPct: pct })
+  const didMoveRef = useRef({ moved: false })
 
   function handlePointerDown(e: React.PointerEvent) {
     e.stopPropagation()
     const chip = e.currentTarget as HTMLElement
     chip.setPointerCapture(e.pointerId)
-    dragStartX.x = e.clientX
-    dragStartX.origPct = previewPct
-    didMoveRef.moved = false
+    dragStartRef.current.x = e.clientX
+    dragStartRef.current.origPct = previewPct
+    didMoveRef.current.moved = false
     setDragging(false)
   }
 
@@ -74,11 +74,11 @@ function DraggableChip({ ev, pct, chipClass, icon, label, duration, onDrop, onCl
     const parent = (e.currentTarget as HTMLElement).parentElement
     if (!parent) return
     const rect = parent.getBoundingClientRect()
-    const dx = e.clientX - dragStartX.x
+    const dx = e.clientX - dragStartRef.current.x
     if (Math.abs(dx) < 4 && !dragging) return
-    didMoveRef.moved = true
+    didMoveRef.current.moved = true
     if (!dragging) setDragging(true)
-    const newPct = Math.min(Math.max(dragStartX.origPct + (dx / rect.width) * 100, 0), 98)
+    const newPct = Math.min(Math.max(dragStartRef.current.origPct + (dx / rect.width) * 100, 0), 98)
     const newSecs = Math.round((newPct / 100) * duration)
     setPreviewPct(newPct)
     setPreviewSecs(newSecs)
@@ -86,7 +86,7 @@ function DraggableChip({ ev, pct, chipClass, icon, label, duration, onDrop, onCl
 
   async function handlePointerUp(e: React.PointerEvent) {
     e.stopPropagation()
-    if (!didMoveRef.moved) {
+    if (!didMoveRef.current.moved) {
       setDragging(false)
       onClick()
       return
@@ -163,7 +163,7 @@ export default function EventsPage() {
   const [aiPreview, setAiPreview] = useState<GeneratedChatEvent[]>([])
   const [aiError, setAiError] = useState('')
   const [aiInserting, setAiInserting] = useState(false)
-  const [form, setForm] = useState<{ type: EventType; timestamp_seconds: number; timestampStr: string; payload: Record<string, any> }>({
+  const [form, setForm] = useState<{ type: EventType; timestamp_seconds: number; timestampStr: string; payload: Record<string, unknown> }>({
     type: 'chat_message', timestamp_seconds: 0, timestampStr: '00:00', payload: { ...emptyPayloads.chat_message }
   })
   const [saving, setSaving] = useState(false)
@@ -202,7 +202,7 @@ export default function EventsPage() {
 
   function openCreate(type: EventType = 'chat_message') {
     setEditEvent(null)
-    setForm({ type, timestamp_seconds: 0, timestampStr: '00:00', payload: { ...emptyPayloads[type] as Record<string, any> } })
+    setForm({ type, timestamp_seconds: 0, timestampStr: '00:00', payload: { ...emptyPayloads[type] as Record<string, unknown> } })
     setShowModal(true)
   }
 
@@ -212,7 +212,7 @@ export default function EventsPage() {
       type: event.type,
       timestamp_seconds: event.timestamp_seconds,
       timestampStr: formatTime(event.timestamp_seconds),
-      payload: { ...(event.payload as Record<string, any>) },
+      payload: { ...(event.payload as Record<string, unknown>) },
     })
     setShowModal(true)
   }
@@ -242,7 +242,7 @@ export default function EventsPage() {
     setForm(f => ({ ...f, timestampStr: str, timestamp_seconds: isNaN(secs) ? 0 : secs }))
   }
 
-  function updatePayload(key: string, value: any) {
+  function updatePayload(key: string, value: unknown) {
     setForm(f => ({ ...f, payload: { ...f.payload, [key]: value } }))
   }
 
@@ -432,7 +432,7 @@ export default function EventsPage() {
           <div className="event-list">
             {events.map(ev => {
               const evType = EVENT_TYPES.find(t => t.type === ev.type)
-              const payload = ev.payload as Record<string, any>
+              const payload = ev.payload as Record<string, unknown>
               return (
                 <div key={ev.id} className="event-item">
                   <span className={`badge ${
@@ -591,7 +591,7 @@ export default function EventsPage() {
                     {EVENT_TYPES.map(et => (
                       <button key={et.type}
                         className={`btn ${form.type === et.type ? 'btn-primary' : 'btn-ghost'} btn-sm`}
-                        onClick={() => setForm(f => ({ ...f, type: et.type as EventType, payload: { ...(emptyPayloads[et.type as EventType] as Record<string, any>) } }))}
+                        onClick={() => setForm(f => ({ ...f, type: et.type as EventType, payload: { ...(emptyPayloads[et.type as EventType] as Record<string, unknown>) } }))}
                         style={{ justifyContent: 'flex-start', gap: 8 }}>
                         {et.icon} {et.label}
                       </button>

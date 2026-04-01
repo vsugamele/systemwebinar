@@ -34,7 +34,10 @@ export default function MaterialsAdminPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [wid])
+  useEffect(() => {
+    supabase.from('webi_materials').select('*').eq('webinar_id', wid).order('show_at_seconds')
+      .then(({ data }) => { setMaterials(data || []); setLoading(false) })
+  }, [wid])
 
   async function add(e: React.FormEvent) {
     e.preventDefault()
@@ -62,7 +65,7 @@ export default function MaterialsAdminPage() {
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, marginBottom: 4 }}>📂 Materiais de Apoio</h1>
         <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-          Libere PDFs, planilhas e links no momento certo do vídeo. Os participantes veem na aba "Materiais".
+          Libere PDFs, planilhas e links no momento certo do vídeo. Os participantes veem na aba &quot;Materiais&quot;.
         </p>
       </div>
 

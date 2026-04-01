@@ -5,6 +5,10 @@ import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import type { Project, Webinar } from '@/types'
 
+interface WebinarWithProject extends Webinar {
+  webi_projects?: { name: string; accent_color: string } | null
+}
+
 interface Stats {
   projects: number
   webinars: number
@@ -14,7 +18,7 @@ interface Stats {
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats>({ projects: 0, webinars: 0, leads: 0, attended: 0 })
-  const [recentWebinars, setRecentWebinars] = useState<(Webinar & { project?: Project })[]>([])
+  const [recentWebinars, setRecentWebinars] = useState<WebinarWithProject[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
 
@@ -31,7 +35,7 @@ export default function AdminDashboard() {
         leads: leadsCount || 0,
         attended: attendedCount || 0,
       })
-      setRecentWebinars((webinars as any) || [])
+      setRecentWebinars((webinars as WebinarWithProject[]) || [])
       setLoading(false)
     }
     load()
@@ -105,10 +109,10 @@ export default function AdminDashboard() {
                 </tr>
               </thead>
               <tbody>
-                {recentWebinars.map((w: any) => (
+                {recentWebinars.map((w) => (
                   <tr key={w.id}>
                     <td style={{ color: 'var(--text-primary)', fontWeight: 500 }}>{w.name}</td>
-                    <td>{(w as any).webi_projects?.name || '—'}</td>
+                    <td>{w.webi_projects?.name || '—'}</td>
                     <td>
                       <span className={`badge badge-${w.status}`}>
                         {w.status === 'active' ? '● Ativo' : w.status === 'draft' ? '○ Rascunho' : '⏸ Pausado'}

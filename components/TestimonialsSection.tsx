@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 interface Testimonial {
   id: string
@@ -30,6 +30,7 @@ function StarRating({ rating }: { rating: number }) {
 
 function Avatar({ name, url }: { name: string; url?: string }) {
   if (url) return (
+    // eslint-disable-next-line @next/next/no-img-element
     <img src={url} alt={name} style={{ width: 44, height: 44, borderRadius: '50%', objectFit: 'cover' }} />
   )
   return (
@@ -44,13 +45,17 @@ function Avatar({ name, url }: { name: string; url?: string }) {
   )
 }
 
-export default function TestimonialsSection({ webinarId, webinarName, currentTime }: Props) {
+export default function TestimonialsSection({ webinarId, webinarName: _webinarName, currentTime }: Props) {
   const [allTestimonials, setAllTestimonials] = useState<Testimonial[]>([])
-  const [visible, setVisible] = useState<Testimonial[]>([])
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState({ name: '', role: '', text: '', rating: 5 })
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
+
+  const visible = useMemo(
+    () => allTestimonials.filter(t => t.show_at_seconds <= currentTime),
+    [allTestimonials, currentTime]
+  )
 
   useEffect(() => {
     fetch(`/api/testimonials?webinar_id=${webinarId}`)
@@ -58,12 +63,6 @@ export default function TestimonialsSection({ webinarId, webinarName, currentTim
       .then(data => setAllTestimonials(data))
       .catch(() => {})
   }, [webinarId])
-
-  // Reveal testimonials as video progresses
-  useEffect(() => {
-    const toShow = allTestimonials.filter(t => t.show_at_seconds <= currentTime)
-    setVisible(toShow)
-  }, [currentTime, allTestimonials])
 
   async function submitTestimonial(e: React.FormEvent) {
     e.preventDefault()
@@ -178,7 +177,7 @@ export default function TestimonialsSection({ webinarId, webinarName, currentTim
                   fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6,
                   margin: '12px 0', fontStyle: 'italic',
                 }}>
-                  "{t.text}"
+                  &quot;{t.text}&quot;
                 </p>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                   <Avatar name={t.name} url={t.avatar_url} />

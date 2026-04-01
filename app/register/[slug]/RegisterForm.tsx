@@ -4,8 +4,10 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Webinar } from '@/types'
 
+type FormFieldConfig = string | { key: string; label?: string; required?: boolean }
+
 interface Props {
-  webinar: Webinar & { webi_projects?: { name?: string; accent_color?: string }; form_fields?: any[] }
+  webinar: Webinar & { webi_projects?: { name?: string; accent_color?: string }; form_fields?: FormFieldConfig[] }
   slug: string
 }
 
@@ -20,13 +22,13 @@ const FIELD_META: Record<string, { label: string; placeholder: string; type?: st
 
 export default function RegisterForm({ webinar, slug }: Props) {
   const router = useRouter()
-  const accent = (webinar as any).webi_projects?.accent_color || (webinar as any).projects?.accent_color || '#6366f1'
+  const accent = webinar.webi_projects?.accent_color || '#6366f1'
 
   // Parse form_fields config
-  const rawFields = (webinar as any).form_fields as any[] | null
+  const rawFields = webinar.form_fields ?? null
   const extraFields: Array<{ key: string; label: string; placeholder: string; type?: string; required?: boolean }> =
     (Array.isArray(rawFields) ? rawFields : [{ key: 'phone' }])
-      .map((f: any) => {
+      .map((f: FormFieldConfig) => {
         const key = typeof f === 'string' ? f : f.key
         const meta = FIELD_META[key] || { label: key, placeholder: '' }
         const label = (typeof f === 'object' && f.label) ? f.label : meta.label
@@ -56,8 +58,8 @@ export default function RegisterForm({ webinar, slug }: Props) {
 
       // Redirect to live webinar room
       router.push(`/w/${slug}`)
-    } catch (err: any) {
-      setError(err.message || 'Erro ao realizar inscrição. Tente novamente.')
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro ao realizar inscrição. Tente novamente.')
     } finally {
       setLoading(false)
     }

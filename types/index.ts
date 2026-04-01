@@ -115,6 +115,7 @@ export interface ChatMessage {
   text: string
   timestamp: number
   isSimulated: boolean
+  isBroadcast?: boolean
 }
 
 // Analytics

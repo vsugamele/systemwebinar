@@ -25,41 +25,32 @@ export default function RegistrantsPage() {
   }, [])
 
   useEffect(() => {
-    if (!selectedProject) { setWebinars([]); setLeads([]); return }
+    if (!selectedProject) return
     supabase.from('webi_webinars').select('*').eq('project_id', selectedProject).order('created_at', { ascending: false })
       .then(({ data }) => setWebinars(data || []))
-    setSelectedWebinar('')
-    setLeads([])
   }, [selectedProject])
 
   useEffect(() => {
     if (!selectedProject) return
-    loadLeads()
+    let q = supabase.from('webi_leads').select('*').eq('project_id', selectedProject)
+    if (selectedWebinar) q = q.eq('webinar_id', selectedWebinar)
+    if (filterBehavior === 'attended') q = q.eq('attended', true)
+    if (filterBehavior === 'not_attended') q = q.eq('attended', false)
+
+    q.order('registered_at', { ascending: false }).then(async ({ data }) => {
+      let fetchedLeads = data || []
+      if (fetchedLeads.length > 0 && ['cta_clicked', 'popup_seen', 'chat_sent'].includes(filterBehavior)) {
+        const { data: events } = await supabase.from('webi_session_events')
+          .select('lead_id')
+          .eq('event_type', filterBehavior)
+          .in('lead_id', fetchedLeads.map(l => l.id))
+        const evtSet = new Set(events?.map(e => e.lead_id))
+        fetchedLeads = fetchedLeads.filter(l => evtSet.has(l.id))
+      }
+      setLeads(fetchedLeads.map(l => ({ ...l, sessions_count: 0, last_seen: null })))
+      setLoading(false)
+    })
   }, [selectedWebinar, filterBehavior, selectedProject])
-
-  async function loadLeads() {
-    setLoading(true)
-    let query = supabase.from('webi_leads').select('*').eq('project_id', selectedProject)
-    if (selectedWebinar) query = query.eq('webinar_id', selectedWebinar)
-    if (filterBehavior === 'attended') query = query.eq('attended', true)
-    if (filterBehavior === 'not_attended') query = query.eq('attended', false)
-    
-    const { data } = await query.order('registered_at', { ascending: false })
-    let fetchedLeads = data || []
-
-    if (fetchedLeads.length > 0 && ['cta_clicked', 'popup_seen', 'chat_sent'].includes(filterBehavior)) {
-      const { data: events } = await supabase.from('webi_session_events')
-        .select('lead_id')
-        .eq('event_type', filterBehavior)
-        .in('lead_id', fetchedLeads.map(l => l.id))
-      
-      const evtSet = new Set(events?.map(e => e.lead_id))
-      fetchedLeads = fetchedLeads.filter(l => evtSet.has(l.id))
-    }
-
-    setLeads(fetchedLeads.map(l => ({ ...l, sessions_count: 0, last_seen: null })))
-    setLoading(false)
-  }
 
   const filtered = leads.filter(l =>
     !search || l.name.toLowerCase().includes(search.toLowerCase()) || l.email.toLowerCase().includes(search.toLowerCase())
@@ -100,20 +91,20 @@ export default function RegistrantsPage() {
         {/* Filters */}
         <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
           <select className="form-input form-select" style={{ maxWidth: 220 }}
-            value={selectedProject} onChange={e => setSelectedProject(e.target.value)}>
+            value={selectedProject} onChange={e => { const v = e.target.value; setSelectedProject(v); setWebinars([]); setLeads([]); setSelectedWebinar(''); if (v) setLoading(true) }}>
             <option value="">Todos os projetos</option>
             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
 
           <select className="form-input form-select" style={{ maxWidth: 280 }}
-            value={selectedWebinar} onChange={e => setSelectedWebinar(e.target.value)}
+            value={selectedWebinar} onChange={e => { setSelectedWebinar(e.target.value); if (selectedProject) setLoading(true) }}
             disabled={!selectedProject}>
             <option value="">Todos os webinars</option>
             {webinars.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
           </select>
 
           <select className="form-input form-select" style={{ maxWidth: 200 }}
-            value={filterBehavior} onChange={e => setFilterBehavior(e.target.value as any)}>
+            value={filterBehavior} onChange={e => { setFilterBehavior(e.target.value as 'all' | 'attended' | 'not_attended' | 'cta_clicked' | 'popup_seen' | 'chat_sent'); if (selectedProject) setLoading(true) }}>
             <option value="all">Todos os registrantes</option>
             <option value="attended">Assistiram</option>
             <option value="not_attended">Não assistiram</option>
