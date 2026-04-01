@@ -46,6 +46,7 @@ interface WebinarConfig {
   fake_viewers_end?: number
   fake_viewers_peak_at_pct?: number
   chat_default_tab?: 'chat' | 'qa'
+  theme?: 'dark' | 'light' | 'youtube'
 }
 
 /** Compute seconds elapsed since session_started_at (0 if not set). */
@@ -128,7 +129,7 @@ function getYouTubeEmbedUrl(url: string, startSeconds = 0): string | null {
 
     if (!videoId) return null
     const start = startSeconds > 0 ? `&start=${startSeconds}` : ''
-    return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=0&controls=0&modestbranding=1&rel=0&disablekb=1&iv_load_policy=3&playsinline=1&fs=0&showinfo=0&enablejsapi=1${start}`
+    return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&modestbranding=1&rel=0&disablekb=1&iv_load_policy=3&playsinline=1&fs=0&showinfo=0&enablejsapi=1${start}`
   } catch {
     return null
   }
@@ -213,6 +214,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
   // YouTube overlay state
   const ytIframeRef = useRef<HTMLIFrameElement>(null)
   const [ytPlaying, setYtPlaying] = useState(false)
+  const [ytMuted, setYtMuted] = useState(true)
 
   // Chat tabs
   type ChatTab = 'chat' | 'qa' | 'materials'
@@ -504,6 +506,13 @@ export default function WebinarRoom({ webinar, events }: Props) {
     // Try to play as soon as iframe is ready; retry every 500ms until it starts
     const tryInterval = setInterval(sendPlay, 500)
 
+    function unMute() {
+      ytIframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
+        '*'
+      )
+    }
+
     function onMessage(e: MessageEvent) {
       try {
         const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
@@ -511,6 +520,8 @@ export default function WebinarRoom({ webinar, events }: Props) {
         if (data?.event === 'infoDelivery' && data?.info?.playerState === 1) {
           setYtPlaying(true)
           clearInterval(tryInterval)
+          // Try to unMute automatically (works if user has already interacted)
+          unMute()
         }
       } catch { /* ignore */ }
     }
@@ -729,7 +740,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
       {/* MAIN ROOM — shown after waiting */}
       {waitingDone && (
       <>
-      <div className="webinar-page-wrapper">
+      <div className="webinar-page-wrapper" data-theme={webinar.theme || 'dark'}>
       <div className="webinar-room">
       {/* VIDEO SECTION */}
       <div className="video-section">
@@ -786,7 +797,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
                   allowFullScreen={false}
                   title={webinar.name}
                 />
-                {/* Overlay preto cobre thumbnail/branding até o vídeo começar */}
+                {/* Overlay preto cobre thumbnail até o vídeo começar */}
                 {!ytPlaying && (
                   <div style={{
                     position: 'absolute', inset: 0, zIndex: 3,
@@ -803,6 +814,32 @@ export default function WebinarRoom({ webinar, events }: Props) {
                     <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.04em' }}>
                       Carregando transmissão...
                     </span>
+                  </div>
+                )}
+                {/* Botão de ativar som — aparece assim que o vídeo começa (mutado) */}
+                {ytPlaying && ytMuted && (
+                  <div style={{
+                    position: 'absolute', inset: 0, zIndex: 3,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(0,0,0,0.55)',
+                  }}>
+                    <button
+                      onClick={() => {
+                        ytIframeRef.current?.contentWindow?.postMessage(
+                          JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*'
+                        )
+                        setYtMuted(false)
+                      }}
+                      style={{
+                        background: 'rgba(255,255,255,0.95)', color: '#111',
+                        border: 'none', borderRadius: 50, padding: '14px 28px',
+                        fontSize: 15, fontWeight: 700, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+                      }}
+                    >
+                      🔊 Clique para ativar o som
+                    </button>
                   </div>
                 )}
                 {/* Cobrir barra inferior e cantos do YouTube quando estiver tocando */}

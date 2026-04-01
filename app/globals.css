@@ -631,6 +631,158 @@ tbody tr:hover td { background: var(--bg-hover); }
 .auth-footer a:hover { text-decoration: underline; }
 
 /* =============================================
+   WEBINAR THEMES
+   ============================================= */
+
+/* --- LIGHT THEME --- */
+.webinar-page-wrapper[data-theme="light"] {
+  --bg: #f0f0f5;
+  --bg-card: #ffffff;
+  --bg-elevated: #e8e8ef;
+  --bg-hover: #ebebf2;
+  --border: rgba(0, 0, 0, 0.1);
+  --border-hover: rgba(0, 0, 0, 0.2);
+  --text-primary: #111118;
+  --text-secondary: #44444f;
+  --text-muted: #88889a;
+  background: #f0f0f5;
+}
+.webinar-page-wrapper[data-theme="light"] .webinar-room {
+  background: #f0f0f5;
+}
+.webinar-page-wrapper[data-theme="light"] .video-header {
+  background: rgba(255, 255, 255, 0.97);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+.webinar-page-wrapper[data-theme="light"] .chat-section {
+  background: #ffffff;
+  border-left: 1px solid rgba(0, 0, 0, 0.1);
+}
+.webinar-page-wrapper[data-theme="light"] .chat-header {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+.webinar-page-wrapper[data-theme="light"] .chat-msg-text {
+  color: #333340;
+}
+.webinar-page-wrapper[data-theme="light"] .chat-input {
+  background: #f0f0f5;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  color: #111118;
+}
+.webinar-page-wrapper[data-theme="light"] .chat-input-area {
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+.webinar-page-wrapper[data-theme="light"] .chat-tab {
+  color: #44444f;
+}
+.webinar-page-wrapper[data-theme="light"] .chat-tab.active {
+  color: var(--brand);
+  border-bottom-color: var(--brand);
+}
+.webinar-page-wrapper[data-theme="light"] .viewer-count {
+  color: #44444f;
+}
+.webinar-page-wrapper[data-theme="light"] .live-badge {
+  background: rgba(239, 68, 68, 0.1);
+}
+
+/* --- YOUTUBE THEME --- */
+.webinar-page-wrapper[data-theme="youtube"] {
+  --bg: #0f0f0f;
+  --bg-card: #212121;
+  --bg-elevated: #272727;
+  --bg-hover: #3d3d3d;
+  --border: rgba(255, 255, 255, 0.1);
+  --border-hover: rgba(255, 255, 255, 0.2);
+  --text-primary: #ffffff;
+  --text-secondary: #aaaaaa;
+  --text-muted: #717171;
+  background: #0f0f0f;
+}
+.webinar-page-wrapper[data-theme="youtube"] .webinar-room {
+  background: #0f0f0f;
+  grid-template-columns: 1fr 400px;
+}
+.webinar-page-wrapper[data-theme="youtube"] .video-header {
+  background: #0f0f0f;
+  border-bottom: none;
+  padding: 10px 16px;
+}
+.webinar-page-wrapper[data-theme="youtube"] .live-badge {
+  background: #cc0000;
+  border: none;
+  color: #fff;
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 3px 8px;
+  letter-spacing: 0.03em;
+}
+.webinar-page-wrapper[data-theme="youtube"] .live-dot {
+  display: none;
+}
+.webinar-page-wrapper[data-theme="youtube"] .chat-section {
+  background: #212121;
+  border-left: 1px solid #3d3d3d;
+}
+.webinar-page-wrapper[data-theme="youtube"] .chat-header {
+  background: #212121;
+  border-bottom: 1px solid #3d3d3d;
+  padding: 12px 16px;
+}
+.webinar-page-wrapper[data-theme="youtube"] .chat-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+.webinar-page-wrapper[data-theme="youtube"] .chat-messages {
+  padding: 12px;
+  gap: 8px;
+}
+.webinar-page-wrapper[data-theme="youtube"] .chat-message {
+  gap: 8px;
+}
+.webinar-page-wrapper[data-theme="youtube"] .chat-avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 10px;
+  border-radius: 50%;
+}
+.webinar-page-wrapper[data-theme="youtube"] .chat-msg-author {
+  font-size: 11px;
+  font-weight: 700;
+  color: #aaaaaa;
+  margin-bottom: 1px;
+}
+.webinar-page-wrapper[data-theme="youtube"] .chat-msg-text {
+  font-size: 13px;
+  color: #f1f1f1;
+  line-height: 1.4;
+}
+.webinar-page-wrapper[data-theme="youtube"] .chat-input {
+  background: #121212;
+  border: 1px solid #3d3d3d;
+  color: #fff;
+  border-radius: 20px;
+  font-size: 13px;
+}
+.webinar-page-wrapper[data-theme="youtube"] .chat-input-area {
+  border-top: 1px solid #3d3d3d;
+  padding: 12px;
+}
+.webinar-page-wrapper[data-theme="youtube"] .viewer-count {
+  font-size: 12px;
+  color: #aaaaaa;
+}
+.webinar-page-wrapper[data-theme="youtube"] .chat-tab {
+  font-size: 12px;
+  color: #aaaaaa;
+}
+.webinar-page-wrapper[data-theme="youtube"] .chat-tab.active {
+  color: #fff;
+  border-bottom-color: #fff;
+}
+
+/* =============================================
    WEBINAR ROOM
    ============================================= */
 /* Outer scrollable wrapper: video+chat grid on top, testimonials below */

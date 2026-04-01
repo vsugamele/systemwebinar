@@ -38,6 +38,8 @@ export interface Webinar {
   fake_viewers_peak_at_pct: number
   // Chat (004)
   chat_default_tab: 'chat' | 'qa'
+  // Appearance
+  theme?: 'dark' | 'light' | 'youtube'
 }
 
 // ---- Event Payloads ----

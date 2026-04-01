@@ -17,6 +17,7 @@ interface WebinarData {
   ai_enabled: boolean
   session_started_at: string | null
   form_fields: unknown[]
+  theme?: 'dark' | 'light' | 'youtube'
 }
 
 interface Counts {
@@ -287,6 +288,9 @@ export default function WebinarHubPage() {
           </Link>
         </div>
 
+        {/* THEME SELECTOR */}
+        <ThemeSelector webinarId={wid} currentTheme={webinar.theme || 'dark'} />
+
         {/* REQUIRED */}
         <section>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
@@ -384,6 +388,108 @@ export default function WebinarHubPage() {
         </div>
       )}
     </>
+  )
+}
+
+const THEMES = [
+  {
+    id: 'dark' as const,
+    label: 'Dark',
+    desc: 'Padrão — fundo escuro profissional',
+    preview: { bg: '#0a0a0f', header: '#111118', chat: '#111118', accent: '#6366f1', text: '#f0f0ff', chatText: '#8b8ba7' },
+  },
+  {
+    id: 'light' as const,
+    label: 'Branco',
+    desc: 'Fundo claro, texto escuro',
+    preview: { bg: '#f0f0f5', header: '#ffffff', chat: '#ffffff', accent: '#6366f1', text: '#111118', chatText: '#44444f' },
+  },
+  {
+    id: 'youtube' as const,
+    label: 'YouTube',
+    desc: 'Clone do YouTube Live',
+    preview: { bg: '#0f0f0f', header: '#0f0f0f', chat: '#212121', accent: '#cc0000', text: '#ffffff', chatText: '#aaaaaa' },
+  },
+]
+
+function ThemeSelector({ webinarId, currentTheme }: { webinarId: string; currentTheme: 'dark' | 'light' | 'youtube' }) {
+  const supabase = createClient()
+  const [theme, setTheme] = useState(currentTheme)
+  const [saving, setSaving] = useState(false)
+  const [saved, setSaved] = useState(false)
+
+  async function applyTheme(t: 'dark' | 'light' | 'youtube') {
+    setTheme(t)
+    setSaving(true)
+    await supabase.from('webi_webinars').update({ theme: t }).eq('id', webinarId)
+    setSaving(false)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 1800)
+  }
+
+  return (
+    <div className="card" style={{ padding: '16px 20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>🎨 Tema da Sala</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Aparência da sala de webinar para os participantes</div>
+        </div>
+        {saving && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Salvando...</span>}
+        {saved && <span style={{ fontSize: 12, color: 'var(--success)' }}>✓ Salvo</span>}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        {THEMES.map(t => {
+          const p = t.preview
+          const active = theme === t.id
+          return (
+            <button
+              key={t.id}
+              onClick={() => applyTheme(t.id)}
+              style={{
+                background: 'none', border: `2px solid ${active ? 'var(--brand)' : 'var(--border)'}`,
+                borderRadius: 12, padding: 0, cursor: 'pointer', textAlign: 'left',
+                transition: 'border-color 0.15s',
+                boxShadow: active ? '0 0 0 3px var(--brand-glow)' : 'none',
+                overflow: 'hidden',
+              }}
+            >
+              {/* Mini preview */}
+              <div style={{ background: p.bg, padding: 8, display: 'flex', gap: 4, height: 72, position: 'relative' }}>
+                {/* Video area */}
+                <div style={{ flex: 1, background: '#000', borderRadius: 4, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                  <div style={{ background: p.header, height: 10, borderBottom: `1px solid rgba(255,255,255,0.08)` }} />
+                  <div style={{ flex: 1, background: '#000' }} />
+                </div>
+                {/* Chat sidebar */}
+                <div style={{ width: 40, background: p.chat, borderRadius: 4, display: 'flex', flexDirection: 'column', gap: 3, padding: 4, overflow: 'hidden' }}>
+                  {[1,2,3].map(i => (
+                    <div key={i} style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: p.accent, flexShrink: 0 }} />
+                      <div style={{ flex: 1, height: 3, background: p.chatText, borderRadius: 2, opacity: 0.6 }} />
+                    </div>
+                  ))}
+                </div>
+                {/* Active checkmark */}
+                {active && (
+                  <div style={{
+                    position: 'absolute', top: 4, right: 4,
+                    width: 16, height: 16, borderRadius: '50%',
+                    background: 'var(--brand)', color: '#fff',
+                    fontSize: 9, fontWeight: 900,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>✓</div>
+                )}
+              </div>
+              {/* Label */}
+              <div style={{ padding: '8px 10px', background: 'var(--bg-elevated)' }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 1 }}>{t.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.desc}</div>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
