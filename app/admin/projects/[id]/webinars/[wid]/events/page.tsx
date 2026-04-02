@@ -164,6 +164,13 @@ export default function EventsPage() {
   const [aiPreview, setAiPreview] = useState<GeneratedChatEvent[]>([])
   const [aiError, setAiError] = useState('')
   const [aiInserting, setAiInserting] = useState(false)
+
+  // Quick-add chat state
+  const [qMM, setQMM] = useState('0')
+  const [qSS, setQSS] = useState('0')
+  const [qAuthor, setQAuthor] = useState('')
+  const [qText, setQText] = useState('')
+  const [qSaving, setQSaving] = useState(false)
   const [form, setForm] = useState<{ type: EventType; timestamp_seconds: number; timestampStr: string; payload: Record<string, any> }>({
     type: 'chat_message', timestamp_seconds: 0, timestampStr: '00:00', payload: { ...emptyPayloads.chat_message }
   })
@@ -291,7 +298,28 @@ export default function EventsPage() {
     load()
   }
 
+  async function addQuickChat() {
+    if (!qAuthor.trim() || !qText.trim()) return
+    setQSaving(true)
+    const secs = Math.max(0, Number(qMM) * 60 + Number(qSS))
+    await supabase.from('webi_events').insert({
+      webinar_id: webinarId,
+      type: 'chat_message',
+      timestamp_seconds: secs,
+      payload: { author: qAuthor.trim(), text: qText.trim(), avatar: '' },
+    })
+    setQAuthor('')
+    setQText('')
+    setQSaving(false)
+    load()
+  }
+
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
+
+  const chatEvents = events.filter(e => e.type === 'chat_message').sort((a, b) => a.timestamp_seconds - b.timestamp_seconds)
+  const pitchEvents = events.filter(e => e.type === 'pitch_button' || e.type === 'hide_pitch_button')
+  const popupEvents = events.filter(e => e.type === 'offer_popup')
+  const otherEvents = events.filter(e => e.type === 'email_auto')
 
   const timelineWidth = 1200
   const eventsGrouped = EVENT_TYPES.map(et => ({
@@ -313,17 +341,10 @@ export default function EventsPage() {
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
-          {EVENT_TYPES.slice(0, 3).map(et => (
-            <button key={et.type} className={`btn btn-ghost btn-sm`} onClick={() => openCreate(et.type as EventType)}
-              style={{ gap: 6 }}>
-              {et.icon} {et.label}
-            </button>
-          ))}
-          <button className="btn btn-secondary" onClick={() => { setShowAiModal(true); setAiPreview([]); setAiError('') }}
-            style={{ gap: 6 }}>
-            ✨ Gerar com AI
+          <button className="btn btn-secondary" onClick={() => { setShowAiModal(true); setAiPreview([]); setAiError('') }}>
+            ✨ AI
           </button>
-          <button className="btn btn-primary" onClick={() => openCreate()}>+ Adicionar Evento</button>
+          <button className="btn btn-primary" onClick={() => openCreate()}>+ Evento</button>
         </div>
       </div>
 
@@ -331,7 +352,7 @@ export default function EventsPage() {
         {/* LEGEND */}
         <div className="event-type-legend" style={{ marginBottom: 20 }}>
           {EVENT_TYPES.map(et => (
-            <div key={et.type} className="legend-item">
+            <div key={et.type} className="legend-item" style={{ cursor: 'pointer' }} onClick={() => openCreate(et.type as EventType)}>
               <div className={`legend-dot timeline-event-chip ${et.chipClass}`}
                 style={{ width: 10, height: 10, borderRadius: '50%', padding: 0, border: 'none', display: 'block' }} />
               {et.icon} {et.label}
@@ -421,47 +442,200 @@ export default function EventsPage() {
           </div>
         </div>
 
-        {/* EVENT LIST */}
-        {events.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">⚡</div>
-            <div className="empty-title">Nenhum evento configurado</div>
-            <div className="empty-desc">Adicione eventos na timeline para criar a experiência do webinar</div>
-            <button className="btn btn-primary" onClick={() => openCreate()}>Adicionar Primeiro Evento</button>
-          </div>
-        ) : (
-          <div className="event-list">
-            {events.map(ev => {
-              const evType = EVENT_TYPES.find(t => t.type === ev.type)
-              const payload = ev.payload as Record<string, any>
-              return (
-                <div key={ev.id} className="event-item">
-                  <span className={`badge ${
-                    ev.type === 'chat_message' ? 'badge-active' :
-                    ev.type === 'offer_popup' ? '' :
-                    'badge-draft'
-                  }`} style={{ minWidth: 60, justifyContent: 'center' }}>
-                    <code style={{ fontSize: 11, fontFamily: 'monospace' }}>{formatTime(ev.timestamp_seconds)}</code>
-                  </span>
-                  <span style={{ fontSize: 18 }}>{evType?.icon}</span>
-                  <div className="event-info">
-                    <div className="event-name">{evType?.label}</div>
-                    <div className="event-desc">
-                      {ev.type === 'chat_message' && `${payload.author}: "${payload.text}"`}
-                      {ev.type === 'offer_popup' && `${payload.title} — ${payload.cta_text}`}
-                      {ev.type === 'pitch_button' && `CTA: ${payload.cta_text}`}
-                      {ev.type === 'email_auto' && `Template: ${payload.template} · Delay: ${payload.delay_minutes}min`}
-                    </div>
-                  </div>
-                  <div className="event-actions">
-                    <button className="btn btn-ghost btn-sm" onClick={() => openEdit(ev)}>✏️ Editar</button>
-                    <button className="btn btn-danger btn-sm" onClick={() => deleteEvent(ev.id)}>🗑</button>
-                  </div>
+        {/* 2-ZONE LAYOUT */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16, alignItems: 'start' }}>
+
+          {/* LEFT — Chat Messages */}
+          <div>
+            {/* Quick-add inline */}
+            <div className="card" style={{ marginBottom: 12, padding: '14px 16px' }}>
+              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: 'var(--text-primary)' }}>
+                💬 Mensagens no Chat
+                <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>
+                  {chatEvents.length} {chatEvents.length === 1 ? 'mensagem' : 'mensagens'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                {/* MM:SS picker */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, padding: '0 10px', height: 38 }}>
+                  <input
+                    type="number" min={0} max={999}
+                    value={qMM}
+                    onChange={e => setQMM(e.target.value)}
+                    style={{ width: 40, background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'monospace', fontWeight: 700 }}
+                  />
+                  <span style={{ color: 'var(--text-muted)', fontWeight: 700, lineHeight: 1 }}>:</span>
+                  <input
+                    type="number" min={0} max={59}
+                    value={qSS}
+                    onChange={e => setQSS(String(Math.min(59, Number(e.target.value))).padStart(2, '0'))}
+                    style={{ width: 34, background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'monospace', fontWeight: 700 }}
+                  />
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>min:s</span>
                 </div>
-              )
-            })}
+                <input
+                  className="form-input"
+                  placeholder="Nome"
+                  style={{ width: 140, flexShrink: 0 }}
+                  value={qAuthor}
+                  onChange={e => setQAuthor(e.target.value)}
+                />
+                <input
+                  className="form-input"
+                  placeholder="Texto da mensagem... (Enter para salvar)"
+                  style={{ flex: 1, minWidth: 180 }}
+                  value={qText}
+                  onChange={e => setQText(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && void addQuickChat()}
+                />
+                <button
+                  className="btn btn-primary"
+                  style={{ flexShrink: 0 }}
+                  onClick={() => void addQuickChat()}
+                  disabled={qSaving || !qAuthor.trim() || !qText.trim()}
+                >
+                  {qSaving ? <span className="spinner" /> : '+ Add'}
+                </button>
+              </div>
+            </div>
+
+            {/* Chat list */}
+            {chatEvents.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--text-muted)', fontSize: 13, background: 'var(--bg-card)', borderRadius: 12, border: '1px dashed var(--border)' }}>
+                Nenhuma mensagem ainda — adicione acima ou use ✨ AI
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                {chatEvents.map(ev => {
+                  const p = ev.payload as Record<string, unknown>
+                  const initial = String(p.author || '?')[0]?.toUpperCase()
+                  return (
+                    <div key={ev.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      background: 'var(--bg-card)', borderRadius: 10, padding: '9px 12px',
+                      border: '1px solid var(--border)',
+                    }}>
+                      <code style={{ fontSize: 11, color: 'var(--brand-light)', fontFamily: 'monospace', minWidth: 38, flexShrink: 0 }}>
+                        {formatTime(ev.timestamp_seconds)}
+                      </code>
+                      <div style={{
+                        width: 26, height: 26, borderRadius: '50%',
+                        background: 'linear-gradient(135deg, var(--brand), var(--brand-dark))',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 11, fontWeight: 700, color: '#fff', flexShrink: 0,
+                      }}>{initial}</div>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--brand-light)', flexShrink: 0 }}>
+                        {String(p.author)}
+                      </span>
+                      <span style={{ fontSize: 13, color: 'var(--text-secondary)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {String(p.text)}
+                      </span>
+                      <button className="btn btn-ghost btn-sm" style={{ padding: '3px 8px', fontSize: 12, flexShrink: 0 }} onClick={() => openEdit(ev)}>✏️</button>
+                      <button className="btn btn-danger btn-sm" style={{ padding: '3px 8px', fontSize: 12, flexShrink: 0 }} onClick={() => deleteEvent(ev.id)}>✕</button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
-        )}
+
+          {/* RIGHT — Pitch + Popups + Other */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+            {/* PITCH */}
+            <div className="card" style={{ padding: '14px 16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>🛒 Pitch Button</span>
+                <button className="btn btn-ghost btn-sm" onClick={() => openCreate('pitch_button')}>+ Novo</button>
+              </div>
+              {pitchEvents.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '12px 0', color: 'var(--text-muted)', fontSize: 12 }}>
+                  Nenhum pitch configurado
+                </div>
+              ) : (
+                pitchEvents.map(ev => {
+                  const p = ev.payload as Record<string, unknown>
+                  const isHide = ev.type === 'hide_pitch_button'
+                  return (
+                    <div key={ev.id} style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: 12, border: `1px solid ${isHide ? 'var(--border)' : 'rgba(99,102,241,0.25)'}`, marginBottom: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: isHide ? 0 : 6 }}>
+                        <code style={{ fontSize: 11, color: isHide ? 'var(--text-muted)' : 'var(--brand-light)', fontFamily: 'monospace' }}>
+                          {isHide ? '🙈 ocultar' : '▶ aparecer'} {formatTime(ev.timestamp_seconds)}
+                        </code>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          {!isHide && <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '2px 7px' }} onClick={() => openEdit(ev)}>✏️</button>}
+                          <button className="btn btn-danger btn-sm" style={{ fontSize: 11, padding: '2px 7px' }} onClick={() => deleteEvent(ev.id)}>✕</button>
+                        </div>
+                      </div>
+                      {!isHide && (
+                        <>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 3 }}>{String(p.cta_text || '—')}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all', marginBottom: 4 }}>{String(p.cta_url || '—')}</div>
+                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                            {!!p.countdown_seconds && <span style={{ fontSize: 11, color: 'var(--warning)' }}>⏱ {String(p.countdown_seconds)}s</span>}
+                            {!!p.scarcity_spots && <span style={{ fontSize: 11, color: 'var(--warning)' }}>🪑 {String(p.scarcity_spots)} vagas</span>}
+                            {!!p.broadcast_sales && <span style={{ fontSize: 11, color: 'var(--success)' }}>📣 broadcast</span>}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )
+                })
+              )}
+              {pitchEvents.some(e => e.type === 'pitch_button') && !pitchEvents.some(e => e.type === 'hide_pitch_button') && (
+                <button className="btn btn-ghost btn-sm" style={{ width: '100%', marginTop: 4, fontSize: 12 }} onClick={() => openCreate('hide_pitch_button')}>
+                  + Ocultar pitch no segundo…
+                </button>
+              )}
+            </div>
+
+            {/* POPUPS */}
+            <div className="card" style={{ padding: '14px 16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <span style={{ fontWeight: 700, fontSize: 13 }}>🎯 Pop-ups</span>
+                <button className="btn btn-ghost btn-sm" onClick={() => openCreate('offer_popup')}>+ Novo</button>
+              </div>
+              {popupEvents.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '12px 0', color: 'var(--text-muted)', fontSize: 12 }}>Nenhum pop-up configurado</div>
+              ) : (
+                popupEvents.map(ev => {
+                  const p = ev.payload as Record<string, unknown>
+                  return (
+                    <div key={ev.id} style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: 12, border: '1px solid rgba(239,68,68,0.2)', marginBottom: 6 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <code style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{formatTime(ev.timestamp_seconds)}</code>
+                        <div style={{ display: 'flex', gap: 4 }}>
+                          <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '2px 7px' }} onClick={() => openEdit(ev)}>✏️</button>
+                          <button className="btn btn-danger btn-sm" style={{ fontSize: 11, padding: '2px 7px' }} onClick={() => deleteEvent(ev.id)}>✕</button>
+                        </div>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{String(p.title || '—')}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{String(p.cta_text || '')} · {String(p.duration_seconds || 30)}s</div>
+                    </div>
+                  )
+                })
+              )}
+            </div>
+
+            {/* OTHER (email_auto) */}
+            {otherEvents.length > 0 && (
+              <div className="card" style={{ padding: '14px 16px' }}>
+                <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10 }}>📋 Outros</div>
+                {otherEvents.map(ev => {
+                  const evType = EVENT_TYPES.find(t => t.type === ev.type)
+                  return (
+                    <div key={ev.id} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <code style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{formatTime(ev.timestamp_seconds)}</code>
+                      <span style={{ fontSize: 13, color: 'var(--text-secondary)', flex: 1 }}>{evType?.icon} {evType?.label}</span>
+                      <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, padding: '2px 7px' }} onClick={() => openEdit(ev)}>✏️</button>
+                      <button className="btn btn-danger btn-sm" style={{ fontSize: 11, padding: '2px 7px' }} onClick={() => deleteEvent(ev.id)}>✕</button>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* AI GENERATOR MODAL */}

@@ -2,7 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { EventEngine } from '@/lib/event-engine'
-import { getPusherClient } from '@/lib/pusher'
+import { createClient } from '@/lib/supabase/client'
+import type { RealtimeChannel } from '@supabase/supabase-js'
+// Pusher removed — real-time chat uses Supabase Broadcast
 import type { Webinar, WebinarEvent, ChatMessage, ChatMessagePayload, OfferPopupPayload, PitchButtonPayload } from '@/types'
 import dynamic from 'next/dynamic'
 
@@ -178,6 +180,8 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const elapsedRef = useRef(0) // seconds watched (for non-YouTube videos)
   const elapsedIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const lastVideoTimeRef = useRef(0)
+  const supabaseRef = useRef(createClient())
+  const channelRef = useRef<RealtimeChannel | null>(null)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
@@ -357,23 +361,34 @@ export default function WebinarRoom({ webinar, events }: Props) {
     return () => { if (cpmTimerRef.current) clearTimeout(cpmTimerRef.current) }
   }, [webinar.chat_cpm, webinar.chat_names])
 
-  // ---- Real-time chat (Pusher) ----
+  // ---- Real-time chat + emojis (Supabase Broadcast) ----
   useEffect(() => {
-    try {
-      const pusher = getPusherClient()
-      const channel = pusher.subscribe(`webinar-${webinar.id}`)
-      channel.bind('chat-message', (data: ChatMessage & { session_id?: string }) => {
-        if (data.session_id !== sessionId.current) {
-          const { session_id: _, ...msg } = data
+    const supabase = supabaseRef.current
+    const channel = supabase.channel(`webinar-${webinar.id}`, {
+      config: { broadcast: { self: false } },
+    })
+
+    channel
+      .on('broadcast', { event: 'chat-message' }, ({ payload }) => {
+        if (payload.session_id !== sessionId.current) {
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { session_id: _sid, ...msg } = payload as ChatMessage & { session_id: string }
           setMessages(m => [...m, msg as ChatMessage])
         }
       })
-      return () => {
-        channel.unbind_all()
-        pusher.unsubscribe(`webinar-${webinar.id}`)
-      }
-    } catch {
-      // Pusher not configured — real-time chat disabled
+      .on('broadcast', { event: 'reaction' }, ({ payload }) => {
+        const { emoji, x } = payload as { emoji: string; x: number }
+        const id = Date.now() + Math.random()
+        setFlyingEmojis(f => [...f, { id, emoji, x }])
+        setTimeout(() => setFlyingEmojis(f => f.filter(e => e.id !== id)), 2000)
+      })
+      .subscribe()
+
+    channelRef.current = channel
+
+    return () => {
+      void supabase.removeChannel(channel)
+      channelRef.current = null
     }
   }, [webinar.id])
 
@@ -503,7 +518,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
       )
     }
 
-    // Try to play as soon as iframe is ready; retry every 500ms until it starts
+    // Retry play every 500ms until YouTube confirms playing
     const tryInterval = setInterval(sendPlay, 500)
 
     function unMute() {
@@ -513,22 +528,29 @@ export default function WebinarRoom({ webinar, events }: Props) {
       )
     }
 
+    function markPlaying() {
+      setYtPlaying(true)
+      clearInterval(tryInterval)
+      unMute()
+    }
+
     function onMessage(e: MessageEvent) {
       try {
         const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
-        // YouTube sends playerState 1 = playing
         if (data?.event === 'infoDelivery' && data?.info?.playerState === 1) {
-          setYtPlaying(true)
-          clearInterval(tryInterval)
-          // Try to unMute automatically (works if user has already interacted)
-          unMute()
+          markPlaying()
         }
       } catch { /* ignore */ }
     }
 
+    // Fallback: if YouTube never confirms in 8s, show video anyway
+    // (handles browsers that block postMessage responses)
+    const fallbackTimeout = setTimeout(markPlaying, 8000)
+
     window.addEventListener('message', onMessage)
     return () => {
       clearInterval(tryInterval)
+      clearTimeout(fallbackTimeout)
       window.removeEventListener('message', onMessage)
     }
   }, [webinar.video_url])
@@ -611,9 +633,11 @@ export default function WebinarRoom({ webinar, events }: Props) {
   function fireReaction(emoji: string) {
     setReactions(r => ({ ...r, [emoji]: (r[emoji] || 0) + 1 }))
     const id = Date.now() + Math.random()
-    const x = 20 + Math.random() * 60 // random horizontal %
+    const x = 20 + Math.random() * 60
     setFlyingEmojis(f => [...f, { id, emoji, x }])
     setTimeout(() => setFlyingEmojis(f => f.filter(e => e.id !== id)), 2000)
+    // Broadcast to other viewers
+    channelRef.current?.send({ type: 'broadcast', event: 'reaction', payload: { emoji, x } })
   }
 
   async function sendChatMessage() {
@@ -631,10 +655,11 @@ export default function WebinarRoom({ webinar, events }: Props) {
     setMessages(m => [...m, msg])
     setChatInput('')
 
-    await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...msg, webinar_id: webinar.id, session_id: sessionId.current }),
+    // Broadcast via Supabase Realtime (zero config needed)
+    await channelRef.current?.send({
+      type: 'broadcast',
+      event: 'chat-message',
+      payload: { ...msg, session_id: sessionId.current },
     })
 
     trackEvent('chat_sent', msg.timestamp)
