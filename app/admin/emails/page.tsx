@@ -181,7 +181,7 @@ export default function EmailsPage() {
                 width: 2, background: 'var(--border)', zIndex: 0
               }} />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
-                {orderedTemplates.map((t, idx) => {
+                {orderedTemplates.map((t) => {
                   const meta = typeLabels[t.type]
                   return (
                     <div key={t.id} style={{ display: 'flex', gap: 20, position: 'relative', paddingBottom: 24 }}>
@@ -218,7 +218,7 @@ export default function EmailsPage() {
                             </div>
                           </div>
                           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-                            <button className="btn btn-secondary btn-sm" onClick={() => { setEditTemplate({ ...t }); setActiveStep(idx) }}>
+                            <button className="btn btn-secondary btn-sm" onClick={() => { setEditTemplate({ ...t }) }}>
                               ✏️ Editar
                             </button>
                             <button
