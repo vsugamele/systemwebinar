@@ -40,6 +40,7 @@ export interface Webinar {
   chat_default_tab: 'chat' | 'qa'
   // Appearance
   theme?: 'dark' | 'light' | 'youtube'
+  display_name?: string
 }
 
 // ---- Event Payloads ----

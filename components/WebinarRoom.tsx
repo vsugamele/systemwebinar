@@ -186,7 +186,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
-  const [userName, setUserName] = useState('Você')
+  const [userName] = useState('Você')
   const [viewers, setViewers] = useState(() => {
     const vStart = webinar.fake_viewers_start ?? 30
     return Math.max(1, vStart)
@@ -196,7 +196,6 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const [pitchPayload, setPitchPayload] = useState<ExtendedPitchPayload | null>(null)
   const [popupVisible, setPopupVisible] = useState(false)
   const [popupPayload, setPopupPayload] = useState<OfferPopupPayload | null>(null)
-  const [videoError, setVideoError] = useState(false)
   const [countdown, setCountdown] = useState(0)
   const [scarcitySpots, setScarcitySpots] = useState(0)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
@@ -538,6 +537,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
     })
 
     engineRef.current = engine
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events])
 
   // ---- YouTube IFrame: auto-play via postMessage + detect playing state ----
@@ -643,6 +643,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
       video.removeEventListener('seeking', onSeeking)
       trackEvent('left', Math.floor(video.currentTime))
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [webinar.evergreen_offset_seconds])
 
   async function trackEvent(type: string, timestampVideo: number, metadata: Record<string, unknown> = {}) {
