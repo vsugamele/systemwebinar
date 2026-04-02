@@ -152,13 +152,18 @@ export default function EventsPage() {
   const [editEvent, setEditEvent] = useState<WebinarEvent | null>(null)
 
   // AI generator state
-  const [showAiModal, setShowAiModal] = useState(false)
   const [aiScript, setAiScript] = useState('')
   const [aiCount, setAiCount] = useState(20)
   const [aiGenerating, setAiGenerating] = useState(false)
   const [aiPreview, setAiPreview] = useState<GeneratedChatEvent[]>([])
   const [aiError, setAiError] = useState('')
   const [aiInserting, setAiInserting] = useState(false)
+
+  // Chat panel tabs: quick | bulk | ai
+  const [chatTab, setChatTab] = useState<'quick' | 'bulk' | 'ai'>('quick')
+  const [bulkText, setBulkText] = useState('')
+  const [bulkParsed, setBulkParsed] = useState<GeneratedChatEvent[]>([])
+  const [bulkInserting, setBulkInserting] = useState(false)
 
   // Quick-add chat state
   const [qMM, setQMM] = useState('0')
@@ -174,7 +179,8 @@ export default function EventsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
 
-  async function uploadImage(file: File, field: 'image_url'): Promise<string | null> {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async function uploadImage(file: File, _field: 'image_url'): Promise<string | null> {
     setUploading(true)
     try {
       const ext = file.name.split('.').pop()
@@ -235,7 +241,7 @@ export default function EventsPage() {
 
       setShowModal(false)
       load()
-    } catch (err) {
+    } catch {
       toast.error('Ocorreu um erro ao salvar o evento.')
     } finally {
       setSaving(false)
@@ -294,11 +300,10 @@ export default function EventsPage() {
       }))
       await supabase.from('webi_events').insert(rows)
       toast.success(`${rows.length} mensagens inseridas na timeline!`)
-      setShowAiModal(false)
       setAiPreview([])
       setAiScript('')
       load()
-    } catch (err) {
+    } catch {
       toast.error('Erro ao inserir eventos na timeline.')
     } finally {
       setAiInserting(false)
@@ -320,10 +325,72 @@ export default function EventsPage() {
       setQAuthor('')
       setQText('')
       load()
-    } catch (err) {
+    } catch {
       toast.error('Erro ao adicionar mensagem rápida.')
     } finally {
       setQSaving(false)
+    }
+  }
+
+  function parseBulkText(text: string): GeneratedChatEvent[] {
+    if (!text.trim()) return []
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+    const parsed: GeneratedChatEvent[] = []
+    for (const line of lines) {
+      // Formats accepted:
+      // 01:30 Maria: Nossa, incrível!
+      // 1:30 Maria Silva: Texto da mensagem
+      // 90 Maria: Mensagem (raw seconds)
+      const match = line.match(/^(\d{1,3}:\d{2})\s+(.+?):\s+(.+)$/)
+      if (match) {
+        const [, timeStr, author, text] = match
+        const [mm, ss] = timeStr.split(':').map(Number)
+        parsed.push({ timestamp_seconds: mm * 60 + ss, author: author.trim(), text: text.trim() })
+        continue
+      }
+      // Raw seconds format: 90 Maria: Mensagem
+      const match2 = line.match(/^(\d+)\s+(.+?):\s+(.+)$/)
+      if (match2) {
+        const [, secs, author, text] = match2
+        parsed.push({ timestamp_seconds: Number(secs), author: author.trim(), text: text.trim() })
+        continue
+      }
+    }
+    return parsed.sort((a, b) => a.timestamp_seconds - b.timestamp_seconds)
+  }
+
+  async function insertBulkMessages() {
+    if (bulkParsed.length === 0) return
+    setBulkInserting(true)
+    try {
+      const rows = bulkParsed.map(e => ({
+        webinar_id: webinarId,
+        type: 'chat_message' as const,
+        timestamp_seconds: e.timestamp_seconds,
+        payload: { author: e.author, text: e.text, avatar: '' },
+      }))
+      await supabase.from('webi_events').insert(rows)
+      toast.success(`${rows.length} mensagens importadas na timeline!`)
+      setBulkText('')
+      setBulkParsed([])
+      load()
+    } catch {
+      toast.error('Erro ao importar mensagens.')
+    } finally {
+      setBulkInserting(false)
+    }
+  }
+
+  async function deleteAllChatMessages() {
+    const chatIds = chatEvents.map(e => e.id)
+    if (chatIds.length === 0) return
+    if (!window.confirm(`Tem certeza que deseja excluir TODAS as ${chatIds.length} mensagens de chat?`)) return
+    try {
+      await supabase.from('webi_events').delete().in('id', chatIds)
+      toast.success(`${chatIds.length} mensagens excluídas.`)
+      load()
+    } catch {
+      toast.error('Erro ao excluir mensagens.')
     }
   }
 
@@ -334,7 +401,6 @@ export default function EventsPage() {
   const popupEvents = events.filter(e => e.type === 'offer_popup')
   const otherEvents = events.filter(e => e.type === 'email_auto')
 
-  const timelineWidth = 1200
   const eventsGrouped = EVENT_TYPES.map(et => ({
     ...et,
     items: events.filter(e => e.type === et.type),
@@ -354,9 +420,6 @@ export default function EventsPage() {
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-secondary" onClick={() => { setShowAiModal(true); setAiPreview([]); setAiError('') }}>
-            ✨ AI
-          </button>
           <button className="btn btn-primary" onClick={() => openCreate()}>+ Evento</button>
         </div>
       </div>
@@ -460,62 +523,188 @@ export default function EventsPage() {
 
           {/* LEFT — Chat Messages */}
           <div>
-            {/* Quick-add inline */}
             <div className="card" style={{ marginBottom: 12, padding: '14px 16px' }}>
-              <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 10, color: 'var(--text-primary)' }}>
-                💬 Mensagens no Chat
-                <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>
-                  {chatEvents.length} {chatEvents.length === 1 ? 'mensagem' : 'mensagens'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                {/* MM:SS picker */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, padding: '0 10px', height: 38 }}>
-                  <input
-                    type="number" min={0} max={999}
-                    value={qMM}
-                    onChange={e => setQMM(e.target.value)}
-                    style={{ width: 40, background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'monospace', fontWeight: 700 }}
-                  />
-                  <span style={{ color: 'var(--text-muted)', fontWeight: 700, lineHeight: 1 }}>:</span>
-                  <input
-                    type="number" min={0} max={59}
-                    value={qSS}
-                    onChange={e => setQSS(String(Math.min(59, Number(e.target.value))).padStart(2, '0'))}
-                    style={{ width: 34, background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'monospace', fontWeight: 700 }}
-                  />
-                  <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>min:s</span>
+              {/* Header with tabs */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+                <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)' }}>
+                  💬 Mensagens no Chat
+                  <span style={{ fontWeight: 400, fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>
+                    {chatEvents.length} {chatEvents.length === 1 ? 'mensagem' : 'mensagens'}
+                  </span>
                 </div>
-                <input
-                  className="form-input"
-                  placeholder="Nome"
-                  style={{ width: 140, flexShrink: 0 }}
-                  value={qAuthor}
-                  onChange={e => setQAuthor(e.target.value)}
-                />
-                <input
-                  className="form-input"
-                  placeholder="Texto da mensagem... (Enter para salvar)"
-                  style={{ flex: 1, minWidth: 180 }}
-                  value={qText}
-                  onChange={e => setQText(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && void addQuickChat()}
-                />
-                <button
-                  className="btn btn-primary"
-                  style={{ flexShrink: 0 }}
-                  onClick={() => void addQuickChat()}
-                  disabled={qSaving || !qAuthor.trim() || !qText.trim()}
-                >
-                  {qSaving ? <span className="spinner" /> : '+ Add'}
-                </button>
+                {chatEvents.length > 0 && (
+                  <button className="btn btn-ghost btn-sm" style={{ fontSize: 11, color: 'var(--danger)', padding: '3px 10px' }}
+                    onClick={deleteAllChatMessages}>🗑 Limpar todas</button>
+                )}
               </div>
+
+              {/* Tab switcher */}
+              <div style={{ display: 'flex', gap: 4, marginBottom: 14, background: 'var(--bg-elevated)', borderRadius: 10, padding: 3 }}>
+                {[
+                  { key: 'quick' as const, label: '➕ Rápido', desc: 'Uma mensagem por vez' },
+                  { key: 'bulk' as const, label: '📋 Importar Lote', desc: 'Colar várias de uma vez' },
+                  { key: 'ai' as const, label: '✨ Gerar com AI', desc: 'Roteiro → mensagens automáticas' },
+                ].map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => { setChatTab(tab.key); setAiError('') }}
+                    style={{
+                      flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none',
+                      cursor: 'pointer', fontSize: 12, fontWeight: chatTab === tab.key ? 700 : 500,
+                      background: chatTab === tab.key ? 'var(--brand)' : 'transparent',
+                      color: chatTab === tab.key ? '#fff' : 'var(--text-secondary)',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* TAB: Quick-add */}
+              {chatTab === 'quick' && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0, background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, padding: '0 10px', height: 38 }}>
+                    <input type="number" min={0} max={999} value={qMM} onChange={e => setQMM(e.target.value)}
+                      style={{ width: 40, background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'monospace', fontWeight: 700 }} />
+                    <span style={{ color: 'var(--text-muted)', fontWeight: 700, lineHeight: 1 }}>:</span>
+                    <input type="number" min={0} max={59} value={qSS}
+                      onChange={e => setQSS(String(Math.min(59, Number(e.target.value))).padStart(2, '0'))}
+                      style={{ width: 34, background: 'transparent', border: 'none', outline: 'none', textAlign: 'center', fontSize: 13, color: 'var(--text-primary)', fontFamily: 'monospace', fontWeight: 700 }} />
+                    <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 4 }}>min:s</span>
+                  </div>
+                  <input className="form-input" placeholder="Nome" style={{ width: 140, flexShrink: 0 }}
+                    value={qAuthor} onChange={e => setQAuthor(e.target.value)} />
+                  <input className="form-input" placeholder="Texto da mensagem... (Enter para salvar)"
+                    style={{ flex: 1, minWidth: 180 }} value={qText}
+                    onChange={e => setQText(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && void addQuickChat()} />
+                  <button className="btn btn-primary" style={{ flexShrink: 0 }}
+                    onClick={() => void addQuickChat()} disabled={qSaving || !qAuthor.trim() || !qText.trim()}>
+                    {qSaving ? <span className="spinner" /> : '+ Add'}
+                  </button>
+                </div>
+              )}
+
+              {/* TAB: Bulk Import */}
+              {chatTab === 'bulk' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, background: 'var(--bg-elevated)', borderRadius: 8, padding: '10px 14px', border: '1px solid var(--border)' }}>
+                    📌 <strong>Formato:</strong> cada linha no formato <code style={{ color: 'var(--brand-light)' }}>MM:SS Nome: Texto da mensagem</code><br />
+                    Exemplo:<br />
+                    <code style={{ color: 'var(--brand-light)', fontSize: 11 }}>
+                      01:30 Maria: Nossa, que incrível!<br />
+                      03:45 João Silva: Isso faz muito sentido<br />
+                      05:00 Ana: Pode repetir essa parte?
+                    </code>
+                  </div>
+                  <textarea
+                    className="form-input form-textarea"
+                    style={{ minHeight: 150, fontFamily: 'monospace', fontSize: 12, resize: 'vertical' }}
+                    placeholder={`01:30 Maria: Nossa, que incrível!\n03:45 João: Isso faz muito sentido\n05:00 Ana: Pode repetir essa parte?\n08:20 Carlos: Nunca vi nada igual!`}
+                    value={bulkText}
+                    onChange={e => {
+                      setBulkText(e.target.value)
+                      setBulkParsed(parseBulkText(e.target.value))
+                    }}
+                  />
+                  {bulkParsed.length > 0 && (
+                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>✅ <strong style={{ color: 'var(--success)' }}>{bulkParsed.length} mensagens</strong> reconhecidas</span>
+                      <button className="btn btn-primary btn-sm" onClick={insertBulkMessages} disabled={bulkInserting}>
+                        {bulkInserting ? <><span className="spinner" /> Inserindo...</> : `📋 Inserir ${bulkParsed.length} mensagens`}
+                      </button>
+                    </div>
+                  )}
+                  {bulkText.trim() && bulkParsed.length === 0 && (
+                    <div style={{ fontSize: 12, color: 'var(--warning)' }}>
+                      ⚠️ Nenhuma mensagem reconhecida. Verifique o formato: <code>MM:SS Nome: Texto</code>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB: AI Generation */}
+              {chatTab === 'ai' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  {aiPreview.length === 0 ? (
+                    <>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                        Cole o roteiro do seu webinar abaixo. A IA vai gerar mensagens de chat realistas que combinam com cada momento da apresentação.
+                      </div>
+                      <textarea
+                        className="form-input form-textarea"
+                        style={{ minHeight: 160, fontFamily: 'monospace', fontSize: 12, resize: 'vertical' }}
+                        placeholder={`Exemplo de roteiro:\n\n00:00 - Boas-vindas e apresentação pessoal\n05:00 - Por que 95% das pessoas falham em X\n15:00 - Os 3 pilares do método\n25:00 - Demonstração prática ao vivo\n40:00 - Revelação do produto/oferta\n50:00 - Bônus e garantia\n55:00 - Perguntas e respostas`}
+                        value={aiScript}
+                        onChange={e => setAiScript(e.target.value)}
+                      />
+                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ flex: 1 }}>
+                          <label style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>
+                            Quantidade: <strong style={{ color: 'var(--brand-light)' }}>{aiCount} mensagens</strong>
+                          </label>
+                          <input type="range" min={5} max={60} step={5} value={aiCount}
+                            onChange={e => setAiCount(Number(e.target.value))}
+                            style={{ width: '100%', accentColor: 'var(--brand)' }} />
+                        </div>
+                        <button className="btn btn-primary" onClick={generateWithAI}
+                          disabled={aiGenerating || !aiScript.trim()}
+                          style={{ whiteSpace: 'nowrap', minWidth: 160 }}>
+                          {aiGenerating ? <><span className="spinner" /> Gerando...</> : '✨ Gerar Mensagens'}
+                        </button>
+                      </div>
+                      {aiError && (
+                        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#f87171' }}>
+                          {aiError}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                          <strong style={{ color: 'var(--brand-light)' }}>{aiPreview.length} mensagens</strong> geradas — revise e confirme:
+                        </div>
+                        <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setAiPreview([])}>← Voltar</button>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 300, overflowY: 'auto', paddingRight: 4 }}>
+                        {aiPreview.map((ev, i) => (
+                          <div key={i} style={{
+                            display: 'grid', gridTemplateColumns: '48px 100px 1fr 28px',
+                            gap: 6, alignItems: 'center',
+                            background: 'var(--bg-elevated)', borderRadius: 8, padding: '6px 10px',
+                            border: '1px solid var(--border)', fontSize: 12,
+                          }}>
+                            <code style={{ color: 'var(--brand-light)', fontFamily: 'monospace', fontSize: 11 }}>
+                              {formatTime(ev.timestamp_seconds)}
+                            </code>
+                            <input className="form-input" style={{ fontSize: 11, padding: '3px 6px' }}
+                              value={ev.author}
+                              onChange={e => setAiPreview(prev => prev.map((x, j) => j === i ? { ...x, author: e.target.value } : x))} />
+                            <input className="form-input" style={{ fontSize: 11, padding: '3px 6px' }}
+                              value={ev.text}
+                              onChange={e => setAiPreview(prev => prev.map((x, j) => j === i ? { ...x, text: e.target.value } : x))} />
+                            <button className="btn btn-ghost btn-sm" style={{ padding: '2px 4px', fontSize: 10 }}
+                              onClick={() => setAiPreview(prev => prev.filter((_, j) => j !== i))}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                        <button className="btn btn-primary" onClick={insertGeneratedEvents} disabled={aiInserting}>
+                          {aiInserting ? <><span className="spinner" /> Inserindo...</> : `Inserir ${aiPreview.length} mensagens na timeline`}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Chat list */}
             {chatEvents.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--text-muted)', fontSize: 13, background: 'var(--bg-card)', borderRadius: 12, border: '1px dashed var(--border)' }}>
-                Nenhuma mensagem ainda — adicione acima ou use ✨ AI
+                Nenhuma mensagem ainda — use <strong>Importar Lote</strong> ou <strong>✨ AI</strong> para gerar dezenas de uma vez
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -651,116 +840,6 @@ export default function EventsPage() {
         </div>
       </div>
 
-      {/* AI GENERATOR MODAL */}
-      {showAiModal && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowAiModal(false)}>
-          <div className="modal" style={{ maxWidth: 680, maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-            <div className="modal-header">
-              <h2 className="modal-title">✨ Gerar Mensagens de Chat com AI</h2>
-              <button className="modal-close" onClick={() => setShowAiModal(false)}>✕</button>
-            </div>
-
-            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16, padding: '0 0 4px' }}>
-              {aiPreview.length === 0 ? (
-                <>
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                    Cole o roteiro do seu webinar abaixo. A IA vai gerar mensagens de chat realistas que combinam com cada momento da apresentação.
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Roteiro do Webinar</label>
-                    <textarea
-                      className="form-input form-textarea"
-                      style={{ minHeight: 220, fontFamily: 'monospace', fontSize: 12, resize: 'vertical' }}
-                      placeholder={`Exemplo de roteiro:\n\n00:00 - Boas-vindas e apresentação pessoal\n05:00 - Por que 95% das pessoas falham em X\n15:00 - Os 3 pilares do método\n25:00 - Demonstração prática ao vivo\n40:00 - Revelação do produto/oferta\n50:00 - Bônus e garantia\n55:00 - Perguntas e respostas`}
-                      value={aiScript}
-                      onChange={e => setAiScript(e.target.value)}
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">
-                      Quantidade de mensagens — <strong style={{ color: 'var(--brand-light)' }}>{aiCount}</strong>
-                    </label>
-                    <input
-                      type="range" min={5} max={60} step={5}
-                      value={aiCount}
-                      onChange={e => setAiCount(Number(e.target.value))}
-                      style={{ width: '100%', accentColor: 'var(--brand)' }}
-                    />
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                      <span>5 — bem espaçado</span>
-                      <span>30 — moderado</span>
-                      <span>60 — chat bem ativo</span>
-                    </div>
-                  </div>
-
-                  {aiError && (
-                    <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 13, color: '#f87171' }}>
-                      {aiError}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                      <strong style={{ color: 'var(--text-primary)' }}>{aiPreview.length} mensagens</strong> geradas — revise e confirme para inserir na timeline.
-                    </div>
-                    <button className="btn btn-ghost btn-sm" onClick={() => setAiPreview([])}>
-                      ← Voltar e editar
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 380, overflowY: 'auto', paddingRight: 4 }}>
-                    {aiPreview.map((ev, i) => (
-                      <div key={i} style={{
-                        display: 'grid', gridTemplateColumns: '52px 110px 1fr',
-                        gap: 10, alignItems: 'start',
-                        background: 'var(--bg-elevated)', borderRadius: 8, padding: '8px 12px',
-                        border: '1px solid var(--border)',
-                      }}>
-                        <code style={{ fontSize: 11, color: 'var(--brand-light)', fontFamily: 'monospace', paddingTop: 2 }}>
-                          {formatTime(ev.timestamp_seconds)}
-                        </code>
-                        <input
-                          className="form-input"
-                          style={{ fontSize: 12, padding: '4px 8px' }}
-                          value={ev.author}
-                          onChange={e => setAiPreview(prev => prev.map((x, j) => j === i ? { ...x, author: e.target.value } : x))}
-                        />
-                        <input
-                          className="form-input"
-                          style={{ fontSize: 12, padding: '4px 8px' }}
-                          value={ev.text}
-                          onChange={e => setAiPreview(prev => prev.map((x, j) => j === i ? { ...x, text: e.target.value } : x))}
-                        />
-                      </div>
-                    ))}
-                  </div>
-
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                    Você pode editar qualquer texto ou nome acima antes de inserir. Depois de inserir, cada mensagem pode ser reposicionada na timeline ou editada individualmente.
-                  </div>
-                </>
-              )}
-            </div>
-
-            <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={() => setShowAiModal(false)}>Cancelar</button>
-              {aiPreview.length === 0 ? (
-                <button className="btn btn-primary" onClick={generateWithAI} disabled={aiGenerating || !aiScript.trim()}>
-                  {aiGenerating ? <><span className="spinner" /> Gerando...</> : '✨ Gerar Mensagens'}
-                </button>
-              ) : (
-                <button className="btn btn-primary" onClick={insertGeneratedEvents} disabled={aiInserting}>
-                  {aiInserting ? <><span className="spinner" /> Inserindo...</> : `Inserir ${aiPreview.length} mensagens na timeline`}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* EVENT MODAL */}
       {showModal && (
