@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
@@ -163,7 +164,7 @@ export default function EventsPage() {
   const [aiPreview, setAiPreview] = useState<GeneratedChatEvent[]>([])
   const [aiError, setAiError] = useState('')
   const [aiInserting, setAiInserting] = useState(false)
-  const [form, setForm] = useState<{ type: EventType; timestamp_seconds: number; timestampStr: string; payload: Record<string, unknown> }>({
+  const [form, setForm] = useState<{ type: EventType; timestamp_seconds: number; timestampStr: string; payload: Record<string, any> }>({
     type: 'chat_message', timestamp_seconds: 0, timestampStr: '00:00', payload: { ...emptyPayloads.chat_message }
   })
   const [saving, setSaving] = useState(false)
@@ -202,7 +203,7 @@ export default function EventsPage() {
 
   function openCreate(type: EventType = 'chat_message') {
     setEditEvent(null)
-    setForm({ type, timestamp_seconds: 0, timestampStr: '00:00', payload: { ...emptyPayloads[type] as Record<string, unknown> } })
+    setForm({ type, timestamp_seconds: 0, timestampStr: '00:00', payload: { ...emptyPayloads[type] as Record<string, any> } })
     setShowModal(true)
   }
 
@@ -212,7 +213,7 @@ export default function EventsPage() {
       type: event.type,
       timestamp_seconds: event.timestamp_seconds,
       timestampStr: formatTime(event.timestamp_seconds),
-      payload: { ...(event.payload as Record<string, unknown>) },
+      payload: { ...(event.payload as Record<string, any>) },
     })
     setShowModal(true)
   }
@@ -432,7 +433,7 @@ export default function EventsPage() {
           <div className="event-list">
             {events.map(ev => {
               const evType = EVENT_TYPES.find(t => t.type === ev.type)
-              const payload = ev.payload as Record<string, unknown>
+              const payload = ev.payload as Record<string, any>
               return (
                 <div key={ev.id} className="event-item">
                   <span className={`badge ${
@@ -591,7 +592,7 @@ export default function EventsPage() {
                     {EVENT_TYPES.map(et => (
                       <button key={et.type}
                         className={`btn ${form.type === et.type ? 'btn-primary' : 'btn-ghost'} btn-sm`}
-                        onClick={() => setForm(f => ({ ...f, type: et.type as EventType, payload: { ...(emptyPayloads[et.type as EventType] as Record<string, unknown>) } }))}
+                        onClick={() => setForm(f => ({ ...f, type: et.type as EventType, payload: { ...(emptyPayloads[et.type as EventType] as Record<string, any>) } }))}
                         style={{ justifyContent: 'flex-start', gap: 8 }}>
                         {et.icon} {et.label}
                       </button>
