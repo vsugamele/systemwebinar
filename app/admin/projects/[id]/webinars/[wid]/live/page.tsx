@@ -29,6 +29,7 @@ export default function LivePage() {
   const [webinarName, setWebinarName] = useState('')
   const [webinarSlug, setWebinarSlug] = useState('')
   const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null)
+  const [displayName, setDisplayName] = useState('')
   const [elapsed, setElapsed] = useState('')
   const [form, setForm] = useState({
     fake_viewers_start: 50,
@@ -40,13 +41,14 @@ export default function LivePage() {
   useEffect(() => {
     supabase
       .from('webi_webinars')
-      .select('name, slug, session_started_at, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct')
+      .select('name, slug, display_name, session_started_at, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct')
       .eq('id', wid)
       .single()
       .then(({ data }) => {
         if (data) {
           setWebinarName(data.name)
           setWebinarSlug(data.slug)
+          setDisplayName(data.display_name || '')
           setSessionStartedAt(data.session_started_at ?? null)
           setForm({
             fake_viewers_start: data.fake_viewers_start ?? 50,
@@ -84,7 +86,7 @@ export default function LivePage() {
   async function saveViewers(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    await supabase.from('webi_webinars').update(form).eq('id', wid)
+    await supabase.from('webi_webinars').update({ ...form, display_name: displayName || null }).eq('id', wid)
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2500)
@@ -168,9 +170,22 @@ export default function LivePage() {
         {/* VIEWER CURVE */}
         <form onSubmit={saveViewers}>
           <div className="card">
-            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>👥 Curva de Audiência</div>
+            <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>👥 Curva de Audiência & Nome da Sala</div>
             <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-              Como o contador de espectadores se comporta ao longo do webinar.
+              Configure o nome público da sala e como o contador de espectadores se comporta.
+            </div>
+
+            {/* Display Name */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: 'block', fontWeight: 600, fontSize: 13, marginBottom: 2 }}>Nome de Exibição (público)</label>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>Como aparece no cabeçalho da sala para os participantes. Deixe vazio para usar o nome interno.</div>
+              <input
+                className="form-input"
+                placeholder={webinarName || 'Ex: Masterclass de Marketing Digital'}
+                value={displayName}
+                onChange={e => setDisplayName(e.target.value)}
+                style={{ width: '100%' }}
+              />
             </div>
 
             {/* Visual curve preview */}

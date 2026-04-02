@@ -49,6 +49,7 @@ interface WebinarConfig {
   fake_viewers_peak_at_pct?: number
   chat_default_tab?: 'chat' | 'qa'
   theme?: 'dark' | 'light' | 'youtube'
+  display_name?: string
 }
 
 /** Compute seconds elapsed since session_started_at (0 if not set). */
@@ -186,7 +187,10 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
   const [userName, setUserName] = useState('Você')
-  const [viewers, setViewers] = useState(webinar.peak_viewers_min)
+  const [viewers, setViewers] = useState(() => {
+    const vStart = webinar.fake_viewers_start ?? 30
+    return Math.max(1, vStart)
+  })
   const [viewersPulse, setViewersPulse] = useState(false)
   const [pitchVisible, setPitchVisible] = useState(false)
   const [pitchPayload, setPitchPayload] = useState<ExtendedPitchPayload | null>(null)
@@ -301,9 +305,9 @@ export default function WebinarRoom({ webinar, events }: Props) {
 
   // ---- Viewer counter simulation (4-phase curve) ----
   useEffect(() => {
-    const vStart  = webinar.fake_viewers_start  ?? webinar.peak_viewers_min
-    const vPeak   = webinar.fake_viewers_peak   ?? webinar.peak_viewers_max
-    const vEnd    = webinar.fake_viewers_end    ?? webinar.peak_viewers_min
+    const vStart  = webinar.fake_viewers_start  ?? 30
+    const vPeak   = webinar.fake_viewers_peak   ?? Math.max(50, webinar.peak_viewers_max || 50)
+    const vEnd    = webinar.fake_viewers_end    ?? Math.max(15, webinar.peak_viewers_min || 15)
     const peakPct = webinar.fake_viewers_peak_at_pct ?? 30
     const duration = webinar.duration_seconds || 3600
 
@@ -572,9 +576,9 @@ export default function WebinarRoom({ webinar, events }: Props) {
       } catch { /* ignore */ }
     }
 
-    // Fallback: if YouTube never confirms in 8s, show video anyway
+    // Fallback: if YouTube never confirms in 3s, show video anyway
     // (handles browsers that block postMessage responses)
-    const fallbackTimeout = setTimeout(markPlaying, 8000)
+    const fallbackTimeout = setTimeout(markPlaying, 3000)
 
     window.addEventListener('message', onMessage)
     return () => {
@@ -826,7 +830,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
                 {String(Math.floor(elapsedSeconds / 3600)).padStart(2, '0')}:{String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2, '0')}:{String(elapsedSeconds % 60).padStart(2, '0')}
               </span>
             </div>
-            <span style={{ fontSize: 14, fontWeight: 600 }}>{webinar.name}</span>
+            <span style={{ fontSize: 14, fontWeight: 600 }}>{webinar.display_name || webinar.name}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button
