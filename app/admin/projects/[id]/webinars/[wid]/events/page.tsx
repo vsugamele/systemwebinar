@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { toast } from 'react-hot-toast'
 import type { WebinarEvent, EventType } from '@/types'
 
 const EVENT_TYPES = [
@@ -34,12 +35,6 @@ function formatTime(seconds: number) {
   const m = Math.floor(seconds / 60)
   const s = seconds % 60
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-}
-
-function parseTime(str: string): number {
-  const parts = str.split(':')
-  if (parts.length === 2) return Number(parts[0]) * 60 + Number(parts[1])
-  return Number(str)
 }
 
 // ---- Draggable chip for the visual timeline ----
@@ -227,28 +222,34 @@ export default function EventsPage() {
 
   async function save() {
     setSaving(true)
-    const data = { webinar_id: webinarId, type: form.type, timestamp_seconds: form.timestamp_seconds, payload: form.payload }
+    try {
+      const data = { webinar_id: webinarId, type: form.type, timestamp_seconds: form.timestamp_seconds, payload: form.payload }
 
-    if (editEvent) {
-      await supabase.from('webi_events').update(data).eq('id', editEvent.id)
-    } else {
-      await supabase.from('webi_events').insert(data)
+      if (editEvent) {
+        await supabase.from('webi_events').update(data).eq('id', editEvent.id)
+        toast.success('Evento atualizado com sucesso!')
+      } else {
+        await supabase.from('webi_events').insert(data)
+        toast.success('Novo evento adicionado!')
+      }
+
+      setShowModal(false)
+      load()
+    } catch (err) {
+      toast.error('Ocorreu um erro ao salvar o evento.')
+    } finally {
+      setSaving(false)
     }
-
-    setSaving(false)
-    setShowModal(false)
-    load()
   }
 
   async function deleteEvent(id: string) {
+    if (!window.confirm('Tem certeza que deseja excluir?')) return
     await supabase.from('webi_events').delete().eq('id', id)
+    toast.success('Evento removido.')
     load()
   }
 
-  function updateTimestamp(str: string) {
-    const secs = parseTime(str)
-    setForm(f => ({ ...f, timestampStr: str, timestamp_seconds: isNaN(secs) ? 0 : secs }))
-  }
+
 
   function updatePayload(key: string, value: unknown) {
     setForm(f => ({ ...f, payload: { ...f.payload, [key]: value } }))
@@ -284,34 +285,46 @@ export default function EventsPage() {
   async function insertGeneratedEvents() {
     if (aiPreview.length === 0) return
     setAiInserting(true)
-    const rows = aiPreview.map(e => ({
-      webinar_id: webinarId,
-      type: 'chat_message' as const,
-      timestamp_seconds: e.timestamp_seconds,
-      payload: { author: e.author, text: e.text, avatar: '' },
-    }))
-    await supabase.from('webi_events').insert(rows)
-    setAiInserting(false)
-    setShowAiModal(false)
-    setAiPreview([])
-    setAiScript('')
-    load()
+    try {
+      const rows = aiPreview.map(e => ({
+        webinar_id: webinarId,
+        type: 'chat_message' as const,
+        timestamp_seconds: e.timestamp_seconds,
+        payload: { author: e.author, text: e.text, avatar: '' },
+      }))
+      await supabase.from('webi_events').insert(rows)
+      toast.success(`${rows.length} mensagens inseridas na timeline!`)
+      setShowAiModal(false)
+      setAiPreview([])
+      setAiScript('')
+      load()
+    } catch (err) {
+      toast.error('Erro ao inserir eventos na timeline.')
+    } finally {
+      setAiInserting(false)
+    }
   }
 
   async function addQuickChat() {
     if (!qAuthor.trim() || !qText.trim()) return
     setQSaving(true)
-    const secs = Math.max(0, Number(qMM) * 60 + Number(qSS))
-    await supabase.from('webi_events').insert({
-      webinar_id: webinarId,
-      type: 'chat_message',
-      timestamp_seconds: secs,
-      payload: { author: qAuthor.trim(), text: qText.trim(), avatar: '' },
-    })
-    setQAuthor('')
-    setQText('')
-    setQSaving(false)
-    load()
+    try {
+      const secs = Math.max(0, Number(qMM) * 60 + Number(qSS))
+      await supabase.from('webi_events').insert({
+        webinar_id: webinarId,
+        type: 'chat_message',
+        timestamp_seconds: secs,
+        payload: { author: qAuthor.trim(), text: qText.trim(), avatar: '' },
+      })
+      toast.success('Mensagem de chat adicionada!')
+      setQAuthor('')
+      setQText('')
+      load()
+    } catch (err) {
+      toast.error('Erro ao adicionar mensagem rápida.')
+    } finally {
+      setQSaving(false)
+    }
   }
 
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
@@ -776,13 +789,25 @@ export default function EventsPage() {
               )}
 
               <div className="form-group">
-                <label className="form-label">Timestamp (mm:ss ou segundos)</label>
-                <input className="form-input" placeholder="01:30 ou 90"
-                  value={form.timestampStr}
-                  onChange={e => updateTimestamp(e.target.value)} />
-                <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  = {form.timestamp_seconds}s ({formatTime(form.timestamp_seconds)})
-                </span>
+                <label className="form-label">Tempo no Vídeo (Minutos : Segundos)</label>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <input type="number" min={0} max={999} className="form-input" 
+                    placeholder="Min"
+                    value={Math.floor(form.timestamp_seconds / 60)} 
+                    onChange={e => setForm(f => ({ ...f, timestamp_seconds: (Math.max(0, Number(e.target.value)) * 60) + (f.timestamp_seconds % 60) }))} 
+                    style={{ width: 80, textAlign: 'center', fontSize: 20, fontFamily: 'monospace', fontWeight: 'bold' }} 
+                  />
+                  <span style={{ fontWeight: 700, fontSize: 20, color: 'var(--text-muted)' }}>:</span>
+                  <input type="number" min={0} max={59} className="form-input" 
+                    placeholder="Seg"
+                    value={String(form.timestamp_seconds % 60).padStart(2, '0')} 
+                    onChange={e => setForm(f => ({ ...f, timestamp_seconds: Math.floor(f.timestamp_seconds / 60) * 60 + Math.min(59, Math.max(0, Number(e.target.value))) }))} 
+                    style={{ width: 80, textAlign: 'center', fontSize: 20, fontFamily: 'monospace', fontWeight: 'bold' }} 
+                  />
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 8 }}>
+                    ({form.timestamp_seconds} segundos de vídeo)
+                  </span>
+                </div>
               </div>
 
               {/* Dynamic payload fields */}

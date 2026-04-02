@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { toast } from 'react-hot-toast'
 import type { Project, Webinar } from '@/types'
 
 interface EmailTemplate {
@@ -122,17 +123,28 @@ export default function EmailsPage() {
   async function saveTemplate() {
     if (!editTemplate) return
     setSaving(true)
-    await supabase.from('webi_email_templates')
-      .update({ subject: editTemplate.subject, body: editTemplate.body, enabled: editTemplate.enabled })
-      .eq('id', editTemplate.id)
-    setSaving(false)
-    setEditTemplate(null)
-    loadTemplates()
+    try {
+      await supabase.from('webi_email_templates')
+        .update({ subject: editTemplate.subject, body: editTemplate.body, enabled: editTemplate.enabled })
+        .eq('id', editTemplate.id)
+      toast.success('Template de e-mail atualizado!')
+      setEditTemplate(null)
+      loadTemplates()
+    } catch (err) {
+      toast.error('Ocorreu um erro ao atualizar o e-mail.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function toggleEnabled(t: EmailTemplate) {
-    await supabase.from('webi_email_templates').update({ enabled: !t.enabled }).eq('id', t.id)
-    loadTemplates()
+    try {
+      await supabase.from('webi_email_templates').update({ enabled: !t.enabled }).eq('id', t.id)
+      toast.success(t.enabled ? 'E-mail desativado.' : 'E-mail ativado!')
+      loadTemplates()
+    } catch (err) {
+      toast.error('Erro ao alternar status do e-mail.')
+    }
   }
 
   const orderedTemplates = Object.keys(typeLabels).map(type =>

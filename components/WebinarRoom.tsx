@@ -361,19 +361,48 @@ export default function WebinarRoom({ webinar, events }: Props) {
     return () => { if (cpmTimerRef.current) clearTimeout(cpmTimerRef.current) }
   }, [webinar.chat_cpm, webinar.chat_names])
 
-  // ---- Real-time chat + emojis (Supabase Broadcast) ----
+  // ---- Real-time chat + emojis (Supabase Broadcast & DB) ----
   useEffect(() => {
     const supabase = supabaseRef.current
     const channel = supabase.channel(`webinar-${webinar.id}`, {
       config: { broadcast: { self: false } },
     })
 
+    // Listen to Database inserts on webi_live_chat
+    channel.on('postgres_changes', {
+      event: 'INSERT',
+      schema: 'public',
+      table: 'webi_live_chat',
+      filter: `webinar_id=eq.${webinar.id}`
+    }, (payload) => {
+      const dbMsg = payload.new
+      if (dbMsg.session_id !== sessionId.current) {
+        setMessages(m => {
+          // Prevent duplicates if fallback broadcast fired
+          if (m.some(msg => msg.id === dbMsg.id)) return m
+          return [...m, {
+            id: dbMsg.id,
+            author: dbMsg.author,
+            avatar: dbMsg.avatar,
+            text: dbMsg.text,
+            timestamp: dbMsg.timestamp_video,
+            isSimulated: dbMsg.is_simulated || false,
+            isBroadcast: dbMsg.is_broadcast || false,
+          }]
+        })
+      }
+    })
+
+    // Listen to fallbacks/broadcasts
     channel
       .on('broadcast', { event: 'chat-message' }, ({ payload }) => {
         if (payload.session_id !== sessionId.current) {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { session_id: _sid, ...msg } = payload as ChatMessage & { session_id: string }
-          setMessages(m => [...m, msg as ChatMessage])
+          setMessages(m => {
+            if (m.some(existing => existing.id === msg.id)) return m
+            return [...m, msg as ChatMessage]
+          })
         }
       })
       .on('broadcast', { event: 'reaction' }, ({ payload }) => {
@@ -655,14 +684,33 @@ export default function WebinarRoom({ webinar, events }: Props) {
     setMessages(m => [...m, msg])
     setChatInput('')
 
-    // Broadcast via Supabase Realtime (zero config needed)
-    await channelRef.current?.send({
-      type: 'broadcast',
-      event: 'chat-message',
-      payload: { ...msg, session_id: sessionId.current },
-    })
-
     trackEvent('chat_sent', msg.timestamp)
+
+    try {
+      // 1. Try DB-backed chat (Moderation ready)
+      const { error } = await supabaseRef.current.from('webi_live_chat').insert({
+        id: msg.id,
+        webinar_id: webinar.id,
+        session_id: sessionId.current,
+        author: msg.author,
+        text: msg.text,
+        timestamp_video: msg.timestamp,
+        is_simulated: false,
+        is_broadcast: false,
+      })
+
+      // 2. If table doesn't exist yet, fallback to broadcast P2P
+      if (error && error.code === '42P01') {
+        throw new Error('Fallback')
+      }
+    } catch {
+      // Broadcast via Supabase Realtime (legacy p2p mode)
+      await channelRef.current?.send({
+        type: 'broadcast',
+        event: 'chat-message',
+        payload: { ...msg, session_id: sessionId.current },
+      })
+    }
 
     // AI auto-response if enabled and message is a question
     if (webinar.ai_enabled) {
