@@ -46,7 +46,7 @@ export default function LogsPage() {
         .order('created_at', { ascending: false })
         .limit(1000)
 
-      setEvents((evts ?? []) as SessionEvent[])
+      setEvents((evts ?? []) as unknown as SessionEvent[])
       setLoading(false)
     }
     load()
