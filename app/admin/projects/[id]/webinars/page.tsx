@@ -230,8 +230,8 @@ export default function WebinarsPage() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">URL do Vídeo (MP4 ou HLS)</label>
-                <input className="form-input" placeholder="https://..." value={form.video_url}
+                <label className="form-label">URL do Vídeo (YouTube, Vimeo, VTurb ou MP4/HLS)</label>
+                <input className="form-input" placeholder="YouTube, Vimeo, VTurb (player.js) ou MP4..." value={form.video_url}
                   onChange={e => setForm(f => ({ ...f, video_url: e.target.value }))} />
               </div>
 

@@ -31,6 +31,10 @@ export default function LivePage() {
   const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState('')
   const [elapsed, setElapsed] = useState('')
+  const [scheduledAt, setScheduledAt] = useState('')
+  const [savingScheduled, setSavingScheduled] = useState(false)
+  const [savedScheduled, setSavedScheduled] = useState(false)
+  const [scheduleTimeUntil, setScheduleTimeUntil] = useState('')
   const [form, setForm] = useState({
     fake_viewers_start: 50,
     fake_viewers_peak: 500,
@@ -41,7 +45,7 @@ export default function LivePage() {
   useEffect(() => {
     supabase
       .from('webi_webinars')
-      .select('name, slug, display_name, session_started_at, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct')
+      .select('name, slug, display_name, session_started_at, scheduled_start_at, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct')
       .eq('id', wid)
       .single()
       .then(({ data }) => {
@@ -50,6 +54,13 @@ export default function LivePage() {
           setWebinarSlug(data.slug)
           setDisplayName(data.display_name || '')
           setSessionStartedAt(data.session_started_at ?? null)
+          if (data.scheduled_start_at) {
+            // Convert to local datetime-local format
+            const d = new Date(data.scheduled_start_at)
+            const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+              .toISOString().slice(0, 16)
+            setScheduledAt(local)
+          }
           setForm({
             fake_viewers_start: data.fake_viewers_start ?? 50,
             fake_viewers_peak: data.fake_viewers_peak ?? 500,
@@ -60,6 +71,46 @@ export default function LivePage() {
         setLoading(false)
       })
   }, [wid])
+
+  // Scheduled countdown ticker
+  useEffect(() => {
+    function updateLabel() {
+      if (!scheduledAt) { setScheduleTimeUntil(''); return }
+      const diff = new Date(scheduledAt).getTime() - Date.now()
+      if (diff <= 0) { setScheduleTimeUntil(''); return }
+      const h = Math.floor(diff / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      const s = Math.floor((diff % 60000) / 1000)
+      if (h > 0) setScheduleTimeUntil(`${h}h ${m}m ${s}s`)
+      else if (m > 0) setScheduleTimeUntil(`${m}m ${s}s`)
+      else setScheduleTimeUntil(`${s}s`)
+    }
+    const t = setInterval(updateLabel, 1000)
+    updateLabel()
+    return () => clearInterval(t)
+  }, [scheduledAt])
+
+  async function saveScheduled() {
+    setSavingScheduled(true)
+    const iso = scheduledAt ? new Date(scheduledAt).toISOString() : null
+    await supabase.from('webi_webinars').update({
+      scheduled_start_at: iso,
+      session_started_at: iso,
+    }).eq('id', wid)
+    setSessionStartedAt(iso)
+    setSavingScheduled(false)
+    setSavedScheduled(true)
+    setTimeout(() => setSavedScheduled(false), 3000)
+  }
+
+  async function clearScheduled() {
+    setScheduledAt('')
+    await supabase.from('webi_webinars').update({
+      scheduled_start_at: null,
+      session_started_at: null,
+    }).eq('id', wid)
+    setSessionStartedAt(null)
+  }
 
   // Live elapsed ticker
   useEffect(() => {
@@ -118,6 +169,49 @@ export default function LivePage() {
       </div>
 
       <div className="page-body" style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 700 }}>
+
+        {/* SCHEDULING */}
+        <div className="card">
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>🗓 Agendamento</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            Configure uma data e hora específica para o início da transmissão. Os participantes verão um countdown até o evento começar.
+          </div>
+          <input
+            type="datetime-local"
+            className="form-input"
+            value={scheduledAt}
+            onChange={e => setScheduledAt(e.target.value)}
+            style={{ width: '100%', marginBottom: 12 }}
+          />
+          {scheduledAt && scheduleTimeUntil && (
+            <div style={{
+              fontSize: 13, color: '#a78bfa', marginBottom: 12,
+              background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.2)',
+              borderRadius: 8, padding: '8px 12px',
+            }}>
+              ⏳ Começa em <strong>{scheduleTimeUntil}</strong>
+            </div>
+          )}
+          {scheduledAt && !scheduleTimeUntil && (
+            <div style={{
+              fontSize: 13, color: 'var(--success)', marginBottom: 12,
+              background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)',
+              borderRadius: 8, padding: '8px 12px',
+            }}>
+              ✅ Horário configurado para {new Date(scheduledAt).toLocaleString('pt-BR')}
+            </div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary btn-sm" onClick={saveScheduled} disabled={savingScheduled}>
+              {savedScheduled ? '✅ Salvo!' : savingScheduled ? '⏳...' : '💾 Salvar agendamento'}
+            </button>
+            {scheduledAt && (
+              <button className="btn btn-ghost btn-sm" onClick={clearScheduled}>
+                ✕ Remover agendamento
+              </button>
+            )}
+          </div>
+        </div>
 
         {/* SESSION CLOCK — primary action */}
         <div className="card" style={{

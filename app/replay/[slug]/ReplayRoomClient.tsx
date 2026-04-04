@@ -3,6 +3,55 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Webinar } from '@/types'
 
+function isVimeoUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    return ['vimeo.com', 'www.vimeo.com', 'player.vimeo.com'].includes(u.hostname)
+  } catch { return false }
+}
+
+function getVimeoEmbedUrl(url: string): string | null {
+  try {
+    const u = new URL(url)
+    let videoId: string | null = null
+    if (u.hostname === 'player.vimeo.com') {
+      videoId = u.pathname.split('/video/')[1]?.split('/')[0] ?? null
+    } else {
+      const parts = u.pathname.split('/').filter(Boolean)
+      const last = parts[parts.length - 1] ?? null
+      videoId = last && /^\d+$/.test(last) ? last : null
+    }
+    if (!videoId) return null
+    return `https://player.vimeo.com/video/${videoId}?autoplay=1&muted=1&controls=1&title=0&byline=0&portrait=0&playsinline=1`
+  } catch { return null }
+}
+
+function isVturbUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    return u.hostname === 'scripts.converteai.net' || u.hostname.includes('vturb')
+  } catch { return false }
+}
+
+function getVturbPlayerId(url: string): string | null {
+  const match = url.match(/\/players\/([^/]+)\/player\.js/)
+  return match?.[1] ?? null
+}
+
+function VturbPlayer({ scriptUrl, playerId }: { scriptUrl: string; playerId: string }) {
+  useEffect(() => {
+    if (document.getElementById(`scr_${playerId}`)) return
+    const script = document.createElement('script')
+    script.id = `scr_${playerId}`
+    script.src = scriptUrl
+    script.async = true
+    document.head.appendChild(script)
+    return () => { document.getElementById(`scr_${playerId}`)?.remove() }
+  }, [scriptUrl, playerId])
+
+  return <div id={`vid_${playerId}`} style={{ position: 'relative', width: '100%', height: '100%' }} />
+}
+
 interface Props {
   webinar: Webinar & { webi_projects?: { name: string; accent_color: string } }
 }
@@ -63,15 +112,32 @@ export default function ReplayRoomClient({ webinar }: Props) {
           boxShadow: '0 40px 80px rgba(0,0,0,0.6)'
         }}>
           {webinar.video_url ? (
-            <video
-              ref={videoRef}
-              src={webinar.video_url}
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              onTimeUpdate={e => setCurrentTime(e.currentTarget.currentTime)}
-              onLoadedMetadata={e => setDuration(e.currentTarget.duration)}
-              onPlay={() => setPlaying(true)}
-              onPause={() => setPlaying(false)}
-            />
+            isVimeoUrl(webinar.video_url) ? (
+              <iframe
+                src={getVimeoEmbedUrl(webinar.video_url) || ''}
+                style={{ width: '100%', height: '100%', border: 'none' }}
+                allow="autoplay; fullscreen; picture-in-picture"
+                allowFullScreen
+                title={webinar.name}
+              />
+            ) : isVturbUrl(webinar.video_url) ? (
+              (() => {
+                const pid = getVturbPlayerId(webinar.video_url)
+                return pid ? (
+                  <VturbPlayer scriptUrl={webinar.video_url} playerId={pid} />
+                ) : null
+              })()
+            ) : (
+              <video
+                ref={videoRef}
+                src={webinar.video_url}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                onTimeUpdate={e => setCurrentTime(e.currentTarget.currentTime)}
+                onLoadedMetadata={e => setDuration(e.currentTarget.duration)}
+                onPlay={() => setPlaying(true)}
+                onPause={() => setPlaying(false)}
+              />
+            )
           ) : (
             <div style={{
               width: '100%', height: '100%', display: 'flex',
@@ -84,8 +150,8 @@ export default function ReplayRoomClient({ webinar }: Props) {
           )}
         </div>
 
-        {/* Controls */}
-        {webinar.video_url && (
+        {/* Controls — only for native video (MP4/HLS); Vimeo and VTurb have their own controls */}
+        {webinar.video_url && !isVimeoUrl(webinar.video_url) && !isVturbUrl(webinar.video_url) && (
           <div style={{
             marginTop: 12, background: 'rgba(255,255,255,0.04)',
             border: '1px solid rgba(255,255,255,0.08)',

@@ -10,6 +10,7 @@ export interface Project {
   accent_color: string
   custom_domain: string | null
   resend_from_email: string | null
+  openrouter_api_key?: string
   created_at: string
   updated_at: string
 }
@@ -36,11 +37,24 @@ export interface Webinar {
   fake_viewers_peak: number
   fake_viewers_end: number
   fake_viewers_peak_at_pct: number
+  // Chat (003 — missing from interface)
+  chat_cpm?: number
+  chat_names?: string[]
   // Chat (004)
   chat_default_tab: 'chat' | 'qa'
+  // Chat v2 (007)
+  chat_mode?: 'cpm' | 'interval'
+  chat_interval_minutes?: number
+  chat_start_seconds?: number
+  chat_end_seconds?: number | null
+  chat_phrases?: string[] | null
+  // Live scheduling (007)
+  scheduled_start_at?: string | null
   // Appearance
   theme?: 'dark' | 'light' | 'youtube'
   display_name?: string
+  // AI Config
+  ai_model?: string
 }
 
 // ---- Event Payloads ----

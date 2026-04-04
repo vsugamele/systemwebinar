@@ -11,7 +11,7 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editProject, setEditProject] = useState<Project | null>(null)
-  const [form, setForm] = useState({ name: '', accent_color: '#6366f1', resend_from_email: '' })
+  const [form, setForm] = useState({ name: '', accent_color: '#6366f1', resend_from_email: '', openrouter_api_key: '' })
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
 
@@ -24,17 +24,17 @@ export default function ProjectsPage() {
   useEffect(() => {
     supabase.from('webi_projects').select('*').order('created_at', { ascending: false })
       .then(({ data }) => { setProjects(data || []); setLoading(false) })
-  }, [])
+  }, []) // keeping missing dep as is since it's common
 
   function openCreate() {
     setEditProject(null)
-    setForm({ name: '', accent_color: '#6366f1', resend_from_email: '' })
+    setForm({ name: '', accent_color: '#6366f1', resend_from_email: '', openrouter_api_key: '' })
     setShowModal(true)
   }
 
   function openEdit(p: Project) {
     setEditProject(p)
-    setForm({ name: p.name, accent_color: p.accent_color, resend_from_email: p.resend_from_email || '' })
+    setForm({ name: p.name, accent_color: p.accent_color, resend_from_email: p.resend_from_email || '', openrouter_api_key: p.openrouter_api_key || '' })
     setShowModal(true)
   }
 
@@ -169,6 +169,20 @@ export default function ProjectsPage() {
             value={form.resend_from_email}
             onChange={e => setForm(f => ({ ...f, resend_from_email: e.target.value }))}
           />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Chave de API do OpenRouter (Integração IA)</label>
+          <input
+            type="password"
+            className="form-input"
+            placeholder="sk-or-v1-..."
+            value={form.openrouter_api_key}
+            onChange={e => setForm(f => ({ ...f, openrouter_api_key: e.target.value }))}
+          />
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+            Usado para gerar mensagens de chat automáticas com base no seu roteiro.
+          </div>
         </div>
       </Modal>
     </>

@@ -4,9 +4,10 @@ import { useEffect, useRef, useState } from 'react'
 import { EventEngine } from '@/lib/event-engine'
 import { createClient } from '@/lib/supabase/client'
 import type { RealtimeChannel } from '@supabase/supabase-js'
-// Pusher removed — real-time chat uses Supabase Broadcast
 import type { Webinar, WebinarEvent, ChatMessage, ChatMessagePayload, OfferPopupPayload, PitchButtonPayload } from '@/types'
 import dynamic from 'next/dynamic'
+import ChatPanel, { EMOJI_REACTIONS } from './ChatPanel'
+import type { Material } from './ChatPanel'
 
 const WebinarQuiz = dynamic(() => import('./WebinarQuiz'), { ssr: false })
 const TestimonialsSection = dynamic(() => import('./TestimonialsSection'), { ssr: false })
@@ -21,13 +22,6 @@ interface ExtendedPitchPayload extends PitchButtonPayload {
   broadcast_names?: string
 }
 
-interface Material {
-  id: string
-  label: string
-  url: string
-  icon: string
-  show_at_seconds: number
-}
 
 interface WebinarConfig {
   chat_cpm?: number
@@ -88,22 +82,13 @@ interface Props {
   events: WebinarEvent[]
 }
 
-const EMOJI_REACTIONS = [
-  { emoji: '👍', label: 'Curtir' },
-  { emoji: '❤️', label: 'Amar' },
-  { emoji: '🔥', label: 'Incrível' },
-  { emoji: '🤯', label: 'Surpreendente' },
-  { emoji: '😂', label: 'Divertido' },
-  { emoji: '🙌', label: 'Aplausos' },
-]
+// EMOJI_REACTIONS moved to ChatPanel.tsx
 
 function generateSessionId() {
   return Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
-function getInitials(name: string) {
-  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-}
+// getInitials moved to ChatPanel.tsx
 
 function formatCountdown(secs: number) {
   const m = Math.floor(secs / 60)
@@ -147,8 +132,75 @@ function isYouTubeUrl(url: string): boolean {
   }
 }
 
-// Pool of chat messages for CPM simulation
-const GENERIC_CHAT_PHRASES = [
+function isVimeoUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    return ['vimeo.com', 'www.vimeo.com', 'player.vimeo.com'].includes(u.hostname)
+  } catch {
+    return false
+  }
+}
+
+function getVimeoEmbedUrl(url: string): string | null {
+  try {
+    const u = new URL(url)
+    let videoId: string | null = null
+
+    if (u.hostname === 'player.vimeo.com') {
+      videoId = u.pathname.split('/video/')[1]?.split('/')[0] ?? null
+    } else {
+      const parts = u.pathname.split('/').filter(Boolean)
+      const last = parts[parts.length - 1] ?? null
+      videoId = last && /^\d+$/.test(last) ? last : null
+    }
+
+    if (!videoId) return null
+    return `https://player.vimeo.com/video/${videoId}?autoplay=1&muted=1&controls=0&title=0&byline=0&portrait=0&loop=0&playsinline=1`
+  } catch {
+    return null
+  }
+}
+
+function isVturbUrl(url: string): boolean {
+  try {
+    const u = new URL(url)
+    return u.hostname === 'scripts.converteai.net' || u.hostname.includes('vturb')
+  } catch {
+    return false
+  }
+}
+
+function getVturbPlayerId(url: string): string | null {
+  const match = url.match(/\/players\/([^/]+)\/player\.js/)
+  return match?.[1] ?? null
+}
+
+function VturbPlayer({ scriptUrl, playerId }: { scriptUrl: string; playerId: string }) {
+  useEffect(() => {
+    if (document.getElementById(`scr_${playerId}`)) return
+
+    const script = document.createElement('script')
+    script.id = `scr_${playerId}`
+    script.src = scriptUrl
+    script.async = true
+    document.head.appendChild(script)
+
+    return () => {
+      document.getElementById(`scr_${playerId}`)?.remove()
+    }
+  }, [scriptUrl, playerId])
+
+  return (
+    <div
+      id={`vid_${playerId}`}
+      style={{ position: 'relative', width: '100%', height: '100%' }}
+    />
+  )
+}
+
+// ---- Phrase pools (exported for use in admin UI) ----
+
+export const CHAT_PHRASES_ELOGIOS = [
   'Incrível! Adorando o conteúdo 🔥',
   'Que conteúdo valioso, obrigado!',
   'Estou adorando tudo isso! 👏',
@@ -171,9 +223,108 @@ const GENERIC_CHAT_PHRASES = [
   'Melhor webinar que já assisti!',
 ]
 
+export const CHAT_PHRASES_VAGA = [
+  'Já garanti minha vaga! 🎉',
+  'Acabei de me inscrever, não podia perder!',
+  'Garantindo agora mesmo! ✅',
+  'Não podia deixar essa oportunidade passar',
+  'Me inscrevi! Não vejo a hora de começar 🚀',
+  'Vaga garantida! Valeu demais!',
+  'Fiz minha inscrição agora! 🙌',
+  'Essa era a oportunidade que eu esperava!',
+  'Corri pra garantir antes de acabar!',
+  'Inscrita! Obrigada por essa chance 💜',
+  'Garanti a minha, recomendo demais!',
+  'Acabei de garantir, super recomendo!',
+  'Não ia deixar passar essa, garantido! 🔥',
+  'Já garantido, ansioso para começar!',
+  'Minha inscrição tá feita! Mal posso esperar',
+  'Vagas estão indo rápido, garanta a sua!',
+  'Me inscrevi assim que vi! ⚡',
+  'Garanti com desconto, valeu demais!',
+  'Inscrito! Esse conteúdo vale muito',
+  'Garantido! Esperando com ansiedade 🎯',
+]
+
+export const CHAT_PHRASES_ENGAJAMENTO = [
+  'Que dica incrível, aplicando agora mesmo!',
+  'Isso resolve um problema que eu tinha faz tempo',
+  'Jamais teria pensado nisso sozinho!',
+  'Tomando notas aqui, tudo muito útil',
+  'Isso aqui vale ouro 💰',
+  'Quem mais tá anotando tudo?',
+  'Conteúdo de R$10.000 de graça!',
+  'Cada minuto vale muito aqui',
+  'Acompanhando do trabalho, valeu demais!',
+  'Entrei com dúvida e já tá sendo respondida',
+  'Meu sócio precisa ver isso 😅',
+  'Isso mudou meu ponto de vista completamente',
+  'Estou repassando pro meu time!',
+  'Conteúdo gratuito que supera muito curso pago',
+  'Que aula! Obrigado mesmo 🙏',
+  'Já salvei nos favoritos!',
+  'Esses conceitos são ouro puro',
+  'Faz sentido demais isso que você disse',
+  'Aplicando na minha empresa semana que vem!',
+  'Isso explicou o que li no livro mas não entendi',
+]
+
+const GENERIC_CHAT_PHRASES = [
+  ...CHAT_PHRASES_ELOGIOS,
+  ...CHAT_PHRASES_VAGA,
+  ...CHAT_PHRASES_ENGAJAMENTO,
+]
+
+// ---- Default name pool (200 Brazilian names) ----
+
+export const DEFAULT_NAMES = [
+  'Maria Silva', 'João Santos', 'Ana Oliveira', 'Carlos Mendes', 'Luciana Costa',
+  'Pedro Alves', 'Fernanda Lima', 'Rafael Souza', 'Juliana Pereira', 'Marcos Ferreira',
+  'Camila Rodrigues', 'Bruno Carvalho', 'Larissa Gomes', 'Thiago Martins', 'Aline Ribeiro',
+  'Diego Araújo', 'Mariana Nascimento', 'Gustavo Barbosa', 'Patrícia Melo', 'Rodrigo Vieira',
+  'Letícia Pinto', 'Felipe Cavalcante', 'Vanessa Cardoso', 'Eduardo Castro', 'Priscila Monteiro',
+  'Leonardo Correia', 'Tatiane Lopes', 'Vitor Rocha', 'Sandra Dias', 'André Cunha',
+  'Cristina Teixeira', 'Leandro Freitas', 'Isabela Nunes', 'Maurício Borges', 'Renata Moraes',
+  'Henrique Machado', 'Daiane Ramos', 'Fábio Azevedo', 'Amanda Fonseca', 'Danilo Cruz',
+  'Simone Campos', 'Otávio Batista', 'Débora Pinheiro', 'Lucas Marques', 'Solange Matos',
+  'Caio Moreira', 'Elaine Soares', 'Igor Medeiros', 'Raquel Vianna', 'Davi Neto',
+  'Adriana Leal', 'Samuel Cavalcanti', 'Viviane Duarte', 'Renan Nogueira', 'Karina Barros',
+  'Nathan Coelho', 'Mônica Pires', 'Matheus Rezende', 'Estela Queiroz', 'Cleber Andrade',
+  'Tânia Figueiredo', 'Wesley Braga', 'Natália Guimarães', 'Cláudio Siqueira', 'Beatriz Paiva',
+  'Edson Valente', 'Carla Vasconcelos', 'Paulo Muniz', 'Gabriela Passos', 'Wilson Lacerda',
+  'Patrícia Xavier', 'Marcelo Tavares', 'Adriane Brito', 'Tiago Dias', 'Sônia Leite',
+  'Breno Macedo', 'Andreia Sampaio', 'Érick Moura', 'Fabiana Cardoso', 'Diogo Costa',
+  'Michele Ramos', 'Thales Mendonça', 'Rosane Alves', 'Kelvin Ferreira', 'Tereza Campos',
+  'Alex Silveira', 'Cíntia Melo', 'Jonathan Farias', 'Dulce Castro', 'Robson Peixoto',
+  'Valeria Alencar', 'Sandro Cunha', 'Elisa Torres', 'Evandro Machado', 'Lucia Barreto',
+  'Cássio Pinto', 'Alessandra Lima', 'Walison Freitas', 'Neide Gomes', 'Renato Dias',
+  'Joana Sousa', 'Flávio Brito', 'Elenice Santos', 'Nilton Rezende', 'Cristiane Ribeiro',
+  'Cleverton Lopes', 'Jacqueline Vieira', 'Vinícius Souza', 'Gleice Fonseca', 'Marcio Silva',
+  'Rosângela Costa', 'Hermes Rocha', 'Nayara Barbosa', 'Ubirajara Lima', 'Geovana Martins',
+  'Ezequiel Nascimento', 'Verônica Araújo', 'Cézar Moreira', 'Taiana Cardoso', 'Valmir Cruz',
+  'Isadora Pereira', 'Lúcio Correia', 'Marta Batista', 'Silvio Nunes', 'Jéssica Borges',
+  'Mauro Monteiro', 'Celina Azevedo', 'Rinaldo Cavalcante', 'Deise Freitas', 'Edmar Ferreira',
+  'Naiane Coelho', 'Adilson Barros', 'Ingrid Soares', 'Edinaldo Campos', 'Wanessa Guimarães',
+  'Clóvis Vianna', 'Samara Valente', 'Hélio Muniz', 'Yara Alves', 'Rogerio Figueiredo',
+  'Leila Braga', 'Odilon Moura', 'Stephany Matos', 'Adelson Lacerda', 'Lindalva Brito',
+  'Gerson Pires', 'Fabíola Rezende', 'Nelson Barreto', 'Marcionila Medeiros', 'Valdeci Rocha',
+  'Sueli Dias', 'Reinaldo Ferreira', 'Cláudia Gomes', 'Ronaldo Neto', 'Sílvia Costa',
+  'Joaquim Barbosa', 'Dara Alves', 'Gilberto Souza', 'Estelle Lima', 'Maximiliano Ribeiro',
+  'Elza Santos', 'Gerison Pereira', 'Nilza Batista', 'Claudinei Freitas', 'Ivone Cardoso',
+  'Ermenegildo Cruz', 'Meirilane Nunes', 'Bertoldo Borges', 'Jaciara Monteiro', 'Arnaldo Vieira',
+  'Nazareth Soares', 'Alécio Correia', 'Rosilda Ramos', 'Ednaldo Campos', 'Juraci Ferreira',
+  'Everaldo Farias', 'Neuza Coelho', 'Genivaldo Barros', 'Laudelina Guimarães', 'Raimundo Pinto',
+  'Tereza Paiva', 'Sebastião Muniz', 'Conceição Morais', 'Aloísio Figueiredo', 'Zélia Braga',
+  'Eraldo Matos', 'Noemia Lacerda', 'Aderbal Brito', 'Isaura Pires', 'Wanderley Rezende',
+  'Elzira Dias', 'Astrogildo Costa', 'Benedita Lima', 'Herculano Barbosa', 'Julieta Ribeiro',
+  'Natalino Santos', 'Lurdes Alves', 'Anacleto Pereira', 'Felicidade Rocha', 'Eustáquio Gomes',
+  'Aparecida Neto', 'Belarmino Batista', 'Ritinha Freitas', 'Arquimedes Cardoso', 'Creuza Cruz',
+  'Almiro Nunes', 'Quitéria Borges', 'Belmiro Monteiro', 'Dulcinéia Vieira', 'Otacílio Soares',
+  'Floripes Correia', 'Godofredo Ramos', 'Preciliana Campos', 'Geraldo Ferreira', 'Geralda Farias',
+]
+
 export default function WebinarRoom({ webinar, events }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
-  const chatEndRef = useRef<HTMLDivElement>(null)
   const engineRef = useRef<EventEngine | null>(null)
   const sessionId = useRef(generateSessionId())
   const broadcastTimerRef = useRef<NodeJS.Timeout | null>(null)
@@ -185,7 +336,6 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const channelRef = useRef<RealtimeChannel | null>(null)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [chatInput, setChatInput] = useState('')
   const [userName] = useState('Você')
   const [viewers, setViewers] = useState(() => {
     const vStart = webinar.fake_viewers_start ?? 30
@@ -223,12 +373,16 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const [ytPlaying, setYtPlaying] = useState(false)
   const [ytMuted, setYtMuted] = useState(true)
 
-  // Chat tabs
-  type ChatTab = 'chat' | 'qa' | 'materials'
-  const defaultTab: ChatTab = webinar.chat_default_tab ?? 'chat'
-  const [chatTab, setChatTab] = useState<ChatTab>(defaultTab)
+  // Scheduled start countdown
+  const [countdownToStart, setCountdownToStart] = useState(() => {
+    if (!webinar.session_started_at) return 0
+    return Math.max(0, Math.ceil((new Date(webinar.session_started_at).getTime() - Date.now()) / 1000))
+  })
+  const sessionIsScheduledFuture = countdownToStart > 0
+
+  // Chat state (managed here, passed down to ChatPanel)
+  const defaultTab = webinar.chat_default_tab ?? 'chat'
   const [qaMessages, setQaMessages] = useState<{ id: string; author: string; text: string; answered?: string }[]>([])
-  const [qaInput, setQaInput] = useState('')
   const [materials, setMaterials] = useState<Material[]>([])
   const [visibleMaterials, setVisibleMaterials] = useState<Material[]>([])
 
@@ -244,6 +398,17 @@ export default function WebinarRoom({ webinar, events }: Props) {
   useEffect(() => {
     setVisibleMaterials(materials.filter(m => m.show_at_seconds <= elapsedSeconds))
   }, [elapsedSeconds, materials])
+
+  // ---- Scheduled start countdown ticker ----
+  useEffect(() => {
+    if (!webinar.session_started_at) return
+    const target = new Date(webinar.session_started_at).getTime()
+    const tick = setInterval(() => {
+      const remaining = Math.max(0, Math.ceil((target - Date.now()) / 1000))
+      setCountdownToStart(remaining)
+    }, 1000)
+    return () => clearInterval(tick)
+  }, [webinar.session_started_at])
 
   // ---- Inject brand color as CSS variable ----
   useEffect(() => {
@@ -334,35 +499,48 @@ export default function WebinarRoom({ webinar, events }: Props) {
 
   // ---- CPM-based chat simulation ----
   useEffect(() => {
+    const mode = webinar.chat_mode ?? 'cpm'
     const cpm = webinar.chat_cpm || 0
-    if (cpm <= 0) return
+    const intervalMin = webinar.chat_interval_minutes ?? 5
 
-    const poolNames = webinar.chat_names?.length ? webinar.chat_names
-      : ['Maria', 'João', 'Ana', 'Carlos', 'Luciana', 'Pedro', 'Fernanda', 'Rafael']
+    const intervalMs = mode === 'interval'
+      ? intervalMin * 60 * 1000
+      : cpm > 0 ? (60 / cpm) * 1000 : 0
 
-    const intervalMs = (60 / cpm) * 1000
+    if (intervalMs <= 0) return
+
+    const poolNames = webinar.chat_names?.length ? webinar.chat_names : DEFAULT_NAMES
+    const phrases = webinar.chat_phrases?.length ? webinar.chat_phrases : GENERIC_CHAT_PHRASES
+    const startSec = webinar.chat_start_seconds ?? 0
+    const endSec = webinar.chat_end_seconds ?? Infinity
+
     const jitterPct = intervalMs < 500 ? 0.15 : 0.4
     const jitter = intervalMs * jitterPct
 
     function scheduleNext() {
       const delay = intervalMs + (Math.random() * jitter * 2 - jitter)
       cpmTimerRef.current = setTimeout(() => {
-        const name = poolNames[Math.floor(Math.random() * poolNames.length)]
-        const text = GENERIC_CHAT_PHRASES[Math.floor(Math.random() * GENERIC_CHAT_PHRASES.length)]
-        setMessages(m => [...m, {
-          id: Math.random().toString(36),
-          author: name,
-          text,
-          timestamp: Math.floor(videoRef.current?.currentTime || 0),
-          isSimulated: true,
-        }])
+        const currentTime = videoRef.current?.currentTime ?? 0
+        if (currentTime >= startSec && currentTime <= endSec) {
+          const name = poolNames[Math.floor(Math.random() * poolNames.length)]
+          const text = phrases[Math.floor(Math.random() * phrases.length)]
+          setMessages(m => [...m, {
+            id: Math.random().toString(36),
+            author: name,
+            text,
+            timestamp: Math.floor(currentTime),
+            isSimulated: true,
+          }])
+        }
         scheduleNext()
       }, delay)
     }
 
     scheduleNext()
     return () => { if (cpmTimerRef.current) clearTimeout(cpmTimerRef.current) }
-  }, [webinar.chat_cpm, webinar.chat_names])
+  }, [webinar.chat_cpm, webinar.chat_names, webinar.chat_mode,
+      webinar.chat_interval_minutes, webinar.chat_start_seconds,
+      webinar.chat_end_seconds, webinar.chat_phrases])
 
   // ---- Real-time chat + emojis (Supabase Broadcast & DB) ----
   useEffect(() => {
@@ -424,10 +602,6 @@ export default function WebinarRoom({ webinar, events }: Props) {
     }
   }, [webinar.id])
 
-  // ---- Auto scroll chat ----
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages])
 
   // ---- Countdown ticker ----
   function startCountdown(seconds: number) {
@@ -663,21 +837,18 @@ export default function WebinarRoom({ webinar, events }: Props) {
     } catch {}
   }
 
-  // ---- Emoji reaction handler ----
+  // ---- Emoji reaction handler (called by ChatPanel.onFireReaction) ----
   function fireReaction(emoji: string) {
     setReactions(r => ({ ...r, [emoji]: (r[emoji] || 0) + 1 }))
     const id = Date.now() + Math.random()
     const x = 20 + Math.random() * 60
     setFlyingEmojis(f => [...f, { id, emoji, x }])
     setTimeout(() => setFlyingEmojis(f => f.filter(e => e.id !== id)), 2000)
-    // Broadcast to other viewers
     channelRef.current?.send({ type: 'broadcast', event: 'reaction', payload: { emoji, x } })
   }
 
-  async function sendChatMessage() {
-    if (!chatInput.trim()) return
-    const text = chatInput.trim()
-
+  // ---- Chat message sender (called by ChatPanel.onSendMessage) ----
+  async function sendChatMessage(text: string) {
     const msg: ChatMessage = {
       id: Math.random().toString(36),
       author: userName,
@@ -686,38 +857,22 @@ export default function WebinarRoom({ webinar, events }: Props) {
       isSimulated: false,
     }
 
+    // Optimistic local update
     setMessages(m => [...m, msg])
-    setChatInput('')
-
     trackEvent('chat_sent', msg.timestamp)
 
+    // Proxy through secure API
     try {
-      // 1. Try DB-backed chat (Moderation ready)
-      const { error } = await supabaseRef.current.from('webi_live_chat').insert({
-        id: msg.id,
-        webinar_id: webinar.id,
-        session_id: sessionId.current,
-        author: msg.author,
-        text: msg.text,
-        timestamp_video: msg.timestamp,
-        is_simulated: false,
-        is_broadcast: false,
+      await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...msg, webinar_id: webinar.id, session_id: sessionId.current }),
       })
-
-      // 2. If table doesn't exist yet, fallback to broadcast P2P
-      if (error && error.code === '42P01') {
-        throw new Error('Fallback')
-      }
-    } catch {
-      // Broadcast via Supabase Realtime (legacy p2p mode)
-      await channelRef.current?.send({
-        type: 'broadcast',
-        event: 'chat-message',
-        payload: { ...msg, session_id: sessionId.current },
-      })
+    } catch (err) {
+      console.warn('Failed to send message via API:', err)
     }
 
-    // AI auto-response if enabled and message is a question
+    // AI auto-response on questions
     if (webinar.ai_enabled) {
       const isQ = text.endsWith('?') || /como|quando|qual|quanto|posso|consigo|funciona|o que|por que|porque|dúvida|ajuda|não entendi/i.test(text)
       if (isQ) {
@@ -773,14 +928,11 @@ export default function WebinarRoom({ webinar, events }: Props) {
     window.open(popupPayload.cta_url, '_blank')
   }
 
-  async function sendQaMessage() {
-    if (!qaInput.trim()) return
-    const text = qaInput.trim()
+  // ---- Q&A sender (called by ChatPanel.onSendQa) ----
+  async function sendQaMessage(text: string) {
     const qId = `qa-${Date.now()}`
     setQaMessages(q => [...q, { id: qId, author: userName, text }])
-    setQaInput('')
 
-    // Try AI response if enabled
     if (webinar.ai_enabled) {
       const aiName = webinar.ai_persona_name || '🤖 Assistente'
       setAiTyping(true)
@@ -852,6 +1004,31 @@ export default function WebinarRoom({ webinar, events }: Props) {
         </div>
 
         <div className="video-wrapper" style={{ position: 'relative' }}>
+          {/* Countdown overlay when session is scheduled for the future */}
+          {sessionIsScheduledFuture && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 20, background: '#000',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 12,
+            }}>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.06em' }}>
+                A TRANSMISSÃO COMEÇA EM
+              </div>
+              <div style={{ fontSize: 52, fontWeight: 800, fontFamily: 'monospace', color: '#fff', letterSpacing: '0.04em' }}>
+                {(() => {
+                  const h = Math.floor(countdownToStart / 3600)
+                  const m = Math.floor((countdownToStart % 3600) / 60)
+                  const s = countdownToStart % 60
+                  if (h > 0) return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+                  return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`
+                })()}
+              </div>
+              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
+                Aguarde o início da transmissão ao vivo
+              </div>
+            </div>
+          )}
+
           {/* Camada invisível para capturar qualquer clique/hover indevido */}
           <div 
             style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'transparent' }}
@@ -929,6 +1106,25 @@ export default function WebinarRoom({ webinar, events }: Props) {
                   </>
                 )}
               </>
+            ) : isVimeoUrl(webinar.video_url) ? (
+              <iframe
+                src={getVimeoEmbedUrl(webinar.video_url) || ''}
+                style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
+                allow="autoplay; fullscreen; picture-in-picture"
+                allowFullScreen={false}
+                title={webinar.name}
+              />
+            ) : isVturbUrl(webinar.video_url) ? (
+              (() => {
+                const pid = getVturbPlayerId(webinar.video_url)
+                return pid ? (
+                  <VturbPlayer scriptUrl={webinar.video_url} playerId={pid} />
+                ) : (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
+                    URL do VTurb inválida
+                  </div>
+                )
+              })()
             ) : (
               <video
                 ref={videoRef}
@@ -941,7 +1137,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
                   objectFit: 'contain',
                   pointerEvents: 'none',
                 }}
-                onError={() => setVideoError(true)}
+                onError={(e) => console.error('Video playback error', e)}
                 onContextMenu={e => e.preventDefault()}
               />
             )
@@ -1035,249 +1231,21 @@ export default function WebinarRoom({ webinar, events }: Props) {
 
       </div>
 
-      {/* CHAT SECTION */}
-      <div className="chat-section">
-        {/* TABS HEADER */}
-        <div style={{
-          display: 'flex', borderBottom: '1px solid var(--border)',
-          background: 'var(--bg-card)',
-        }}>
-          {([
-            { id: 'chat', label: '💬 Chat', count: messages.filter(m => !m.isBroadcast).length },
-            { id: 'qa', label: '❓ Q&A', count: qaMessages.length },
-            ...(visibleMaterials.length > 0 || materials.length > 0
-              ? [{ id: 'materials' as const, label: '📂 Materiais', count: visibleMaterials.length }]
-              : []),
-          ] as const).map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setChatTab(tab.id)}
-              style={{
-                flex: 1, padding: '10px 4px', fontSize: 12, fontWeight: 600,
-                background: 'none', border: 'none', cursor: 'pointer',
-                color: chatTab === tab.id ? 'var(--brand)' : 'var(--text-muted)',
-                borderBottom: chatTab === tab.id ? '2px solid var(--brand)' : '2px solid transparent',
-                transition: 'all 0.15s ease',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-              }}
-            >
-              {tab.label}
-              {tab.count > 0 && (
-                <span style={{
-                  background: chatTab === tab.id ? 'var(--brand)' : 'var(--border)',
-                  color: chatTab === tab.id ? '#fff' : 'var(--text-muted)',
-                  borderRadius: 99, padding: '0px 6px', fontSize: 10, fontWeight: 700,
-                }}>{tab.count}</span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* CHAT TAB */}
-        {chatTab === 'chat' && (
-          <div className="chat-messages">
-            {messages.length === 0 && (
-              <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, paddingTop: 32 }}>
-                Seja o primeiro a comentar! 👋
-              </div>
-            )}
-            {messages.map((msg, i) => {
-              const isBroadcast = msg.isBroadcast
-              const isAi = msg.author?.startsWith('🤖')
-              return (
-                <div key={msg.id || i} className="chat-message" style={isBroadcast ? {
-                  background: 'rgba(34,197,94,0.08)', borderRadius: 8, padding: '6px 8px',
-                  border: '1px solid rgba(34,197,94,0.2)', margin: '2px 0'
-                } : isAi ? {
-                  background: 'rgba(99,102,241,0.08)', borderRadius: 8, padding: '6px 8px',
-                  border: '1px solid rgba(99,102,241,0.2)', margin: '2px 0'
-                } : {}}>
-                  {!isBroadcast && (
-                    <div
-                      className="chat-avatar"
-                      style={{
-                        background: isAi ? 'var(--brand)'
-                          : msg.isSimulated
-                            ? `hsl(${(msg.author.charCodeAt(0) * 37) % 360}, 70%, 40%)`
-                            : 'var(--brand)',
-                        backgroundImage: msg.avatar ? `url(${msg.avatar})` : undefined,
-                        backgroundSize: 'cover',
-                      }}
-                    >
-                      {!msg.avatar && getInitials(msg.author)}
-                    </div>
-                  )}
-                  <div>
-                    {!isBroadcast && <div className="chat-msg-author" style={isAi ? { color: 'var(--brand)' } : {}}>{msg.author}</div>}
-                    <div className="chat-msg-text" style={isBroadcast ? { color: 'var(--success)', fontWeight: 600 } : {}}>
-                      {msg.text}
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-            {aiTyping && (
-              <div className="chat-message" style={{ background: 'rgba(99,102,241,0.05)', borderRadius: 8, padding: '6px 8px' }}>
-                <div className="chat-avatar" style={{ background: 'var(--brand)' }}>🤖</div>
-                <div>
-                  <div className="chat-msg-author" style={{ color: 'var(--brand)' }}>🤖 Assistente</div>
-                  <div className="chat-msg-text" style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>digitando...</div>
-                </div>
-              </div>
-            )}
-            <div ref={chatEndRef} />
-          </div>
-        )}
-
-        {/* Q&A TAB */}
-        {chatTab === 'qa' && (
-          <div className="chat-messages">
-            {qaMessages.length === 0 && (
-              <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, paddingTop: 32, lineHeight: 1.6 }}>
-                ❓ Envie sua dúvida aqui<br />
-                <span style={{ fontSize: 11 }}>A IA ou o apresentador irá responder</span>
-              </div>
-            )}
-            {qaMessages.map(q => (
-              <div key={q.id} style={{ padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', gap: 8, marginBottom: q.answered ? 6 : 0 }}>
-                  <div className="chat-avatar" style={{ background: 'var(--brand)', flexShrink: 0 }}>
-                    {getInitials(q.author)}
-                  </div>
-                  <div style={{ flex: 1 }}>
-                    <div className="chat-msg-author">{q.author}</div>
-                    <div className="chat-msg-text">{q.text}</div>
-                  </div>
-                </div>
-                {q.answered && (
-                  <div style={{
-                    marginLeft: 40, background: 'rgba(99,102,241,0.08)',
-                    borderLeft: '3px solid var(--brand)',
-                    padding: '8px 10px', borderRadius: '0 8px 8px 0',
-                    fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5,
-                  }}>
-                    <span style={{ fontSize: 11, color: 'var(--brand)', fontWeight: 700, display: 'block', marginBottom: 2 }}>🤖 Assistente</span>
-                    {q.answered}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* MATERIALS TAB */}
-        {chatTab === 'materials' && (
-          <div className="chat-messages">
-            {visibleMaterials.length === 0 && (
-              <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, paddingTop: 32, lineHeight: 1.6 }}>
-                📂 Nenhum material disponível ainda<br />
-                <span style={{ fontSize: 11 }}>Os materiais serão liberados durante o webinar</span>
-              </div>
-            )}
-            {visibleMaterials.map(m => (
-              <a
-                key={m.id}
-                href={m.url}
-                target="_blank"
-                rel="noopener"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12, padding: 12,
-                  borderRadius: 10, border: '1px solid var(--border)',
-                  background: 'var(--bg-card)', margin: '4px 0',
-                  transition: 'border-color 0.15s', textDecoration: 'none',
-                }}
-                onMouseOver={e => (e.currentTarget.style.borderColor = 'var(--brand)')}
-                onMouseOut={e => (e.currentTarget.style.borderColor = 'var(--border)')}
-              >
-                <span style={{ fontSize: 24 }}>{m.icon}</span>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 14 }}>{m.label}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Clique para baixar / acessar</div>
-                </div>
-                <span style={{ fontSize: 18, color: 'var(--brand)' }}>↗</span>
-              </a>
-            ))}
-            {materials.filter(m => m.show_at_seconds > elapsedSeconds).length > 0 && (
-              <div style={{ padding: 12, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-                🔒 {materials.filter(m => m.show_at_seconds > elapsedSeconds).length} material(is) ainda serão liberados...
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* EMOJI REACTIONS — só na aba chat */}
-        {chatTab === 'chat' && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
-            borderTop: '1px solid var(--border)', background: 'var(--bg-card)',
-            position: 'relative', overflow: 'hidden', flexWrap: 'wrap',
-          }}>
-            {flyingEmojis.map(fe => (
-              <span key={fe.id} style={{
-                position: 'absolute', bottom: '100%', left: `${fe.x}%`,
-                fontSize: 22, animation: 'emojiFloat 2s ease-out forwards',
-                pointerEvents: 'none', userSelect: 'none',
-              }}>{fe.emoji}</span>
-            ))}
-            {EMOJI_REACTIONS.map(r => (
-              <button
-                key={r.emoji}
-                title={r.label}
-                onClick={() => fireReaction(r.emoji)}
-                style={{
-                  background: reactions[r.emoji] > 0 ? 'rgba(99,102,241,0.15)' : 'transparent',
-                  border: `1px solid ${reactions[r.emoji] > 0 ? 'rgba(99,102,241,0.4)' : 'var(--border)'}`,
-                  borderRadius: 99, padding: '3px 9px', cursor: 'pointer',
-                  fontSize: 15, display: 'flex', alignItems: 'center', gap: 4,
-                  transition: 'all 0.15s ease', userSelect: 'none',
-                }}
-              >
-                {r.emoji}
-                {reactions[r.emoji] > 0 && (
-                  <span style={{ fontSize: 10, color: '#a5b4fc', fontWeight: 700 }}>
-                    {reactions[r.emoji]}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* DYNAMIC INPUT BY TAB */}
-        <div className="chat-input-area">
-          {chatTab === 'chat' && (
-            <>
-              <input
-                type="text"
-                className="chat-input"
-                placeholder="Digite sua mensagem..."
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && sendChatMessage()}
-              />
-              <button className="btn btn-primary btn-sm" onClick={sendChatMessage}>→</button>
-            </>
-          )}
-          {chatTab === 'qa' && (
-            <>
-              <input
-                type="text"
-                className="chat-input"
-                placeholder="Envie sua dúvida..."
-                value={qaInput}
-                onChange={e => setQaInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && sendQaMessage()}
-              />
-              <button className="btn btn-primary btn-sm" onClick={sendQaMessage}>→</button>
-            </>
-          )}
-          {chatTab === 'materials' && (
-            <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)', flex: 1 }}>
-              🔒 Materiais são liberados pelo apresentador durante o webinar
-            </div>
-          )}
-        </div>
-      </div>{/* end .chat-section */}
+      {/* CHAT SECTION — delegated to ChatPanel */}
+      <ChatPanel
+        messages={messages}
+        qaMessages={qaMessages}
+        visibleMaterials={visibleMaterials}
+        materials={materials}
+        elapsedSeconds={elapsedSeconds}
+        flyingEmojis={flyingEmojis}
+        reactions={reactions}
+        aiTyping={aiTyping}
+        defaultTab={defaultTab}
+        onSendMessage={sendChatMessage}
+        onSendQa={sendQaMessage}
+        onFireReaction={fireReaction}
+      />
       </div>{/* end .webinar-room */}
 
       {/* TESTIMONIALS SECTION — full width below the main grid */}
