@@ -19,6 +19,7 @@ const defaultForm = {
   evergreen_offset_seconds: 0,
   peak_viewers_min: 20,
   peak_viewers_max: 80,
+  theme: 'dark' as string,
 }
 
 export default function WebinarsPage() {
@@ -61,6 +62,7 @@ export default function WebinarsPage() {
       name: w.name, description: w.description || '', video_url: w.video_url || '',
       slug: w.slug, status: w.status, evergreen_offset_seconds: w.evergreen_offset_seconds,
       peak_viewers_min: w.peak_viewers_min, peak_viewers_max: w.peak_viewers_max,
+      theme: w.theme || 'dark',
     })
     setShowModal(true)
   }
@@ -262,6 +264,26 @@ export default function WebinarsPage() {
                 <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                   Quantos segundos simular que já passaram ao entrar. 0 = começa do início.
                 </span>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Tema Visual</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  {([
+                    { value: 'dark', label: '🌑 Dark' },
+                    { value: 'light', label: '☀️ Light' },
+                    { value: 'youtube', label: '▶ YouTube' },
+                  ] as const).map(opt => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      className={`btn btn-sm ${form.theme === opt.value ? 'btn-primary' : 'btn-ghost'}`}
+                      onClick={() => setForm(f => ({ ...f, theme: opt.value }))}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="form-group">

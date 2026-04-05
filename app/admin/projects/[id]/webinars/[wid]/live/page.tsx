@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, startTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { toast } from 'react-hot-toast'
 
 function elapsedLabel(iso: string | null): string {
   if (!iso) return ''
@@ -24,7 +25,6 @@ export default function LivePage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [restarting, setRestarting] = useState(false)
   const [webinarName, setWebinarName] = useState('')
   const [webinarSlug, setWebinarSlug] = useState('')
@@ -33,7 +33,6 @@ export default function LivePage() {
   const [elapsed, setElapsed] = useState('')
   const [scheduledAt, setScheduledAt] = useState('')
   const [savingScheduled, setSavingScheduled] = useState(false)
-  const [savedScheduled, setSavedScheduled] = useState(false)
   const [scheduleTimeUntil, setScheduleTimeUntil] = useState('')
   const [form, setForm] = useState({
     fake_viewers_start: 50,
@@ -99,8 +98,7 @@ export default function LivePage() {
     }).eq('id', wid)
     setSessionStartedAt(iso)
     setSavingScheduled(false)
-    setSavedScheduled(true)
-    setTimeout(() => setSavedScheduled(false), 3000)
+    toast.success('Agendamento salvo!')
   }
 
   async function clearScheduled() {
@@ -139,8 +137,7 @@ export default function LivePage() {
     setSaving(true)
     await supabase.from('webi_webinars').update({ ...form, display_name: displayName || null }).eq('id', wid)
     setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    toast.success('Curva de audiência salva!')
   }
 
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
@@ -203,7 +200,7 @@ export default function LivePage() {
           )}
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-primary btn-sm" onClick={saveScheduled} disabled={savingScheduled}>
-              {savedScheduled ? '✅ Salvo!' : savingScheduled ? '⏳...' : '💾 Salvar agendamento'}
+              {savingScheduled ? '⏳...' : '💾 Salvar agendamento'}
             </button>
             {scheduledAt && (
               <button className="btn btn-ghost btn-sm" onClick={clearScheduled}>
@@ -291,15 +288,18 @@ export default function LivePage() {
                 const pct = i / 19
                 const peakAt = form.fake_viewers_peak_at_pct / 100
                 const peakEnd = Math.min(peakAt + 0.15, 0.8)
+                const endRatio = form.fake_viewers_peak > 0
+                  ? Math.min(1, form.fake_viewers_end / form.fake_viewers_peak)
+                  : 0
                 let h: number
                 if (pct <= peakAt) {
                   h = peakAt > 0 ? pct / peakAt : 1
                 } else if (pct <= peakEnd) {
                   h = 1
                 } else if (pct <= 0.85) {
-                  h = 1 - (pct - peakEnd) / (0.85 - peakEnd)
+                  h = 1 - (1 - endRatio) * (pct - peakEnd) / (0.85 - peakEnd)
                 } else {
-                  h = form.fake_viewers_end / form.fake_viewers_peak
+                  h = endRatio
                 }
                 const height = Math.max(4, Math.round(h * 44))
                 return (
@@ -343,7 +343,7 @@ export default function LivePage() {
             </div>
 
             <button type="submit" className="btn btn-primary btn-sm" disabled={saving} style={{ alignSelf: 'flex-start' }}>
-              {saving ? '⏳ Salvando...' : saved ? '✅ Salvo!' : '💾 Salvar curva'}
+              {saving ? '⏳ Salvando...' : '💾 Salvar curva'}
             </button>
           </div>
         </form>

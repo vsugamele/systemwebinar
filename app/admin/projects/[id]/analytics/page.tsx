@@ -123,7 +123,7 @@ export default function AnalyticsPage() {
           .from('webi_quiz_responses')
           .select('*', { count: 'exact', head: true })
           .eq('webinar_id', wid)
-          .gte('score_percent', 70)
+          .gte('score', 70)
 
         const convRate = (leads ?? 0) > 0
           ? Math.round(((ctaClicked) / (leads ?? 1)) * 100)

@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { toast } from 'react-hot-toast'
 
 interface WebinarData {
   id: string
@@ -24,6 +25,7 @@ interface Counts {
   events: number
   materials: number
   emailTemplates: number
+  quiz: number
 }
 
 type AreaStatus = 'done' | 'warn' | 'empty'
@@ -47,27 +49,27 @@ function statusDot(s: AreaStatus) {
 
 export default function WebinarHubPage() {
   const { id, wid } = useParams() as { id: string; wid: string }
-  const router = useRouter()
   const supabase = createClient()
 
   const [loading, setLoading] = useState(true)
   const [webinar, setWebinar] = useState<WebinarData | null>(null)
-  const [counts, setCounts] = useState<Counts>({ events: 0, materials: 0, emailTemplates: 0 })
+  const [counts, setCounts] = useState<Counts>({ events: 0, materials: 0, emailTemplates: 0, quiz: 0 })
   const [publishing, setPublishing] = useState(false)
   const [showPublishModal, setShowPublishModal] = useState(false)
   const [publishSaved, setPublishSaved] = useState(false)
 
   useEffect(() => {
     async function load() {
-      const [{ data: w }, { count: evCount }, { count: matCount }, { count: emailCount }] =
+      const [{ data: w }, { count: evCount }, { count: matCount }, { count: emailCount }, { count: quizCount }] =
         await Promise.all([
           supabase.from('webi_webinars').select('*').eq('id', wid).single(),
           supabase.from('webi_events').select('id', { count: 'exact', head: true }).eq('webinar_id', wid),
           supabase.from('webi_materials').select('id', { count: 'exact', head: true }).eq('webinar_id', wid),
           supabase.from('webi_email_templates').select('id', { count: 'exact', head: true }).eq('webinar_id', wid).eq('enabled', true),
+          supabase.from('webi_quiz_questions').select('id', { count: 'exact', head: true }).eq('webinar_id', wid),
         ])
       if (w) setWebinar(w as WebinarData)
-      setCounts({ events: evCount || 0, materials: matCount || 0, emailTemplates: emailCount || 0 })
+      setCounts({ events: evCount || 0, materials: matCount || 0, emailTemplates: emailCount || 0, quiz: quizCount || 0 })
       setLoading(false)
     }
     load()
@@ -149,7 +151,7 @@ export default function WebinarHubPage() {
       icon: '✉️',
       label: 'E-mails',
       description: 'Sequência automática de lembretes',
-      href: `/admin/emails`,
+      href: `/admin/emails?project=${id}&webinar=${wid}`,
       status: counts.emailTemplates > 0 ? 'done' : 'warn',
       hint: counts.emailTemplates > 0 ? `${counts.emailTemplates} templates ativos` : 'Nenhum e-mail ativo',
       priority: 'recommended',
@@ -180,8 +182,8 @@ export default function WebinarHubPage() {
       label: 'Quiz',
       description: 'Perguntas interativas',
       href: `/admin/projects/${id}/webinars/${wid}/quiz`,
-      status: 'empty',
-      hint: 'Opcional',
+      status: counts.quiz > 0 ? 'done' : 'empty',
+      hint: counts.quiz > 0 ? `${counts.quiz} pergunta${counts.quiz > 1 ? 's' : ''} configurada${counts.quiz > 1 ? 's' : ''}` : 'Nenhuma questão',
       priority: 'optional',
     },
   ]
@@ -416,15 +418,13 @@ function ThemeSelector({ webinarId, currentTheme }: { webinarId: string; current
   const supabase = createClient()
   const [theme, setTheme] = useState(currentTheme)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
 
   async function applyTheme(t: 'dark' | 'light' | 'youtube') {
     setTheme(t)
     setSaving(true)
     await supabase.from('webi_webinars').update({ theme: t }).eq('id', webinarId)
     setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 1800)
+    toast.success('Tema salvo!')
   }
 
   return (
@@ -435,7 +435,6 @@ function ThemeSelector({ webinarId, currentTheme }: { webinarId: string; current
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Aparência da sala de webinar para os participantes</div>
         </div>
         {saving && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Salvando...</span>}
-        {saved && <span style={{ fontSize: 12, color: 'var(--success)' }}>✓ Salvo</span>}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
         {THEMES.map(t => {

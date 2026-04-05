@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { toast } from 'react-hot-toast'
 
 const OPENROUTER_MODELS = [
   { value: 'google/gemini-flash-1.5', label: 'Gemini 1.5 Flash (Google) — Mais rápido e barato' },
@@ -20,7 +21,6 @@ export default function AIConfigPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [projectApiKey, setProjectApiKey] = useState('')
   const [webinarName, setWebinarName] = useState('')
 
@@ -67,8 +67,7 @@ export default function AIConfigPage() {
     ])
 
     setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    toast.success('Configurações salvas!')
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Carregando...</div>
@@ -255,7 +254,7 @@ export default function AIConfigPage() {
         </div>
 
         <button type="submit" className="btn btn-primary" disabled={saving} style={{ alignSelf: 'flex-start' }}>
-          {saving ? '⏳ Salvando...' : saved ? '✅ Salvo!' : '💾 Salvar Configurações'}
+          {saving ? '⏳ Salvando...' : '💾 Salvar Configurações'}
         </button>
       </form>
     </div>

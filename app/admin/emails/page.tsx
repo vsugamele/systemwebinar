@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'react-hot-toast'
+import { useSearchParams } from 'next/navigation'
 import type { Project, Webinar } from '@/types'
 
 interface EmailTemplate {
@@ -71,10 +72,11 @@ const typeLabels: Record<string, { label: string; timing: string; icon: string }
 }
 
 export default function EmailsPage() {
+  const searchParams = useSearchParams()
   const [projects, setProjects] = useState<Project[]>([])
   const [webinars, setWebinars] = useState<Webinar[]>([])
-  const [selectedProject, setSelectedProject] = useState('')
-  const [selectedWebinar, setSelectedWebinar] = useState('')
+  const [selectedProject, setSelectedProject] = useState(searchParams.get('project') ?? '')
+  const [selectedWebinar, setSelectedWebinar] = useState(searchParams.get('webinar') ?? '')
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
   const [editTemplate, setEditTemplate] = useState<EmailTemplate | null>(null)
   const [saving, setSaving] = useState(false)

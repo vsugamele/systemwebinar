@@ -53,12 +53,12 @@ export default function AdminToasts() {
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'webi_quiz_responses' },
         (payload) => {
-          const record = payload.new as { score_percent: number; user_name?: string }
-          if (record.score_percent >= 70) {
+          const record = payload.new as { score: number; lead_name?: string }
+          if (record.score >= 70) {
             addToast({
               icon: '🎓',
               title: 'Certificado Conquistado!',
-              body: `${record.user_name || 'Um participante'} atingiu ${record.score_percent}% no quiz`,
+              body: `${record.lead_name || 'Um participante'} atingiu ${record.score}% no quiz`,
               color: '#6366f1',
             })
           }

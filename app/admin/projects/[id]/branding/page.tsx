@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { toast } from 'react-hot-toast'
 
 const PRESET_COLORS = [
   { label: 'Índigo (Padrão)', value: '#6366f1' },
@@ -23,7 +24,6 @@ export default function BrandingPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [brandColor, setBrandColor] = useState('#6366f1')
   const [webhookUrl, setWebhookUrl] = useState('')
 
@@ -43,8 +43,7 @@ export default function BrandingPage() {
     setSaving(true)
     await supabase.from('webi_projects').update({ brand_color: brandColor, webhook_url: webhookUrl }).eq('id', id)
     setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    toast.success('Branding salvo!')
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Carregando...</div>
@@ -148,7 +147,7 @@ export default function BrandingPage() {
         </div>
 
         <button type="submit" className="btn btn-primary" disabled={saving} style={{ alignSelf: 'flex-start' }}>
-          {saving ? '⏳ Salvando...' : saved ? '✅ Salvo!' : '💾 Salvar'}
+          {saving ? '⏳ Salvando...' : '💾 Salvar'}
         </button>
       </form>
     </div>

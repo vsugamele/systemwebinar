@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { toast } from 'react-hot-toast'
 
 export default function TrackingPage() {
   const { id: projectId, wid: webinarId } = useParams<{ id: string; wid: string }>()
@@ -12,7 +13,6 @@ export default function TrackingPage() {
   const [headCode, setHeadCode] = useState('')
   const [bodyCode, setBodyCode] = useState('')
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -39,8 +39,7 @@ export default function TrackingPage() {
       tracking_body_code: bodyCode || null,
     }).eq('id', webinarId)
     setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+    toast.success('Códigos de rastreamento salvos!')
   }
 
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
@@ -56,7 +55,7 @@ export default function TrackingPage() {
           <p className="page-subtitle">Cole aqui seus códigos de rastreamento: Facebook Pixel, Google Analytics, GTM, etc.</p>
         </div>
         <button className="btn btn-primary" onClick={save} disabled={saving}>
-          {saving ? <span className="spinner" /> : saved ? '✅ Salvo!' : '💾 Salvar'}
+          {saving ? <span className="spinner" /> : '💾 Salvar'}
         </button>
       </div>
 

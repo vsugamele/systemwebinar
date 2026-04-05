@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { toast } from 'react-hot-toast'
 
 export default function WaitingRoomConfigPage() {
   const { id, wid } = useParams() as { id: string; wid: string }
@@ -11,7 +12,6 @@ export default function WaitingRoomConfigPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [webinarName, setWebinarName] = useState('')
   const [form, setForm] = useState({
     waiting_room_enabled: false,
@@ -43,8 +43,7 @@ export default function WaitingRoomConfigPage() {
     setSaving(true)
     await supabase.from('webi_webinars').update(form).eq('id', wid)
     setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    toast.success('Sala de espera salva!')
   }
 
   const mins = Math.floor(form.waiting_delay_seconds / 60)
@@ -170,7 +169,7 @@ export default function WaitingRoomConfigPage() {
         </div>
 
         <button type="submit" className="btn btn-primary" disabled={saving} style={{ alignSelf: 'flex-start' }}>
-          {saving ? '⏳ Salvando...' : saved ? '✅ Salvo!' : '💾 Salvar'}
+          {saving ? '⏳ Salvando...' : '💾 Salvar'}
         </button>
       </form>
     </div>

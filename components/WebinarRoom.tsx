@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { EventEngine } from '@/lib/event-engine'
 import { createClient } from '@/lib/supabase/client'
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import type { Webinar, WebinarEvent, ChatMessage, ChatMessagePayload, OfferPopupPayload, PitchButtonPayload } from '@/types'
+import type { Webinar, WebinarEvent, ChatMessage, ChatMessagePayload, OfferPopupPayload, PitchButtonPayload, ChatSegment } from '@/types'
 import dynamic from 'next/dynamic'
 import ChatPanel, { EMOJI_REACTIONS } from './ChatPanel'
 import type { Material } from './ChatPanel'
@@ -196,6 +196,12 @@ function VturbPlayer({ scriptUrl, playerId }: { scriptUrl: string; playerId: str
       style={{ position: 'relative', width: '100%', height: '100%' }}
     />
   )
+}
+
+// ---- Chat segment helpers ----
+
+function findActiveSegment(segments: ChatSegment[], currentTime: number): ChatSegment | null {
+  return segments.find(s => currentTime >= s.from && (s.to == null || currentTime < s.to)) ?? null
 }
 
 // ---- Phrase pools (exported for use in admin UI) ----
@@ -497,8 +503,54 @@ export default function WebinarRoom({ webinar, events }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [webinar])
 
-  // ---- CPM-based chat simulation ----
+  // ---- CPM-based chat simulation (supports segments + global mode) ----
   useEffect(() => {
+    const poolNames = webinar.chat_names?.length ? webinar.chat_names : DEFAULT_NAMES
+    const segments = webinar.chat_segments?.length ? webinar.chat_segments : null
+
+    function getPhrasesForSegment(seg: ChatSegment): string[] {
+      if (seg.phrases === 'elogios') return CHAT_PHRASES_ELOGIOS
+      if (seg.phrases === 'vaga') return CHAT_PHRASES_VAGA
+      if (seg.phrases === 'engajamento') return CHAT_PHRASES_ENGAJAMENTO
+      return GENERIC_CHAT_PHRASES
+    }
+
+    if (segments) {
+      // ---- Segment-based mode ----
+      const segs: ChatSegment[] = segments
+      function tick() {
+        const currentTime = videoRef.current?.currentTime ?? 0
+        const seg = findActiveSegment(segs, currentTime)
+
+        if (!seg || seg.cpm <= 0) {
+          cpmTimerRef.current = setTimeout(tick, 2000)
+          return
+        }
+
+        const intervalMs = (60 / seg.cpm) * 1000
+        const jitter = intervalMs * 0.35
+        const delay = intervalMs + (Math.random() * jitter * 2 - jitter)
+
+        cpmTimerRef.current = setTimeout(() => {
+          const fireTime = videoRef.current?.currentTime ?? 0
+          const activeSeg = findActiveSegment(segs, fireTime)
+          if (activeSeg && activeSeg.cpm > 0) {
+            const phrases = getPhrasesForSegment(activeSeg)
+            const name = poolNames[Math.floor(Math.random() * poolNames.length)]
+            const text = phrases[Math.floor(Math.random() * phrases.length)]
+            setMessages(m => [...m, {
+              id: Math.random().toString(36), author: name, text,
+              timestamp: Math.floor(fireTime), isSimulated: true,
+            }])
+          }
+          tick()
+        }, delay)
+      }
+      tick()
+      return () => { if (cpmTimerRef.current) clearTimeout(cpmTimerRef.current) }
+    }
+
+    // ---- Global CPM mode (fallback) ----
     const mode = webinar.chat_mode ?? 'cpm'
     const cpm = webinar.chat_cpm || 0
     const intervalMin = webinar.chat_interval_minutes ?? 5
@@ -509,7 +561,6 @@ export default function WebinarRoom({ webinar, events }: Props) {
 
     if (intervalMs <= 0) return
 
-    const poolNames = webinar.chat_names?.length ? webinar.chat_names : DEFAULT_NAMES
     const phrases = webinar.chat_phrases?.length ? webinar.chat_phrases : GENERIC_CHAT_PHRASES
     const startSec = webinar.chat_start_seconds ?? 0
     const endSec = webinar.chat_end_seconds ?? Infinity
@@ -540,7 +591,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
     return () => { if (cpmTimerRef.current) clearTimeout(cpmTimerRef.current) }
   }, [webinar.chat_cpm, webinar.chat_names, webinar.chat_mode,
       webinar.chat_interval_minutes, webinar.chat_start_seconds,
-      webinar.chat_end_seconds, webinar.chat_phrases])
+      webinar.chat_end_seconds, webinar.chat_phrases, webinar.chat_segments])
 
   // ---- Real-time chat + emojis (Supabase Broadcast & DB) ----
   useEffect(() => {

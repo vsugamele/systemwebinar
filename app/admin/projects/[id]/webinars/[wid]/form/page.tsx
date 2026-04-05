@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { toast } from 'react-hot-toast'
 
 const FIELD_OPTIONS = [
   { key: 'phone', label: 'Telefone / WhatsApp', placeholder: '(11) 99999-9999', defaultLabel: 'Seu WhatsApp' },
@@ -21,7 +22,6 @@ export default function FormPage() {
   const [formFields, setFormFields] = useState<string[]>(['name', 'email', 'phone'])
   const [fieldLabels, setFieldLabels] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -66,8 +66,7 @@ export default function FormPage() {
       form_fields: enrichedFields,
     }).eq('id', webinarId)
     setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+    toast.success('Formulário salvo!')
   }
 
   function toggleField(key: string) {
@@ -89,7 +88,7 @@ export default function FormPage() {
           <p className="page-subtitle">Configure quais campos aparecem na página de inscrição do seu webinar</p>
         </div>
         <button className="btn btn-primary" onClick={save} disabled={saving}>
-          {saving ? <span className="spinner" /> : saved ? '✅ Salvo!' : '💾 Salvar'}
+          {saving ? <span className="spinner" /> : '💾 Salvar'}
         </button>
       </div>
 
