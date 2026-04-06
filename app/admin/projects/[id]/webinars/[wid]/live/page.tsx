@@ -47,7 +47,8 @@ export default function LivePage() {
       .select('name, slug, display_name, session_started_at, scheduled_start_at, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct')
       .eq('id', wid)
       .single()
-      .then(({ data }) => {
+      .then(({ data, error }) => {
+        if (error) { toast.error('Erro ao carregar dados da sessão.'); setLoading(false); return }
         if (data) {
           setWebinarName(data.name)
           setWebinarSlug(data.slug)
@@ -91,23 +92,34 @@ export default function LivePage() {
 
   async function saveScheduled() {
     setSavingScheduled(true)
-    const iso = scheduledAt ? new Date(scheduledAt).toISOString() : null
-    await supabase.from('webi_webinars').update({
-      scheduled_start_at: iso,
-      session_started_at: iso,
-    }).eq('id', wid)
-    setSessionStartedAt(iso)
-    setSavingScheduled(false)
-    toast.success('Agendamento salvo!')
+    try {
+      const iso = scheduledAt ? new Date(scheduledAt).toISOString() : null
+      const { error } = await supabase.from('webi_webinars').update({
+        scheduled_start_at: iso,
+        session_started_at: iso,
+      }).eq('id', wid)
+      if (error) throw error
+      setSessionStartedAt(iso)
+      toast.success('Agendamento salvo!')
+    } catch {
+      toast.error('Erro ao salvar agendamento. Tente novamente.')
+    } finally {
+      setSavingScheduled(false)
+    }
   }
 
   async function clearScheduled() {
-    setScheduledAt('')
-    await supabase.from('webi_webinars').update({
-      scheduled_start_at: null,
-      session_started_at: null,
-    }).eq('id', wid)
-    setSessionStartedAt(null)
+    try {
+      setScheduledAt('')
+      const { error } = await supabase.from('webi_webinars').update({
+        scheduled_start_at: null,
+        session_started_at: null,
+      }).eq('id', wid)
+      if (error) throw error
+      setSessionStartedAt(null)
+    } catch {
+      toast.error('Erro ao limpar agendamento.')
+    }
   }
 
   // Live elapsed ticker
@@ -121,23 +133,42 @@ export default function LivePage() {
 
   async function startSession() {
     setRestarting(true)
-    const now = new Date().toISOString()
-    await supabase.from('webi_webinars').update({ session_started_at: now }).eq('id', wid)
-    setSessionStartedAt(now)
-    setRestarting(false)
+    try {
+      const now = new Date().toISOString()
+      const { error } = await supabase.from('webi_webinars').update({ session_started_at: now }).eq('id', wid)
+      if (error) throw error
+      setSessionStartedAt(now)
+    } catch {
+      toast.error('Erro ao iniciar sessão.')
+    } finally {
+      setRestarting(false)
+    }
   }
 
   async function stopSession() {
-    await supabase.from('webi_webinars').update({ session_started_at: null }).eq('id', wid)
-    setSessionStartedAt(null)
+    try {
+      const { error } = await supabase.from('webi_webinars').update({ session_started_at: null }).eq('id', wid)
+      if (error) throw error
+      setSessionStartedAt(null)
+    } catch {
+      toast.error('Erro ao encerrar sessão.')
+    }
   }
 
   async function saveViewers(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    await supabase.from('webi_webinars').update({ ...form, display_name: displayName || null }).eq('id', wid)
-    setSaving(false)
-    toast.success('Curva de audiência salva!')
+    try {
+      const { error } = await supabase.from('webi_webinars').update({
+        ...form, display_name: displayName || null,
+      }).eq('id', wid)
+      if (error) throw error
+      toast.success('Curva de audiência salva!')
+    } catch {
+      toast.error('Erro ao salvar. Tente novamente.')
+    } finally {
+      setSaving(false)
+    }
   }
 
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>

@@ -113,6 +113,18 @@ function DraggableChip({ ev, pct, chipClass, icon, label, duration, onDrop, onCl
       <span style={{ fontSize: 10, marginLeft: 3, fontFamily: 'monospace', fontWeight: 700 }}>
         {formatTime(previewSecs)}
       </span>
+      {(() => {
+        const preview = (ev.payload as Record<string, string>)?.text?.slice(0, 18)
+        return preview ? (
+          <span style={{
+            fontSize: 9, marginLeft: 4, opacity: 0.65, maxWidth: 80,
+            overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block',
+            verticalAlign: 'middle',
+          }}>
+            {preview}…
+          </span>
+        ) : null
+      })()}
       {dragging && (
         <div style={{
           position: 'absolute',
@@ -209,9 +221,12 @@ export default function EventsPage() {
 
   useEffect(() => { load() }, [webinarId])
 
-  function openCreate(type: EventType = 'chat_message') {
+  function openCreate(type: EventType = 'chat_message', initialSeconds = 0) {
+    const secs = Math.max(0, Math.min(initialSeconds, duration))
+    const mm = String(Math.floor(secs / 60)).padStart(2, '0')
+    const ss = String(secs % 60).padStart(2, '0')
     setEditEvent(null)
-    setForm({ type, timestamp_seconds: 0, timestampStr: '00:00', payload: { ...emptyPayloads[type] as Record<string, any> } })
+    setForm({ type, timestamp_seconds: secs, timestampStr: `${mm}:${ss}`, payload: { ...emptyPayloads[type] as Record<string, any> } })
     setShowModal(true)
   }
 
@@ -448,7 +463,7 @@ export default function EventsPage() {
             style={{ position: 'relative', userSelect: 'none' }}
           >
             {/* Ruler */}
-            <div className="timeline-ruler" style={{ marginBottom: 12, position: 'relative', height: 24 }}>
+            <div className="timeline-ruler" style={{ marginBottom: 12 }}>
               {Array.from({ length: Math.ceil(duration / 60) + 1 }).map((_, i) => {
                 const pct = (i * 60 / duration) * 100
                 if (pct > 100) return null
@@ -476,23 +491,41 @@ export default function EventsPage() {
             {eventsGrouped.map(group => (
               <div
                 key={group.type}
+                title={`Clique para adicionar ${group.label}`}
                 style={{
                   position: 'relative',
                   height: 44,
                   marginBottom: 8,
                   borderRadius: 8,
-                  background: 'var(--bg-elevated)',
-                  border: '1px solid var(--border)',
+                  background: group.items.length > 0 ? 'var(--bg-elevated)' : 'rgba(255,255,255,0.02)',
+                  border: `1px solid ${group.items.length > 0 ? 'var(--border)' : 'var(--border)'}`,
+                  cursor: 'pointer',
+                }}
+                onClick={(e) => {
+                  if ((e.target as HTMLElement).closest('.timeline-event-chip')) return
+                  const rect = e.currentTarget.getBoundingClientRect()
+                  const secs = Math.round(((e.clientX - rect.left) / rect.width) * duration)
+                  openCreate(group.type as EventType, secs)
                 }}
               >
-                {/* Row label */}
-                <span style={{
-                  position: 'absolute', left: 6, top: '50%', transform: 'translateY(-50%)',
-                  fontSize: 10, color: 'var(--text-muted)', pointerEvents: 'none',
-                  whiteSpace: 'nowrap',
+                {/* Row label: icon + text + badge */}
+                <div style={{
+                  position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
+                  display: 'flex', alignItems: 'center', gap: 4, pointerEvents: 'none',
                 }}>
-                  {group.icon}
-                </span>
+                  <span style={{ fontSize: 12 }}>{group.icon}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                    {group.label}
+                  </span>
+                  {group.items.length > 0 && (
+                    <span style={{
+                      fontSize: 9, background: 'var(--brand)', color: '#fff',
+                      borderRadius: 100, padding: '1px 5px', fontWeight: 700,
+                    }}>
+                      {group.items.length}
+                    </span>
+                  )}
+                </div>
 
                 {group.items.map(ev => {
                   const pct = Math.min((ev.timestamp_seconds / duration) * 100, 98)
