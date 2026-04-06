@@ -372,7 +372,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const brandColor = webinar.brand_color || '#6366f1'
   const startOffset = getStartOffset(webinar.session_started_at)
   const waitDelay = webinar.waiting_delay_seconds ?? 120
-  const waitEnabled = !!webinar.waiting_room_enabled && startOffset < waitDelay
+  const waitEnabled = !!webinar.waiting_room_enabled && startOffset > 0 && startOffset < waitDelay
   const [waitingDone, setWaitingDone] = useState(!waitEnabled)
 
   // YouTube overlay state
@@ -381,10 +381,11 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const [ytMuted, setYtMuted] = useState(true)
   const sessionOnBgRef = useRef(false)
 
-  // Scheduled start countdown
+  // Scheduled start countdown — driven by next_scheduled_start (future occurrence)
+  const nextScheduledStart = (webinar as unknown as Record<string, unknown>).next_scheduled_start as string | undefined
   const [countdownToStart, setCountdownToStart] = useState(() => {
-    if (!webinar.session_started_at) return 0
-    return Math.max(0, Math.ceil((new Date(webinar.session_started_at).getTime() - Date.now()) / 1000))
+    if (!nextScheduledStart) return 0
+    return Math.max(0, Math.ceil((new Date(nextScheduledStart).getTime() - Date.now()) / 1000))
   })
   const sessionIsScheduledFuture = countdownToStart > 0
 
@@ -409,14 +410,20 @@ export default function WebinarRoom({ webinar, events }: Props) {
 
   // ---- Scheduled start countdown ticker ----
   useEffect(() => {
-    if (!webinar.session_started_at) return
-    const target = new Date(webinar.session_started_at).getTime()
+    if (!nextScheduledStart) return
+    const targetMs = new Date(nextScheduledStart).getTime()
     const tick = setInterval(() => {
-      const remaining = Math.max(0, Math.ceil((target - Date.now()) / 1000))
-      setCountdownToStart(remaining)
+      const remaining = Math.max(0, Math.ceil((targetMs - Date.now()) / 1000))
+      setCountdownToStart(prev => {
+        if (prev > 0 && remaining === 0) {
+          // Session just started — reload so server recomputes effective start offset
+          setTimeout(() => window.location.reload(), 500)
+        }
+        return remaining
+      })
     }, 1000)
     return () => clearInterval(tick)
-  }, [webinar.session_started_at])
+  }, [nextScheduledStart])
 
   // ---- Inject brand color as CSS variable ----
   useEffect(() => {
@@ -1108,16 +1115,18 @@ export default function WebinarRoom({ webinar, events }: Props) {
             <span style={{ fontSize: 14, fontWeight: 600 }}>{webinar.display_name || webinar.name}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <button
-              onClick={() => setQuizOpen(true)}
-              style={{
-                background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
-                borderRadius: 8, padding: '6px 12px', fontSize: 12, color: '#a5b4fc',
-                cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
-              }}
-            >
-              📝 Quiz
-            </button>
+            {!!(webinar as unknown as Record<string, unknown>).has_quiz && (
+              <button
+                onClick={() => setQuizOpen(true)}
+                style={{
+                  background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
+                  borderRadius: 8, padding: '6px 12px', fontSize: 12, color: '#a5b4fc',
+                  cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+                }}
+              >
+                📝 Quiz
+              </button>
+            )}
             <div className="viewer-count">
               <div className="viewer-dot" />
               <span className={viewersPulse ? 'bump-anim' : ''}>{viewers.toLocaleString()}</span> assistindo
@@ -1196,7 +1205,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
                 {/* Botão de ativar som — aparece assim que o vídeo começa (mutado) */}
                 {ytPlaying && ytMuted && (
                   <div style={{
-                    position: 'absolute', inset: 0, zIndex: 3,
+                    position: 'absolute', inset: 0, zIndex: 6,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     background: 'rgba(0,0,0,0.55)',
                   }}>

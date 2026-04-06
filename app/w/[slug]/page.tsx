@@ -74,10 +74,62 @@ export default async function WebinarPage({
   // Flatten project fields onto webinar for convenience
   const project = (webinar as Record<string, unknown> & { webi_projects?: { brand_color?: string | null; openrouter_api_key?: string | null; name?: string } | null }).webi_projects || {}
 
-  // Compute effective session_started_at for recurring schedules
-  function computeEffectiveStart(w: typeof webinar): string | null {
+  type WebinarRow = typeof webinar
+
+  /** Next upcoming scheduled occurrence (future), or null if nothing ahead */
+  function computeNextScheduledStart(w: WebinarRow): string | null {
     const rec = (w as Record<string, unknown>).schedule_recurrence as string | undefined
-    if (!rec || rec === 'once') return w.session_started_at ?? null
+    if (!rec || rec === 'once') {
+      const sat = w.scheduled_start_at
+      if (sat && new Date(sat) > new Date()) return sat
+      return null
+    }
+    const timeStr = ((w as Record<string, unknown>).schedule_time as string) ?? '00:00'
+    const [hh, mm] = timeStr.split(':').map(Number)
+    const now = new Date()
+    const candidate = new Date(now)
+    candidate.setHours(hh, mm, 0, 0)
+
+    if (rec === 'daily') {
+      if (candidate <= now) candidate.setDate(candidate.getDate() + 1)
+      return candidate.toISOString()
+    }
+    if (rec === 'weekly') {
+      const days = ((w as Record<string, unknown>).schedule_days as number[]) ?? []
+      for (let i = 1; i <= 8; i++) {
+        const d = new Date(candidate)
+        d.setDate(d.getDate() + i)
+        if (days.includes(d.getDay())) return d.toISOString()
+      }
+      return null
+    }
+    if (rec === 'monthly') {
+      const src = w.scheduled_start_at ? new Date(w.scheduled_start_at) : now
+      candidate.setDate(src.getDate())
+      if (candidate <= now) candidate.setMonth(candidate.getMonth() + 1)
+      return candidate.toISOString()
+    }
+    return null
+  }
+
+  /** Effective session start time — null when next occurrence is still in the future */
+  function computeEffectiveStart(w: WebinarRow): string | null {
+    // If the next occurrence is in the future, there is no active session yet
+    const next = computeNextScheduledStart(w)
+    if (next && new Date(next) > new Date()) return null
+
+    const rec = (w as Record<string, unknown>).schedule_recurrence as string | undefined
+
+    if (!rec || rec === 'once') {
+      if (w.session_started_at) return w.session_started_at
+      // Use scheduled_start_at when it's already in the past (auto-evergreen for once)
+      if (w.scheduled_start_at && new Date(w.scheduled_start_at) <= new Date()) {
+        return w.scheduled_start_at
+      }
+      return null
+    }
+
+    // Recurring: return the most recent past occurrence
     const timeStr = ((w as Record<string, unknown>).schedule_time as string) ?? '00:00'
     const [hh, mm] = timeStr.split(':').map(Number)
     const now = new Date()
@@ -106,20 +158,20 @@ export default async function WebinarPage({
     return w.session_started_at ?? null
   }
 
+  const [{ data: events }, { data: quizQs }] = await Promise.all([
+    supabase.from('webi_events').select('*').eq('webinar_id', webinar.id).order('timestamp_seconds'),
+    supabase.from('webi_quiz_questions').select('id').eq('webinar_id', webinar.id).limit(1),
+  ])
+
   const enrichedWebinar = {
     ...webinar,
     session_started_at: computeEffectiveStart(webinar),
+    next_scheduled_start: computeNextScheduledStart(webinar),
+    has_quiz: (quizQs?.length ?? 0) > 0,
     brand_color: project.brand_color || '#6366f1',
     openrouter_api_key: project.openrouter_api_key,
     project_name: project.name,
   }
 
-  const { data: events } = await supabase
-    .from('webi_events')
-    .select('*')
-    .eq('webinar_id', webinar.id)
-    .order('timestamp_seconds')
-
   return <WebinarRoom webinar={enrichedWebinar} events={events || []} />
 }
-
