@@ -73,8 +73,42 @@ export default async function WebinarPage({
 
   // Flatten project fields onto webinar for convenience
   const project = (webinar as Record<string, unknown> & { webi_projects?: { brand_color?: string | null; openrouter_api_key?: string | null; name?: string } | null }).webi_projects || {}
+
+  // Compute effective session_started_at for recurring schedules
+  function computeEffectiveStart(w: typeof webinar): string | null {
+    const rec = (w as Record<string, unknown>).schedule_recurrence as string | undefined
+    if (!rec || rec === 'once') return w.session_started_at ?? null
+    const timeStr = ((w as Record<string, unknown>).schedule_time as string) ?? '00:00'
+    const [hh, mm] = timeStr.split(':').map(Number)
+    const now = new Date()
+    const candidate = new Date(now)
+    candidate.setHours(hh, mm, 0, 0)
+
+    if (rec === 'daily') {
+      if (candidate > now) candidate.setDate(candidate.getDate() - 1)
+      return candidate.toISOString()
+    }
+    if (rec === 'weekly') {
+      const days = ((w as Record<string, unknown>).schedule_days as number[]) ?? []
+      for (let i = 0; i <= 7; i++) {
+        const d = new Date(candidate)
+        d.setDate(d.getDate() - i)
+        if (days.includes(d.getDay()) && d <= now) return d.toISOString()
+      }
+      return null
+    }
+    if (rec === 'monthly') {
+      const src = w.scheduled_start_at ? new Date(w.scheduled_start_at) : now
+      candidate.setDate(src.getDate())
+      if (candidate > now) candidate.setMonth(candidate.getMonth() - 1)
+      return candidate.toISOString()
+    }
+    return w.session_started_at ?? null
+  }
+
   const enrichedWebinar = {
     ...webinar,
+    session_started_at: computeEffectiveStart(webinar),
     brand_color: project.brand_color || '#6366f1',
     openrouter_api_key: project.openrouter_api_key,
     project_name: project.name,

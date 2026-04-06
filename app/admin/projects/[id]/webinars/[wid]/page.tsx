@@ -420,11 +420,17 @@ function ThemeSelector({ webinarId, currentTheme }: { webinarId: string; current
   const [saving, setSaving] = useState(false)
 
   async function applyTheme(t: 'dark' | 'light' | 'youtube') {
+    const prev = theme
     setTheme(t)
     setSaving(true)
-    await supabase.from('webi_webinars').update({ theme: t }).eq('id', webinarId)
+    const { error } = await supabase.from('webi_webinars').update({ theme: t }).eq('id', webinarId)
     setSaving(false)
-    toast.success('Tema salvo!')
+    if (error) {
+      setTheme(prev)
+      toast.error('Erro ao salvar tema.')
+    } else {
+      toast.success('Tema salvo!')
+    }
   }
 
   return (

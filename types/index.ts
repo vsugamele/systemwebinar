@@ -59,6 +59,10 @@ export interface Webinar {
   chat_segments?: ChatSegment[] | null
   // Live scheduling (007)
   scheduled_start_at?: string | null
+  // Recurring schedule (010)
+  schedule_recurrence?: 'once' | 'daily' | 'weekly' | 'monthly'
+  schedule_time?: string | null
+  schedule_days?: number[] | null
   // Appearance
   theme?: 'dark' | 'light' | 'youtube'
   display_name?: string

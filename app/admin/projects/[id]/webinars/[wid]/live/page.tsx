@@ -32,6 +32,9 @@ export default function LivePage() {
   const [displayName, setDisplayName] = useState('')
   const [elapsed, setElapsed] = useState('')
   const [scheduledAt, setScheduledAt] = useState('')
+  const [scheduleRecurrence, setScheduleRecurrence] = useState<'once' | 'daily' | 'weekly' | 'monthly'>('once')
+  const [scheduleTime, setScheduleTime] = useState('20:00')
+  const [scheduleDays, setScheduleDays] = useState<number[]>([])
   const [savingScheduled, setSavingScheduled] = useState(false)
   const [scheduleTimeUntil, setScheduleTimeUntil] = useState('')
   const [form, setForm] = useState({
@@ -44,7 +47,7 @@ export default function LivePage() {
   useEffect(() => {
     supabase
       .from('webi_webinars')
-      .select('name, slug, display_name, session_started_at, scheduled_start_at, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct')
+      .select('name, slug, display_name, session_started_at, scheduled_start_at, schedule_recurrence, schedule_time, schedule_days, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct')
       .eq('id', wid)
       .single()
       .then(({ data, error }) => {
@@ -54,6 +57,9 @@ export default function LivePage() {
           setWebinarSlug(data.slug)
           setDisplayName(data.display_name || '')
           setSessionStartedAt(data.session_started_at ?? null)
+          setScheduleRecurrence((data.schedule_recurrence as 'once' | 'daily' | 'weekly' | 'monthly') || 'once')
+          setScheduleTime(data.schedule_time || '20:00')
+          setScheduleDays((data.schedule_days as number[]) || [])
           if (data.scheduled_start_at) {
             // Convert to local datetime-local format
             const d = new Date(data.scheduled_start_at)
@@ -93,13 +99,24 @@ export default function LivePage() {
   async function saveScheduled() {
     setSavingScheduled(true)
     try {
-      const iso = scheduledAt ? new Date(scheduledAt).toISOString() : null
-      const { error } = await supabase.from('webi_webinars').update({
-        scheduled_start_at: iso,
-        session_started_at: iso,
-      }).eq('id', wid)
+      let updatePayload: Record<string, unknown>
+      if (scheduleRecurrence === 'once') {
+        const iso = scheduledAt ? new Date(scheduledAt).toISOString() : null
+        updatePayload = {
+          scheduled_start_at: iso,
+          schedule_recurrence: 'once',
+          schedule_time: null,
+          schedule_days: null,
+        }
+      } else {
+        updatePayload = {
+          schedule_recurrence: scheduleRecurrence,
+          schedule_time: scheduleTime,
+          schedule_days: scheduleRecurrence === 'weekly' ? scheduleDays : null,
+        }
+      }
+      const { error } = await supabase.from('webi_webinars').update(updatePayload).eq('id', wid)
       if (error) throw error
-      setSessionStartedAt(iso)
       toast.success('Agendamento salvo!')
     } catch {
       toast.error('Erro ao salvar agendamento. Tente novamente.')
@@ -111,8 +128,14 @@ export default function LivePage() {
   async function clearScheduled() {
     try {
       setScheduledAt('')
+      setScheduleRecurrence('once')
+      setScheduleTime('20:00')
+      setScheduleDays([])
       const { error } = await supabase.from('webi_webinars').update({
         scheduled_start_at: null,
+        schedule_recurrence: 'once',
+        schedule_time: null,
+        schedule_days: null,
         session_started_at: null,
       }).eq('id', wid)
       if (error) throw error
@@ -202,16 +225,129 @@ export default function LivePage() {
         <div className="card">
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>🗓 Agendamento</div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-            Configure uma data e hora específica para o início da transmissão. Os participantes verão um countdown até o evento começar.
+            Configure quando a transmissão começa. Participantes verão um countdown até o horário agendado.
           </div>
-          <input
-            type="datetime-local"
-            className="form-input"
-            value={scheduledAt}
-            onChange={e => setScheduledAt(e.target.value)}
-            style={{ width: '100%', marginBottom: 12 }}
-          />
-          {scheduledAt && scheduleTimeUntil && (
+
+          {/* Recurrence mode tabs */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+            {([
+              { id: 'once', label: '📅 Uma vez' },
+              { id: 'daily', label: '🔁 Diário' },
+              { id: 'weekly', label: '📆 Semanal' },
+              { id: 'monthly', label: '🗓 Mensal' },
+            ] as const).map(opt => (
+              <button
+                key={opt.id}
+                onClick={() => setScheduleRecurrence(opt.id)}
+                style={{
+                  padding: '5px 12px', fontSize: 12, fontWeight: 600, borderRadius: 8,
+                  border: `1px solid ${scheduleRecurrence === opt.id ? 'var(--brand)' : 'var(--border)'}`,
+                  background: scheduleRecurrence === opt.id ? 'rgba(99,102,241,0.12)' : 'transparent',
+                  color: scheduleRecurrence === opt.id ? 'var(--brand)' : 'var(--text-muted)',
+                  cursor: 'pointer', transition: 'all 0.15s',
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Once: datetime-local */}
+          {scheduleRecurrence === 'once' && (
+            <input
+              type="datetime-local"
+              className="form-input"
+              value={scheduledAt}
+              onChange={e => setScheduledAt(e.target.value)}
+              style={{ width: '100%', marginBottom: 12 }}
+            />
+          )}
+
+          {/* Daily: just time */}
+          {scheduleRecurrence === 'daily' && (
+            <div style={{ marginBottom: 12 }}>
+              <label className="form-label">Horário diário</label>
+              <input
+                type="time"
+                className="form-input"
+                value={scheduleTime}
+                onChange={e => setScheduleTime(e.target.value)}
+                style={{ width: 160 }}
+              />
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                O webinar recomeça do início todos os dias neste horário.
+              </div>
+            </div>
+          )}
+
+          {/* Weekly: day checkboxes + time */}
+          {scheduleRecurrence === 'weekly' && (
+            <div style={{ marginBottom: 12 }}>
+              <label className="form-label">Dias da semana</label>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setScheduleDays(prev =>
+                      prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]
+                    )}
+                    style={{
+                      width: 40, height: 40, borderRadius: 8, fontSize: 11, fontWeight: 700,
+                      border: `1px solid ${scheduleDays.includes(i) ? 'var(--brand)' : 'var(--border)'}`,
+                      background: scheduleDays.includes(i) ? 'rgba(99,102,241,0.15)' : 'transparent',
+                      color: scheduleDays.includes(i) ? 'var(--brand)' : 'var(--text-muted)',
+                      cursor: 'pointer', transition: 'all 0.15s',
+                    }}
+                  >
+                    {d}
+                  </button>
+                ))}
+              </div>
+              <label className="form-label">Horário</label>
+              <input
+                type="time"
+                className="form-input"
+                value={scheduleTime}
+                onChange={e => setScheduleTime(e.target.value)}
+                style={{ width: 160 }}
+              />
+            </div>
+          )}
+
+          {/* Monthly: day of month + time */}
+          {scheduleRecurrence === 'monthly' && (
+            <div style={{ marginBottom: 12 }}>
+              <label className="form-label">Dia do mês e horário</label>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Dia</span>
+                <select
+                  className="form-input"
+                  value={scheduledAt ? new Date(scheduledAt).getDate() : 1}
+                  onChange={e => {
+                    const d = scheduledAt ? new Date(scheduledAt) : new Date()
+                    d.setDate(Number(e.target.value))
+                    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+                    setScheduledAt(local)
+                  }}
+                  style={{ width: 80 }}
+                >
+                  {Array.from({ length: 31 }, (_, i) => i + 1).map(n => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>às</span>
+                <input
+                  type="time"
+                  className="form-input"
+                  value={scheduleTime}
+                  onChange={e => setScheduleTime(e.target.value)}
+                  style={{ width: 120 }}
+                />
+              </div>
+            </div>
+          )}
+
+          {scheduleRecurrence === 'once' && scheduledAt && scheduleTimeUntil && (
             <div style={{
               fontSize: 13, color: '#a78bfa', marginBottom: 12,
               background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.2)',
@@ -220,20 +356,30 @@ export default function LivePage() {
               ⏳ Começa em <strong>{scheduleTimeUntil}</strong>
             </div>
           )}
-          {scheduledAt && !scheduleTimeUntil && (
+          {scheduleRecurrence === 'once' && scheduledAt && !scheduleTimeUntil && (
             <div style={{
               fontSize: 13, color: 'var(--success)', marginBottom: 12,
               background: 'rgba(34,197,94,0.06)', border: '1px solid rgba(34,197,94,0.2)',
               borderRadius: 8, padding: '8px 12px',
             }}>
-              ✅ Horário configurado para {new Date(scheduledAt).toLocaleString('pt-BR')}
+              ✅ Agendado para {new Date(scheduledAt).toLocaleString('pt-BR')}
             </div>
           )}
+          {scheduleRecurrence !== 'once' && scheduleTime && (
+            <div style={{
+              fontSize: 13, color: '#a78bfa', marginBottom: 12,
+              background: 'rgba(167,139,250,0.06)', border: '1px solid rgba(167,139,250,0.2)',
+              borderRadius: 8, padding: '8px 12px',
+            }}>
+              🔁 Recorrência ativa — {scheduleRecurrence === 'daily' ? `Diário às ${scheduleTime}` : scheduleRecurrence === 'weekly' ? `Semanal às ${scheduleTime}` : `Mensal às ${scheduleTime}`}
+            </div>
+          )}
+
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-primary btn-sm" onClick={saveScheduled} disabled={savingScheduled}>
               {savingScheduled ? '⏳...' : '💾 Salvar agendamento'}
             </button>
-            {scheduledAt && (
+            {(scheduledAt || scheduleRecurrence !== 'once') && (
               <button className="btn btn-ghost btn-sm" onClick={clearScheduled}>
                 ✕ Remover agendamento
               </button>

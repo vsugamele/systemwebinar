@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import Modal from '@/components/Modal'
+import { toast } from 'react-hot-toast'
 import type { Project } from '@/types'
 
 export default function ProjectsPage() {
@@ -13,6 +14,7 @@ export default function ProjectsPage() {
   const [editProject, setEditProject] = useState<Project | null>(null)
   const [form, setForm] = useState({ name: '', accent_color: '#6366f1', resend_from_email: '', openrouter_api_key: '' })
   const [saving, setSaving] = useState(false)
+  const [cloningProject, setCloningProject] = useState<string | null>(null)
   const supabase = createClient()
 
   async function load() {
@@ -51,6 +53,72 @@ export default function ProjectsPage() {
     setSaving(false)
     setShowModal(false)
     load()
+  }
+
+  async function cloneProject(p: Project) {
+    if (!confirm(`Duplicar o projeto "${p.name}"? Todos os webinars serão copiados.`)) return
+    setCloningProject(p.id)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      const { name, accent_color, resend_from_email, openrouter_api_key } = p
+      const { data: newProject, error: pe } = await supabase
+        .from('webi_projects')
+        .insert({ name: `Cópia de ${name}`, accent_color, resend_from_email, openrouter_api_key, owner_id: user!.id })
+        .select()
+        .single()
+      if (pe) throw pe
+
+      const { data: webinars } = await supabase.from('webi_webinars').select('*').eq('project_id', p.id)
+      for (const w of webinars ?? []) {
+        const ts = Date.now()
+        const { id: _wid, created_at: _wca, updated_at: _wua, project_id: _wpid, ...wRest } = w as Record<string, unknown>
+        void _wid; void _wca; void _wua; void _wpid
+        const { data: newW, error: we } = await supabase
+          .from('webi_webinars')
+          .insert({
+            ...wRest,
+            project_id: newProject.id,
+            name: `${w.name} (Cópia)`,
+            slug: `${w.slug}-copy-${ts}`,
+            status: 'draft',
+            session_started_at: null,
+            scheduled_start_at: null,
+          })
+          .select()
+          .single()
+        if (we || !newW) continue
+
+        const [eventsRes, templatesRes, questionsRes] = await Promise.all([
+          supabase.from('webi_events').select('*').eq('webinar_id', w.id),
+          supabase.from('webi_email_templates').select('*').eq('webinar_id', w.id),
+          supabase.from('webi_quiz_questions').select('*').eq('webinar_id', w.id),
+        ])
+        await Promise.all([
+          eventsRes.data?.length
+            ? supabase.from('webi_events').insert(
+                eventsRes.data.map(({ id: _id, created_at: _ca, ...rest }) => { void _id; void _ca; return { ...rest, webinar_id: newW.id } })
+              )
+            : null,
+          templatesRes.data?.length
+            ? supabase.from('webi_email_templates').insert(
+                templatesRes.data.map(({ id: _id, created_at: _ca, ...rest }) => { void _id; void _ca; return { ...rest, webinar_id: newW.id } })
+              )
+            : null,
+          questionsRes.data?.length
+            ? supabase.from('webi_quiz_questions').insert(
+                questionsRes.data.map(({ id: _id, created_at: _ca, ...rest }) => { void _id; void _ca; return { ...rest, webinar_id: newW.id } })
+              )
+            : null,
+        ].filter(Boolean))
+      }
+
+      toast.success('Projeto duplicado com sucesso!')
+      load()
+    } catch {
+      toast.error('Erro ao duplicar projeto.')
+    } finally {
+      setCloningProject(null)
+    }
   }
 
   async function deleteProject(id: string) {
@@ -111,6 +179,14 @@ export default function ProjectsPage() {
                     🎨
                   </Link>
                   <button className="btn btn-secondary btn-sm" onClick={() => openEdit(p)}>Editar</button>
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    title="Duplicar projeto"
+                    onClick={() => cloneProject(p)}
+                    disabled={cloningProject === p.id}
+                  >
+                    {cloningProject === p.id ? <span className="spinner" /> : '🔁'}
+                  </button>
                   <button className="btn btn-danger btn-sm" onClick={() => deleteProject(p.id)}>🗑</button>
                 </div>
               </div>
