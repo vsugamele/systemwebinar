@@ -1105,12 +1105,14 @@ export default function WebinarRoom({ webinar, events }: Props) {
       <div className="video-section">
         <div className="video-header">
           <div className="webinar-title-bar">
-            <div className="live-badge">
-              <div className="live-dot" />
-              AO VIVO
-              <span style={{ opacity: 0.7, fontWeight: 400, marginLeft: 4 }}>
-                {String(Math.floor(elapsedSeconds / 3600)).padStart(2, '0')}:{String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2, '0')}:{String(elapsedSeconds % 60).padStart(2, '0')}
-              </span>
+            <div className="live-badge" style={sessionIsScheduledFuture ? { background: 'rgba(156,163,175,0.15)', borderColor: 'rgba(156,163,175,0.3)' } : {}}>
+              <div className="live-dot" style={sessionIsScheduledFuture ? { background: '#9ca3af', boxShadow: 'none', animation: 'none' } : {}} />
+              {sessionIsScheduledFuture ? 'EM BREVE' : 'AO VIVO'}
+              {!sessionIsScheduledFuture && (
+                <span style={{ opacity: 0.7, fontWeight: 400, marginLeft: 4 }}>
+                  {String(Math.floor(elapsedSeconds / 3600)).padStart(2, '0')}:{String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2, '0')}:{String(elapsedSeconds % 60).padStart(2, '0')}
+                </span>
+              )}
             </div>
             <span style={{ fontSize: 14, fontWeight: 600 }}>{webinar.display_name || webinar.name}</span>
           </div>
@@ -1172,7 +1174,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
             onContextMenu={e => e.preventDefault()}
           />
 
-          {webinar.video_url ? (
+          {!sessionIsScheduledFuture && webinar.video_url ? (
             isYouTubeUrl(webinar.video_url) ? (
               <>
                 <iframe
@@ -1272,12 +1274,12 @@ export default function WebinarRoom({ webinar, events }: Props) {
                 onContextMenu={e => e.preventDefault()}
               />
             )
-          ) : (
+          ) : !sessionIsScheduledFuture ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 16, color: 'var(--text-muted)' }}>
               <div style={{ fontSize: 48 }}>🎬</div>
               <p>Vídeo não configurado para este webinar</p>
             </div>
-          )}
+          ) : null}
 
           {/* PITCH BUTTON */}
           {pitchVisible && pitchPayload && (

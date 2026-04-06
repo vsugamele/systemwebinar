@@ -18,6 +18,7 @@ export interface Project {
   custom_domain: string | null
   resend_from_email: string | null
   openrouter_api_key?: string
+  timezone?: string
   created_at: string
   updated_at: string
 }

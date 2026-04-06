@@ -175,6 +175,9 @@ export default function ProjectsPage() {
                   <Link href={`/admin/projects/${p.id}/analytics`} className="btn btn-secondary btn-sm" title="Analytics">
                     📊
                   </Link>
+                  <Link href={`/admin/projects/${p.id}/crm`} className="btn btn-secondary btn-sm" title="CRM de Mensagens">
+                    💬
+                  </Link>
                   <Link href={`/admin/projects/${p.id}/branding`} className="btn btn-secondary btn-sm" title="Branding">
                     🎨
                   </Link>

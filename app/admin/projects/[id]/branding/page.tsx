@@ -26,13 +26,15 @@ export default function BrandingPage() {
   const [saving, setSaving] = useState(false)
   const [brandColor, setBrandColor] = useState('#6366f1')
   const [webhookUrl, setWebhookUrl] = useState('')
+  const [timezone, setTimezone] = useState('America/Sao_Paulo')
 
   useEffect(() => {
-    supabase.from('webi_projects').select('brand_color, webhook_url').eq('id', id).single()
+    supabase.from('webi_projects').select('brand_color, webhook_url, timezone').eq('id', id).single()
       .then(({ data }) => {
         if (data) {
           setBrandColor(data.brand_color || '#6366f1')
           setWebhookUrl(data.webhook_url || '')
+          setTimezone(data.timezone || 'America/Sao_Paulo')
         }
         setLoading(false)
       })
@@ -41,9 +43,10 @@ export default function BrandingPage() {
   async function save(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    await supabase.from('webi_projects').update({ brand_color: brandColor, webhook_url: webhookUrl }).eq('id', id)
+    const { error } = await supabase.from('webi_projects').update({ brand_color: brandColor, webhook_url: webhookUrl, timezone }).eq('id', id)
     setSaving(false)
-    toast.success('Branding salvo!')
+    if (error) toast.error('Erro ao salvar.')
+    else toast.success('Branding salvo!')
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>Carregando...</div>
@@ -144,6 +147,44 @@ export default function BrandingPage() {
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
             Payload enviado: <code style={{ color: 'var(--brand)' }}>{'{ name, email, webinar_id, webinar_name, timestamp }'}</code>
           </div>
+        </div>
+
+        {/* Timezone */}
+        <div style={{
+          background: 'var(--bg-card)', border: '1px solid var(--border)',
+          borderRadius: 16, padding: 24,
+        }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>🌎 Fuso Horário</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+            Usado para calcular corretamente os horários de agendamento dos webinars deste projeto.
+          </div>
+          <select
+            className="form-input"
+            value={timezone}
+            onChange={e => setTimezone(e.target.value)}
+          >
+            <optgroup label="Brasil">
+              <option value="America/Sao_Paulo">América/São Paulo (BRT, UTC-3)</option>
+              <option value="America/Fortaleza">América/Fortaleza (BRT, UTC-3)</option>
+              <option value="America/Recife">América/Recife (BRT, UTC-3)</option>
+              <option value="America/Belem">América/Belém (BRT, UTC-3)</option>
+              <option value="America/Manaus">América/Manaus (AMT, UTC-4)</option>
+              <option value="America/Porto_Velho">América/Porto Velho (AMT, UTC-4)</option>
+              <option value="America/Boa_Vista">América/Boa Vista (AMT, UTC-4)</option>
+              <option value="America/Rio_Branco">América/Rio Branco (ACT, UTC-5)</option>
+            </optgroup>
+            <optgroup label="Portugal / Europa">
+              <option value="Europe/Lisbon">Europa/Lisboa (WET, UTC+0/+1)</option>
+              <option value="Europe/London">Europa/Londres (GMT, UTC+0/+1)</option>
+            </optgroup>
+            <optgroup label="Outras">
+              <option value="America/Argentina/Buenos_Aires">América/Buenos Aires (ART, UTC-3)</option>
+              <option value="America/Santiago">América/Santiago (CLT, UTC-3/-4)</option>
+              <option value="America/Bogota">América/Bogotá (COT, UTC-5)</option>
+              <option value="America/Mexico_City">América/Cidade do México (CST, UTC-6/-5)</option>
+              <option value="UTC">UTC</option>
+            </optgroup>
+          </select>
         </div>
 
         <button type="submit" className="btn btn-primary" disabled={saving} style={{ alignSelf: 'flex-start' }}>

@@ -58,7 +58,8 @@ export default async function WebinarPage({
         id,
         name,
         brand_color,
-        openrouter_api_key
+        openrouter_api_key,
+        timezone
       )
     `)
     .eq('slug', slug)
@@ -72,9 +73,29 @@ export default async function WebinarPage({
   if (!webinar) return notFound()
 
   // Flatten project fields onto webinar for convenience
-  const project = (webinar as Record<string, unknown> & { webi_projects?: { brand_color?: string | null; openrouter_api_key?: string | null; name?: string } | null }).webi_projects || {}
+  const project = (webinar as Record<string, unknown> & { webi_projects?: { brand_color?: string | null; openrouter_api_key?: string | null; name?: string; timezone?: string | null } | null }).webi_projects || {}
+  const projectTimezone = (project as { timezone?: string | null }).timezone || 'America/Sao_Paulo'
 
   type WebinarRow = typeof webinar
+
+  /**
+   * Returns a Date representing baseDate's calendar date in `tz`, at hh:mm local time.
+   * Correctly handles DST and non-integer UTC offsets.
+   */
+  function getScheduledDate(baseDate: Date, hh: number, mm: number, tz: string): Date {
+    const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit' })
+    const parts = fmt.formatToParts(baseDate)
+    const y = parts.find(p => p.type === 'year')!.value
+    const mo = parts.find(p => p.type === 'month')!.value
+    const d = parts.find(p => p.type === 'day')!.value
+    const isoLocal = `${y}-${mo}-${d}T${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}:00`
+    // Trick: parse as UTC, then compute actual offset of that TZ at that moment
+    const guessUTC = new Date(isoLocal + 'Z')
+    const tzOffset =
+      new Date(guessUTC.toLocaleString('en-US', { timeZone: tz })).getTime() -
+      new Date(guessUTC.toLocaleString('en-US', { timeZone: 'UTC' })).getTime()
+    return new Date(guessUTC.getTime() - tzOffset)
+  }
 
   /** Next upcoming scheduled occurrence (future), or null if nothing ahead */
   function computeNextScheduledStart(w: WebinarRow): string | null {
@@ -87,27 +108,30 @@ export default async function WebinarPage({
     const timeStr = ((w as Record<string, unknown>).schedule_time as string) ?? '00:00'
     const [hh, mm] = timeStr.split(':').map(Number)
     const now = new Date()
-    const candidate = new Date(now)
-    candidate.setHours(hh, mm, 0, 0)
+    const candidate = getScheduledDate(now, hh, mm, projectTimezone)
 
     if (rec === 'daily') {
-      if (candidate <= now) candidate.setDate(candidate.getDate() + 1)
+      if (candidate <= now) return getScheduledDate(new Date(now.getTime() + 86400000), hh, mm, projectTimezone).toISOString()
       return candidate.toISOString()
     }
     if (rec === 'weekly') {
       const days = ((w as Record<string, unknown>).schedule_days as number[]) ?? []
       for (let i = 1; i <= 8; i++) {
-        const d = new Date(candidate)
-        d.setDate(d.getDate() + i)
-        if (days.includes(d.getDay())) return d.toISOString()
+        const base = new Date(now.getTime() + i * 86400000)
+        const d = getScheduledDate(base, hh, mm, projectTimezone)
+        if (days.includes(base.getDay())) return d.toISOString()
       }
       return null
     }
     if (rec === 'monthly') {
       const src = w.scheduled_start_at ? new Date(w.scheduled_start_at) : now
-      candidate.setDate(src.getDate())
-      if (candidate <= now) candidate.setMonth(candidate.getMonth() + 1)
-      return candidate.toISOString()
+      const dayOfMonth = new Date(src.toLocaleString('en-US', { timeZone: projectTimezone })).getDate()
+      const thisMonthCandidate = getScheduledDate(now, hh, mm, projectTimezone)
+      // Force day-of-month using UTC arithmetic
+      const adjusted = new Date(thisMonthCandidate)
+      adjusted.setUTCDate(adjusted.getUTCDate() + (dayOfMonth - new Date(thisMonthCandidate.toLocaleString('en-US', { timeZone: projectTimezone })).getDate()))
+      if (adjusted <= now) adjusted.setMonth(adjusted.getMonth() + 1)
+      return adjusted.toISOString()
     }
     return null
   }
@@ -133,27 +157,29 @@ export default async function WebinarPage({
     const timeStr = ((w as Record<string, unknown>).schedule_time as string) ?? '00:00'
     const [hh, mm] = timeStr.split(':').map(Number)
     const now = new Date()
-    const candidate = new Date(now)
-    candidate.setHours(hh, mm, 0, 0)
+    const candidate = getScheduledDate(now, hh, mm, projectTimezone)
 
     if (rec === 'daily') {
-      if (candidate > now) candidate.setDate(candidate.getDate() - 1)
+      if (candidate > now) return getScheduledDate(new Date(now.getTime() - 86400000), hh, mm, projectTimezone).toISOString()
       return candidate.toISOString()
     }
     if (rec === 'weekly') {
       const days = ((w as Record<string, unknown>).schedule_days as number[]) ?? []
       for (let i = 0; i <= 7; i++) {
-        const d = new Date(candidate)
-        d.setDate(d.getDate() - i)
-        if (days.includes(d.getDay()) && d <= now) return d.toISOString()
+        const base = new Date(now.getTime() - i * 86400000)
+        const d = getScheduledDate(base, hh, mm, projectTimezone)
+        if (days.includes(base.getDay()) && d <= now) return d.toISOString()
       }
       return null
     }
     if (rec === 'monthly') {
       const src = w.scheduled_start_at ? new Date(w.scheduled_start_at) : now
-      candidate.setDate(src.getDate())
-      if (candidate > now) candidate.setMonth(candidate.getMonth() - 1)
-      return candidate.toISOString()
+      const dayOfMonth = new Date(src.toLocaleString('en-US', { timeZone: projectTimezone })).getDate()
+      const thisMonthCandidate = getScheduledDate(now, hh, mm, projectTimezone)
+      const adjusted = new Date(thisMonthCandidate)
+      adjusted.setUTCDate(adjusted.getUTCDate() + (dayOfMonth - new Date(thisMonthCandidate.toLocaleString('en-US', { timeZone: projectTimezone })).getDate()))
+      if (adjusted > now) adjusted.setMonth(adjusted.getMonth() - 1)
+      return adjusted.toISOString()
     }
     return w.session_started_at ?? null
   }
