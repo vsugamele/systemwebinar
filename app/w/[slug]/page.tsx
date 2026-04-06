@@ -1,22 +1,38 @@
 import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import WebinarRoom from '@/components/WebinarRoom'
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  themeColor: '#050508',
+}
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params
   const supabase = await createClient()
-  const { data: w } = await supabase.from('webi_webinars').select('name, description').eq('slug', slug).single()
+  const { data: w } = await supabase.from('webi_webinars').select('name, description, thumbnail_url').eq('slug', slug).single()
+  const title = w?.name ? `${w.name} | Ao Vivo` : 'Webinar ao Vivo'
+  const description = w?.description || 'Participe do nosso webinar ao vivo.'
   return {
-    title: w?.name ? `${w.name} | Ao Vivo` : 'Webinar ao Vivo',
-    description: w?.description || 'Participe do nosso webinar.',
+    title,
+    description,
     icons: {
       icon: 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><text y=".9em" font-size="90">🎬</text></svg>',
     },
     openGraph: {
-      title: w?.name ? `${w.name} | Ao Vivo` : 'Webinar ao Vivo',
-      description: w?.description || 'Participe do nosso webinar.',
-    }
+      title,
+      description,
+      type: 'video.other',
+      ...(w?.thumbnail_url && { images: [{ url: w.thumbnail_url, width: 1200, height: 630 }] }),
+    },
+    other: {
+      'apple-mobile-web-app-capable': 'yes',
+      'apple-mobile-web-app-status-bar-style': 'black-translucent',
+      'mobile-web-app-capable': 'yes',
+    },
   }
 }
 

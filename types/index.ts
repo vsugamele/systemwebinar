@@ -72,6 +72,9 @@ export interface ChatMessagePayload {
   author: string
   avatar?: string
   text: string
+  image_url?: string    // product image shown in chat bubble
+  link_url?: string     // CTA link URL
+  link_text?: string    // CTA button label (default: "Ver agora →")
 }
 
 export interface OfferPopupPayload {
@@ -142,6 +145,9 @@ export interface ChatMessage {
   timestamp: number
   isSimulated: boolean
   isBroadcast?: boolean
+  image_url?: string
+  link_url?: string
+  link_text?: string
 }
 
 // Analytics

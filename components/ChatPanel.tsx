@@ -152,6 +152,34 @@ export default function ChatPanel({
                   <div className="chat-msg-text" style={isBroadcast ? { color: 'var(--success)', fontWeight: 600 } : {}}>
                     {msg.text}
                   </div>
+                  {msg.image_url && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={msg.image_url}
+                      alt="Produto"
+                      style={{
+                        width: '100%', borderRadius: 8, marginTop: 6,
+                        maxHeight: 160, objectFit: 'cover',
+                        cursor: msg.link_url ? 'pointer' : 'default',
+                      }}
+                      onClick={() => msg.link_url && window.open(msg.link_url, '_blank')}
+                    />
+                  )}
+                  {msg.link_url && (
+                    <a
+                      href={msg.link_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: 'block', marginTop: 6, padding: '8px 12px',
+                        background: 'var(--brand)', color: '#fff',
+                        borderRadius: 8, fontSize: 12, fontWeight: 700,
+                        textAlign: 'center', textDecoration: 'none',
+                      }}
+                    >
+                      {msg.link_text || 'Ver agora →'}
+                    </a>
+                  )}
                 </div>
               </div>
             )

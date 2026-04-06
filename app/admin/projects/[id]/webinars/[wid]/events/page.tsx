@@ -17,7 +17,7 @@ const EVENT_TYPES = [
 ]
 
 const emptyPayloads: Record<EventType, object> = {
-  chat_message: { author: '', avatar: '', text: '' },
+  chat_message: { author: '', avatar: '', text: '', image_url: '', link_url: '', link_text: '' },
   offer_popup: { title: '', subtitle: '', image_url: '', cta_text: 'Quero Agora', cta_url: '', duration_seconds: 30 },
   pitch_button: {
     image_url: '', text_above: '', cta_text: 'Garantir Minha Vaga', cta_url: '',
@@ -906,6 +906,39 @@ export default function EventsPage() {
                     <label className="form-label">Avatar URL (opcional)</label>
                     <input className="form-input" placeholder="https://..."
                       value={form.payload.avatar || ''} onChange={e => updatePayload('avatar', e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Imagem do produto (opcional)</label>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                      Aparece na bolha do chat acima do botão
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input className="form-input" placeholder="https://..."
+                        value={form.payload.image_url || ''} onChange={e => updatePayload('image_url', e.target.value)}
+                        style={{ flex: 1 }} />
+                      <label className="btn btn-ghost btn-sm" style={{ cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        📎 Upload
+                        <input type="file" accept="image/*" style={{ display: 'none' }}
+                          onChange={async e => {
+                            const file = e.target.files?.[0]
+                            if (!file) return
+                            const url = await uploadImage(file, 'image_url')
+                            if (url) updatePayload('image_url', url)
+                          }} />
+                      </label>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                    <div className="form-group">
+                      <label className="form-label">URL do botão (opcional)</label>
+                      <input className="form-input" placeholder="https://checkout...."
+                        value={form.payload.link_url || ''} onChange={e => updatePayload('link_url', e.target.value)} />
+                    </div>
+                    <div className="form-group">
+                      <label className="form-label">Texto do botão</label>
+                      <input className="form-input" placeholder="Ver agora →"
+                        value={form.payload.link_text || ''} onChange={e => updatePayload('link_text', e.target.value)} />
+                    </div>
                   </div>
                 </>
               )}

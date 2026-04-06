@@ -952,6 +952,7 @@ tbody tr:hover td { background: var(--bg-hover); }
 
 .chat-input-area {
   padding: 16px;
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
   border-top: 1px solid var(--border);
   display: flex;
   gap: 10px;
@@ -1460,4 +1461,20 @@ tbody tr:hover td { background: var(--bg-hover); }
   .register-info-grid { grid-template-columns: 1fr; }
   .modal { padding: 24px; }
   .auth-card { padding: 28px 24px; }
+}
+
+@media (max-width: 640px) {
+  /* Pitch button full-width on small phones, above home indicator */
+  .pitch-button {
+    width: calc(100% - 32px);
+    left: 16px;
+    right: 16px;
+    bottom: max(16px, env(safe-area-inset-bottom, 16px));
+    max-width: none;
+  }
+
+  /* Smaller video area on portrait to keep chat visible */
+  .webinar-room {
+    grid-template-rows: minmax(180px, 32vh) 1fr;
+  }
 }

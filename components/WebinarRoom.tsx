@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { toast } from 'react-hot-toast'
 import { EventEngine } from '@/lib/event-engine'
 import { createClient } from '@/lib/supabase/client'
 import type { RealtimeChannel } from '@supabase/supabase-js'
@@ -378,6 +379,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const ytIframeRef = useRef<HTMLIFrameElement>(null)
   const [ytPlaying, setYtPlaying] = useState(false)
   const [ytMuted, setYtMuted] = useState(true)
+  const sessionOnBgRef = useRef(false)
 
   // Scheduled start countdown
   const [countdownToStart, setCountdownToStart] = useState(() => {
@@ -450,6 +452,72 @@ export default function WebinarRoom({ webinar, events }: Props) {
     return () => {
       document.getElementById('webinar-room-animations')?.remove()
     }
+  }, [])
+
+  // ---- MediaSession API (background audio for native video) ----
+  useEffect(() => {
+    const video = videoRef.current
+    const isNative = !!(webinar.video_url && !isYouTubeUrl(webinar.video_url) && !isVimeoUrl(webinar.video_url) && !isVturbUrl(webinar.video_url))
+    if (!video || !isNative || !('mediaSession' in navigator)) return
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: webinar.display_name || webinar.name,
+      artist: 'Webinar ao Vivo',
+    })
+
+    navigator.mediaSession.setActionHandler('play', () => video.play())
+    navigator.mediaSession.setActionHandler('pause', null)
+    navigator.mediaSession.setActionHandler('stop', null)
+    navigator.mediaSession.setActionHandler('seekbackward', null)
+    navigator.mediaSession.setActionHandler('seekforward', null)
+    navigator.mediaSession.setActionHandler('seekto', null)
+
+    return () => {
+      ;(['play', 'pause', 'stop'] as MediaSessionAction[]).forEach(a =>
+        navigator.mediaSession.setActionHandler(a, null)
+      )
+    }
+  }, [webinar.video_url, webinar.name, webinar.display_name])
+
+  // ---- Page Visibility: auto-resume + welcome-back toast ----
+  useEffect(() => {
+    function onVisibilityChange() {
+      if (document.hidden) {
+        if (!sessionStorage.getItem('bg-audio-tip-shown')) {
+          sessionStorage.setItem('bg-audio-tip-shown', '1')
+          sessionOnBgRef.current = true
+        }
+      } else {
+        const video = videoRef.current
+        if (video?.paused) video.play().catch(() => {})
+        if (isYouTubeUrl(webinar.video_url || '')) {
+          ytIframeRef.current?.contentWindow?.postMessage(
+            JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*'
+          )
+        }
+        if (sessionOnBgRef.current) {
+          sessionOnBgRef.current = false
+          import('react-hot-toast').then(({ toast }) =>
+            toast('👋 Bem-vindo de volta!', { duration: 2500 })
+          )
+        }
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange)
+  }, [webinar.video_url])
+
+  // ---- Mobile tip: keep tab open for background audio (once per session) ----
+  useEffect(() => {
+    const isMobile = /Mobi|Android/i.test(navigator.userAgent)
+    if (!isMobile || sessionStorage.getItem('mobile-tip-shown')) return
+    sessionStorage.setItem('mobile-tip-shown', '1')
+    const t = setTimeout(() => {
+      import('react-hot-toast').then(({ toast }) =>
+        toast('🔊 Dica: mantenha a aba aberta para continuar ouvindo ao navegar', { duration: 5000 })
+      )
+    }, 8000)
+    return () => clearTimeout(t)
   }, [])
 
   // ---- Elapsed time counter (wall-clock aware) ----
@@ -711,6 +779,9 @@ export default function WebinarRoom({ webinar, events }: Props) {
         text: p.text,
         timestamp: ev.timestamp_seconds,
         isSimulated: true,
+        image_url: p.image_url || undefined,
+        link_url: p.link_url || undefined,
+        link_text: p.link_text || undefined,
       }])
     })
 
