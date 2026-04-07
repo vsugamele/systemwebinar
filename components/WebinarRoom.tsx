@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import type { Webinar, WebinarEvent, ChatMessage, ChatMessagePayload, OfferPopupPayload, PitchButtonPayload, ChatSegment } from '@/types'
 import dynamic from 'next/dynamic'
-import ChatPanel, { EMOJI_REACTIONS } from './ChatPanel'
+import ChatPanel from './ChatPanel'
 import type { Material } from './ChatPanel'
 
 const WebinarQuiz = dynamic(() => import('./WebinarQuiz'), { ssr: false })
@@ -358,12 +358,6 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
 
   // New feature state
-  const [reactions, setReactions] = useState<Record<string, number>>(() => {
-    const init: Record<string, number> = {}
-    EMOJI_REACTIONS.forEach(r => { init[r.emoji] = 0 })
-    return init
-  })
-  const [flyingEmojis, setFlyingEmojis] = useState<{ id: number; emoji: string; x: number }[]>([])
   const [quizOpen, setQuizOpen] = useState(false)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [aiTyping, setAiTyping] = useState(false)
@@ -712,11 +706,8 @@ export default function WebinarRoom({ webinar, events }: Props) {
           })
         }
       })
-      .on('broadcast', { event: 'reaction' }, ({ payload }) => {
-        const { emoji, x } = payload as { emoji: string; x: number }
-        const id = Date.now() + Math.random()
-        setFlyingEmojis(f => [...f, { id, emoji, x }])
-        setTimeout(() => setFlyingEmojis(f => f.filter(e => e.id !== id)), 2000)
+      .on('broadcast', { event: 'reaction' }, () => {
+        // reactions removed
       })
       .subscribe()
 
@@ -964,16 +955,6 @@ export default function WebinarRoom({ webinar, events }: Props) {
         }),
       })
     } catch {}
-  }
-
-  // ---- Emoji reaction handler (called by ChatPanel.onFireReaction) ----
-  function fireReaction(emoji: string) {
-    setReactions(r => ({ ...r, [emoji]: (r[emoji] || 0) + 1 }))
-    const id = Date.now() + Math.random()
-    const x = 20 + Math.random() * 60
-    setFlyingEmojis(f => [...f, { id, emoji, x }])
-    setTimeout(() => setFlyingEmojis(f => f.filter(e => e.id !== id)), 2000)
-    channelRef.current?.send({ type: 'broadcast', event: 'reaction', payload: { emoji, x } })
   }
 
   // ---- Chat message sender (called by ChatPanel.onSendMessage) ----
@@ -1371,13 +1352,10 @@ export default function WebinarRoom({ webinar, events }: Props) {
         visibleMaterials={visibleMaterials}
         materials={materials}
         elapsedSeconds={elapsedSeconds}
-        flyingEmojis={flyingEmojis}
-        reactions={reactions}
         aiTyping={aiTyping}
         defaultTab={defaultTab}
         onSendMessage={sendChatMessage}
         onSendQa={sendQaMessage}
-        onFireReaction={fireReaction}
       />
       </div>{/* end .webinar-room */}
 

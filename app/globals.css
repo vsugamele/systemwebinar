@@ -878,6 +878,7 @@ tbody tr:hover td { background: var(--bg-hover); }
   flex-direction: column;
   background: var(--bg-card);
   border-left: 1px solid var(--border);
+  overflow: hidden;
 }
 
 .chat-header {
@@ -911,6 +912,7 @@ tbody tr:hover td { background: var(--bg-hover); }
 
 .chat-messages {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 16px;
   display: flex;

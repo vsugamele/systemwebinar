@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { ChatMessage } from '@/types'
 
 export interface Material {
@@ -11,15 +11,6 @@ export interface Material {
 
 export type ChatTab = 'chat' | 'qa' | 'materials'
 
-export const EMOJI_REACTIONS = [
-  { emoji: '👍', label: 'Curtir' },
-  { emoji: '❤️', label: 'Amar' },
-  { emoji: '🔥', label: 'Incrível' },
-  { emoji: '🤯', label: 'Surpreendente' },
-  { emoji: '😂', label: 'Divertido' },
-  { emoji: '🙌', label: 'Aplausos' },
-]
-
 export function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
 }
@@ -30,13 +21,10 @@ interface ChatPanelProps {
   visibleMaterials: Material[]
   materials: Material[]
   elapsedSeconds: number
-  flyingEmojis: { id: number; emoji: string; x: number }[]
-  reactions: Record<string, number>
   aiTyping: boolean
   defaultTab?: ChatTab
   onSendMessage: (text: string) => void
   onSendQa: (text: string) => void
-  onFireReaction: (emoji: string) => void
 }
 
 export default function ChatPanel({
@@ -45,13 +33,10 @@ export default function ChatPanel({
   visibleMaterials,
   materials,
   elapsedSeconds,
-  flyingEmojis,
-  reactions,
   aiTyping,
   defaultTab = 'chat',
   onSendMessage,
   onSendQa,
-  onFireReaction
 }: ChatPanelProps) {
   const [chatTab, setChatTab] = useState<ChatTab>(defaultTab)
   const [chatInput, setChatInput] = useState('')
@@ -270,44 +255,6 @@ export default function ChatPanel({
               🔒 {materials.filter(m => m.show_at_seconds > elapsedSeconds).length} material(is) ainda serão liberados...
             </div>
           )}
-        </div>
-      )}
-
-      {/* EMOJI REACTIONS */}
-      {chatTab === 'chat' && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px',
-          borderTop: '1px solid var(--border)', background: 'var(--bg-card)',
-          position: 'relative', overflow: 'hidden', flexWrap: 'wrap',
-        }}>
-          {flyingEmojis.map(fe => (
-            <span key={fe.id} style={{
-              position: 'absolute', bottom: '100%', left: `${fe.x}%`,
-              fontSize: 22, animation: 'emojiFloat 2s ease-out forwards',
-              pointerEvents: 'none', userSelect: 'none',
-            }}>{fe.emoji}</span>
-          ))}
-          {EMOJI_REACTIONS.map(r => (
-            <button
-              key={r.emoji}
-              title={r.label}
-              onClick={() => onFireReaction(r.emoji)}
-              style={{
-                background: reactions[r.emoji] > 0 ? 'rgba(99,102,241,0.15)' : 'transparent',
-                border: `1px solid ${reactions[r.emoji] > 0 ? 'rgba(99,102,241,0.4)' : 'var(--border)'}`,
-                borderRadius: 99, padding: '3px 9px', cursor: 'pointer',
-                fontSize: 15, display: 'flex', alignItems: 'center', gap: 4,
-                transition: 'all 0.15s ease', userSelect: 'none',
-              }}
-            >
-              {r.emoji}
-              {reactions[r.emoji] > 0 && (
-                <span style={{ fontSize: 10, color: '#a5b4fc', fontWeight: 700 }}>
-                  {reactions[r.emoji]}
-                </span>
-              )}
-            </button>
-          ))}
         </div>
       )}
 
