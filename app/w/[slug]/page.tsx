@@ -136,12 +136,8 @@ export default async function WebinarPage({
     return null
   }
 
-  /** Effective session start time — null when next occurrence is still in the future */
+  /** Most recent past occurrence of the schedule, or null if session hasn't started yet today */
   function computeEffectiveStart(w: WebinarRow): string | null {
-    // If the next occurrence is in the future, there is no active session yet
-    const next = computeNextScheduledStart(w)
-    if (next && new Date(next) > new Date()) return null
-
     const rec = (w as Record<string, unknown>).schedule_recurrence as string | undefined
 
     if (!rec || rec === 'once') {
@@ -153,22 +149,26 @@ export default async function WebinarPage({
       return null
     }
 
-    // Recurring: return the most recent past occurrence
+    // Recurring: find the most recent past occurrence
     const timeStr = ((w as Record<string, unknown>).schedule_time as string) ?? '00:00'
     const [hh, mm] = timeStr.split(':').map(Number)
     const now = new Date()
-    const candidate = getScheduledDate(now, hh, mm, projectTimezone)
+    // Today's occurrence at hh:mm in project timezone
+    const todayCandidate = getScheduledDate(now, hh, mm, projectTimezone)
 
     if (rec === 'daily') {
-      if (candidate > now) return getScheduledDate(new Date(now.getTime() - 86400000), hh, mm, projectTimezone).toISOString()
-      return candidate.toISOString()
+      // If today's occurrence hasn't happened yet → no active session
+      if (todayCandidate > now) return null
+      return todayCandidate.toISOString()
     }
     if (rec === 'weekly') {
       const days = ((w as Record<string, unknown>).schedule_days as number[]) ?? []
       for (let i = 0; i <= 7; i++) {
         const base = new Date(now.getTime() - i * 86400000)
         const d = getScheduledDate(base, hh, mm, projectTimezone)
-        if (days.includes(base.getDay()) && d <= now) return d.toISOString()
+        // base.getDay() is UTC day — use locale day in project tz for accuracy
+        const localDay = new Date(base.toLocaleString('en-US', { timeZone: projectTimezone })).getDay()
+        if (days.includes(localDay) && d <= now) return d.toISOString()
       }
       return null
     }

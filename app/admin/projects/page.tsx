@@ -12,10 +12,27 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editProject, setEditProject] = useState<Project | null>(null)
-  const [form, setForm] = useState({ name: '', accent_color: '#6366f1', resend_from_email: '', openrouter_api_key: '' })
+  const [form, setForm] = useState({ name: '', accent_color: '#6366f1', resend_from_email: '', openrouter_api_key: '', timezone: 'America/Sao_Paulo' })
   const [saving, setSaving] = useState(false)
   const [cloningProject, setCloningProject] = useState<string | null>(null)
   const supabase = createClient()
+
+  const TIMEZONES = [
+    { group: 'Brasil', options: [
+      { value: 'America/Sao_Paulo', label: 'São Paulo / Brasília (BRT, UTC-3)' },
+      { value: 'America/Fortaleza', label: 'Fortaleza / Recife (BRT, UTC-3)' },
+      { value: 'America/Manaus', label: 'Manaus / Porto Velho (AMT, UTC-4)' },
+      { value: 'America/Rio_Branco', label: 'Rio Branco (ACT, UTC-5)' },
+    ]},
+    { group: 'Portugal / Europa', options: [
+      { value: 'Europe/Lisbon', label: 'Lisboa (WET, UTC+0/+1)' },
+    ]},
+    { group: 'Outras', options: [
+      { value: 'America/Argentina/Buenos_Aires', label: 'Buenos Aires (ART, UTC-3)' },
+      { value: 'America/Bogota', label: 'Bogotá (COT, UTC-5)' },
+      { value: 'UTC', label: 'UTC' },
+    ]},
+  ]
 
   async function load() {
     const { data } = await supabase.from('webi_projects').select('*').order('created_at', { ascending: false })
@@ -30,13 +47,13 @@ export default function ProjectsPage() {
 
   function openCreate() {
     setEditProject(null)
-    setForm({ name: '', accent_color: '#6366f1', resend_from_email: '', openrouter_api_key: '' })
+    setForm({ name: '', accent_color: '#6366f1', resend_from_email: '', openrouter_api_key: '', timezone: 'America/Sao_Paulo' })
     setShowModal(true)
   }
 
   function openEdit(p: Project) {
     setEditProject(p)
-    setForm({ name: p.name, accent_color: p.accent_color, resend_from_email: p.resend_from_email || '', openrouter_api_key: p.openrouter_api_key || '' })
+    setForm({ name: p.name, accent_color: p.accent_color, resend_from_email: p.resend_from_email || '', openrouter_api_key: p.openrouter_api_key || '', timezone: p.timezone || 'America/Sao_Paulo' })
     setShowModal(true)
   }
 
@@ -261,6 +278,26 @@ export default function ProjectsPage() {
           />
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
             Usado para gerar mensagens de chat automáticas com base no seu roteiro.
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">🌎 Fuso Horário</label>
+          <select
+            className="form-input"
+            value={form.timezone}
+            onChange={e => setForm(f => ({ ...f, timezone: e.target.value }))}
+          >
+            {TIMEZONES.map(g => (
+              <optgroup key={g.group} label={g.group}>
+                {g.options.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+            Define o fuso usado para calcular os horários de agendamento dos webinars.
           </div>
         </div>
       </Modal>
