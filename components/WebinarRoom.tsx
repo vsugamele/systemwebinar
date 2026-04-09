@@ -10,7 +10,6 @@ import ChatPanel from './ChatPanel'
 import type { Material } from './ChatPanel'
 
 const WebinarQuiz = dynamic(() => import('./WebinarQuiz'), { ssr: false })
-const TestimonialsSection = dynamic(() => import('./TestimonialsSection'), { ssr: false })
 const WaitingRoom = dynamic(() => import('./WaitingRoom'), { ssr: false })
 
 // Extend PitchButtonPayload for new fields
@@ -1397,12 +1396,6 @@ export default function WebinarRoom({ webinar, events }: Props) {
       />
       </div>{/* end .webinar-room */}
 
-      {/* TESTIMONIALS SECTION — full width below the main grid */}
-      <TestimonialsSection
-        webinarId={webinar.id}
-        webinarName={webinar.name}
-        currentTime={elapsedSeconds}
-      />
 
       {/* QUIZ MODAL */}
       <WebinarQuiz
