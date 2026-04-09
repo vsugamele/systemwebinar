@@ -66,7 +66,11 @@ export default function ChatConfigPage() {
   const [chatIntervalMessages, setChatIntervalMessages] = useState(1)
   const [chatStartSeconds, setChatStartSeconds] = useState(0)
   const [chatEndSeconds, setChatEndSeconds] = useState<string>('')
+  const [activePoolTab, setActivePoolTab] = useState<'mix' | 'elogios' | 'vaga' | 'engajamento'>('mix')
   const [chatPhrasesRaw, setChatPhrasesRaw] = useState('')
+  const [chatPhrasesElogiosRaw, setChatPhrasesElogiosRaw] = useState('')
+  const [chatPhrasesVagaRaw, setChatPhrasesVagaRaw] = useState('')
+  const [chatPhrasesEngajamentoRaw, setChatPhrasesEngajamentoRaw] = useState('')
   const [chatNamesRaw, setChatNamesRaw] = useState('')
   const [chatDefaultTab, setChatDefaultTab] = useState<'chat' | 'qa'>('chat')
   const [saving, setSaving] = useState(false)
@@ -77,7 +81,7 @@ export default function ChatConfigPage() {
       const [{ data }, { data: project }] = await Promise.all([
         supabase
           .from('webi_webinars')
-          .select('name, chat_cpm, chat_names, chat_default_tab, chat_mode, chat_interval_minutes, chat_interval_messages, chat_start_seconds, chat_end_seconds, chat_phrases, chat_segments, ai_enabled, ai_model, ai_knowledge_base, ai_system_prompt, ai_persona_name, ai_persona_avatar')
+          .select('name, chat_cpm, chat_names, chat_default_tab, chat_mode, chat_interval_minutes, chat_interval_messages, chat_start_seconds, chat_end_seconds, chat_phrases, chat_phrases_elogios, chat_phrases_vaga, chat_phrases_engajamento, chat_segments, ai_enabled, ai_model, ai_knowledge_base, ai_system_prompt, ai_persona_name, ai_persona_avatar')
           .eq('id', webinarId)
           .single(),
         supabase.from('webi_projects').select('openrouter_api_key').eq('id', projectId).single(),
@@ -94,6 +98,16 @@ export default function ChatConfigPage() {
         if (Array.isArray(names) && names.length > 0) setChatNamesRaw(names.join('\n'))
         const phrases = data.chat_phrases as string[] | null
         if (Array.isArray(phrases) && phrases.length > 0) setChatPhrasesRaw(phrases.join('\n'))
+
+        const phrasesElogios = (data as any).chat_phrases_elogios as string[] | null
+        if (Array.isArray(phrasesElogios) && phrasesElogios.length > 0) setChatPhrasesElogiosRaw(phrasesElogios.join('\n'))
+        
+        const phrasesVaga = (data as any).chat_phrases_vaga as string[] | null
+        if (Array.isArray(phrasesVaga) && phrasesVaga.length > 0) setChatPhrasesVagaRaw(phrasesVaga.join('\n'))
+        
+        const phrasesEngajamento = (data as any).chat_phrases_engajamento as string[] | null
+        if (Array.isArray(phrasesEngajamento) && phrasesEngajamento.length > 0) setChatPhrasesEngajamentoRaw(phrasesEngajamento.join('\n'))
+
         if (data.chat_default_tab === 'qa') setChatDefaultTab('qa')
         const segs = data.chat_segments as ChatSegment[] | null
         if (Array.isArray(segs) && segs.length > 0) {
@@ -117,6 +131,9 @@ export default function ChatConfigPage() {
     setSaving(true)
     const namesArray = chatNamesRaw.split('\n').map(n => n.trim()).filter(Boolean)
     const phrasesArray = chatPhrasesRaw.split('\n').map(p => p.trim()).filter(Boolean)
+    const elogiosArray = chatPhrasesElogiosRaw.split('\n').map(p => p.trim()).filter(Boolean)
+    const vagaArray = chatPhrasesVagaRaw.split('\n').map(p => p.trim()).filter(Boolean)
+    const engajamentoArray = chatPhrasesEngajamentoRaw.split('\n').map(p => p.trim()).filter(Boolean)
     const endSec = chatEndSeconds.trim() !== '' ? Number(chatEndSeconds) : null
     await Promise.all([
       supabase.from('webi_webinars').update({
@@ -129,6 +146,9 @@ export default function ChatConfigPage() {
         chat_start_seconds: chatStartSeconds,
         chat_end_seconds: endSec,
         chat_phrases: phrasesArray.length > 0 ? phrasesArray : null,
+        chat_phrases_elogios: elogiosArray.length > 0 ? elogiosArray : null,
+        chat_phrases_vaga: vagaArray.length > 0 ? vagaArray : null,
+        chat_phrases_engajamento: engajamentoArray.length > 0 ? engajamentoArray : null,
         chat_segments: useSegments && segments.length > 0 ? segments : null,
         ai_enabled: aiEnabled,
         ai_model: aiModel,
@@ -460,42 +480,116 @@ export default function ChatConfigPage() {
 
         {/* ---- PHRASES ---- */}
         <div className="card">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>💬 Mensagens Simuladas (pool global)</div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
-            Usadas no modo global e nos segmentos com frases &quot;Todas (mix)&quot;. Uma mensagem por linha.
-            Deixe vazio para usar as 60 frases padrão do sistema.
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>💬 Mensagens Simuladas (Pools)</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            Personalize as frases que os simuladores enviaram. Cada tipo de mensagem pode ter o seu próprio pool para ser usado nos segmentos específicos. Uma mensagem por linha. Se deixar vazio, o sistema usa as frases padrão.
           </div>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setChatPhrasesRaw(CHAT_PHRASES_ELOGIOS.join('\n'))}>
-              👏 Elogios ({CHAT_PHRASES_ELOGIOS.length})
-            </button>
-            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setChatPhrasesRaw(CHAT_PHRASES_VAGA.join('\n'))}>
-              🎉 Garantiu a Vaga ({CHAT_PHRASES_VAGA.length})
-            </button>
-            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setChatPhrasesRaw(CHAT_PHRASES_ENGAJAMENTO.join('\n'))}>
-              🔥 Engajamento ({CHAT_PHRASES_ENGAJAMENTO.length})
-            </button>
-            <button type="button" className="btn btn-sm btn-ghost" onClick={() => setChatPhrasesRaw(ALL_PHRASES.join('\n'))}>
-              ✨ Todas ({ALL_PHRASES.length})
-            </button>
-            {chatPhrasesRaw && (
-              <button type="button" className="btn btn-sm btn-ghost" style={{ color: 'var(--text-muted)' }} onClick={() => setChatPhrasesRaw('')}>
-                ✕ Usar padrão
+
+          <div style={{ borderBottom: '1px solid var(--border)', marginBottom: 16, display: 'flex', gap: 16 }}>
+            {[
+              { id: 'mix', label: '✨ Todas (Mix)', count: chatPhrasesRaw ? chatPhrasesRaw.split('\n').filter(Boolean).length : ALL_PHRASES.length },
+              { id: 'elogios', label: '👏 Elogios', count: chatPhrasesElogiosRaw ? chatPhrasesElogiosRaw.split('\n').filter(Boolean).length : CHAT_PHRASES_ELOGIOS.length },
+              { id: 'vaga', label: '🎉 Garantiu a Vaga', count: chatPhrasesVagaRaw ? chatPhrasesVagaRaw.split('\n').filter(Boolean).length : CHAT_PHRASES_VAGA.length },
+              { id: 'engajamento', label: '🔥 Engajamento', count: chatPhrasesEngajamentoRaw ? chatPhrasesEngajamentoRaw.split('\n').filter(Boolean).length : CHAT_PHRASES_ENGAJAMENTO.length },
+            ].map(tab => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActivePoolTab(tab.id as any)}
+                style={{
+                  padding: '8px 4px', fontSize: 13, fontWeight: 600,
+                  borderBottom: `2px solid ${activePoolTab === tab.id ? 'var(--brand)' : 'transparent'}`,
+                  color: activePoolTab === tab.id ? 'var(--text-primary)' : 'var(--text-muted)',
+                  cursor: 'pointer'
+                }}
+              >
+                {tab.label} ({tab.count})
               </button>
-            )}
+            ))}
           </div>
-          <textarea
-            className="form-input form-textarea"
-            style={{ minHeight: 160, fontSize: 13 }}
-            placeholder={`Incrível! Adorando o conteúdo 🔥\nJá garanti minha vaga! 🎉\n...`}
-            value={chatPhrasesRaw}
-            onChange={e => setChatPhrasesRaw(e.target.value)}
-          />
-          {chatPhrasesRaw && (
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
-              {chatPhrasesRaw.split('\n').filter(Boolean).length} mensagens configuradas
-            </div>
+
+          {activePoolTab === 'mix' && (
+            <>
+              <textarea
+                className="form-input form-textarea"
+                style={{ minHeight: 160, fontSize: 13 }}
+                placeholder={`Incrível! Adorando o conteúdo 🔥\nJá garanti minha vaga! 🎉\n...`}
+                value={chatPhrasesRaw}
+                onChange={e => setChatPhrasesRaw(e.target.value)}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                  Usadas no modo Global ou nos segmentos "Todas (mix)".
+                </div>
+                {chatPhrasesRaw && (
+                  <button type="button" className="btn btn-sm btn-ghost" style={{ padding: 0, color: '#ef4444' }} onClick={() => setChatPhrasesRaw('')}>
+                    Limpar e usar padrão
+                  </button>
+                )}
+              </div>
+            </>
           )}
+
+          {activePoolTab === 'elogios' && (
+            <>
+              <textarea
+                className="form-input form-textarea"
+                style={{ minHeight: 160, fontSize: 13 }}
+                placeholder={`Muito bom!\nExcelente didática!\n...`}
+                value={chatPhrasesElogiosRaw}
+                onChange={e => setChatPhrasesElogiosRaw(e.target.value)}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Usadas em segmentos do tipo "Elogios".</div>
+                {chatPhrasesElogiosRaw && (
+                  <button type="button" className="btn btn-sm btn-ghost" style={{ padding: 0, color: '#ef4444' }} onClick={() => setChatPhrasesElogiosRaw('')}>
+                    Limpar e usar padrão
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+
+          {activePoolTab === 'vaga' && (
+            <>
+              <textarea
+                className="form-input form-textarea"
+                style={{ minHeight: 160, fontSize: 13 }}
+                placeholder={`Estou dentro!\nComprado!\n...`}
+                value={chatPhrasesVagaRaw}
+                onChange={e => setChatPhrasesVagaRaw(e.target.value)}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Usadas em segmentos do tipo "Garantiu a Vaga".</div>
+                {chatPhrasesVagaRaw && (
+                  <button type="button" className="btn btn-sm btn-ghost" style={{ padding: 0, color: '#ef4444' }} onClick={() => setChatPhrasesVagaRaw('')}>
+                    Limpar e usar padrão
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+
+          {activePoolTab === 'engajamento' && (
+            <>
+              <textarea
+                className="form-input form-textarea"
+                style={{ minHeight: 160, fontSize: 13 }}
+                placeholder={`Eu quero!\nSim!\n...`}
+                value={chatPhrasesEngajamentoRaw}
+                onChange={e => setChatPhrasesEngajamentoRaw(e.target.value)}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Usadas em segmentos do tipo "Engajamento".</div>
+                {chatPhrasesEngajamentoRaw && (
+                  <button type="button" className="btn btn-sm btn-ghost" style={{ padding: 0, color: '#ef4444' }} onClick={() => setChatPhrasesEngajamentoRaw('')}>
+                    Limpar e usar padrão
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+
         </div>
 
         {/* ---- NAMES ---- */}

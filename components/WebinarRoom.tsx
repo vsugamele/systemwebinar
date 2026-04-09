@@ -591,10 +591,20 @@ export default function WebinarRoom({ webinar, events }: Props) {
     const segments = webinar.chat_segments?.length ? webinar.chat_segments : null
 
     function getPhrasesForSegment(seg: ChatSegment): string[] {
-      if (seg.phrases === 'elogios') return CHAT_PHRASES_ELOGIOS
-      if (seg.phrases === 'vaga') return CHAT_PHRASES_VAGA
-      if (seg.phrases === 'engajamento') return CHAT_PHRASES_ENGAJAMENTO
-      return GENERIC_CHAT_PHRASES
+      const w = webinar as Record<string, unknown>;
+      if (seg.phrases === 'elogios') {
+        const p = w.chat_phrases_elogios as string[];
+        return p?.length ? p : CHAT_PHRASES_ELOGIOS;
+      }
+      if (seg.phrases === 'vaga') {
+        const p = w.chat_phrases_vaga as string[];
+        return p?.length ? p : CHAT_PHRASES_VAGA;
+      }
+      if (seg.phrases === 'engajamento') {
+        const p = w.chat_phrases_engajamento as string[];
+        return p?.length ? p : CHAT_PHRASES_ENGAJAMENTO;
+      }
+      return webinar.chat_phrases?.length ? webinar.chat_phrases : GENERIC_CHAT_PHRASES;
     }
 
     if (segments) {
