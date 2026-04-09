@@ -636,9 +636,10 @@ export default function WebinarRoom({ webinar, events }: Props) {
     const mode = webinar.chat_mode ?? 'cpm'
     const cpm = webinar.chat_cpm || 0
     const intervalMin = webinar.chat_interval_minutes ?? 5
+    const intervalMsgs = (webinar as Record<string, unknown>).chat_interval_messages as number || 1
 
     const intervalMs = mode === 'interval'
-      ? intervalMin * 60 * 1000
+      ? (intervalMin * 60 * 1000) / intervalMsgs
       : cpm > 0 ? (60 / cpm) * 1000 : 0
 
     if (intervalMs <= 0) return
@@ -672,8 +673,9 @@ export default function WebinarRoom({ webinar, events }: Props) {
     scheduleNext()
     return () => { if (cpmTimerRef.current) clearTimeout(cpmTimerRef.current) }
   }, [webinar.chat_cpm, webinar.chat_names, webinar.chat_mode,
-      webinar.chat_interval_minutes, webinar.chat_start_seconds,
-      webinar.chat_end_seconds, webinar.chat_phrases, webinar.chat_segments])
+      webinar.chat_interval_minutes, (webinar as any).chat_interval_messages,
+      webinar.chat_start_seconds, webinar.chat_end_seconds, 
+      webinar.chat_phrases, webinar.chat_segments])
 
   // ---- Real-time chat + emojis (Supabase Broadcast & DB) ----
   useEffect(() => {

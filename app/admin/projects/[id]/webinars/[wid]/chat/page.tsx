@@ -63,6 +63,7 @@ export default function ChatConfigPage() {
   const [chatMode, setChatMode] = useState<'cpm' | 'interval'>('cpm')
   const [chatCpm, setChatCpm] = useState(0)
   const [chatIntervalMinutes, setChatIntervalMinutes] = useState(5)
+  const [chatIntervalMessages, setChatIntervalMessages] = useState(1)
   const [chatStartSeconds, setChatStartSeconds] = useState(0)
   const [chatEndSeconds, setChatEndSeconds] = useState<string>('')
   const [chatPhrasesRaw, setChatPhrasesRaw] = useState('')
@@ -76,7 +77,7 @@ export default function ChatConfigPage() {
       const [{ data }, { data: project }] = await Promise.all([
         supabase
           .from('webi_webinars')
-          .select('name, chat_cpm, chat_names, chat_default_tab, chat_mode, chat_interval_minutes, chat_start_seconds, chat_end_seconds, chat_phrases, chat_segments, ai_enabled, ai_model, ai_knowledge_base, ai_system_prompt, ai_persona_name, ai_persona_avatar')
+          .select('name, chat_cpm, chat_names, chat_default_tab, chat_mode, chat_interval_minutes, chat_interval_messages, chat_start_seconds, chat_end_seconds, chat_phrases, chat_segments, ai_enabled, ai_model, ai_knowledge_base, ai_system_prompt, ai_persona_name, ai_persona_avatar')
           .eq('id', webinarId)
           .single(),
         supabase.from('webi_projects').select('openrouter_api_key').eq('id', projectId).single(),
@@ -86,6 +87,7 @@ export default function ChatConfigPage() {
         setChatCpm(data.chat_cpm || 0)
         setChatMode((data.chat_mode as 'cpm' | 'interval') || 'cpm')
         setChatIntervalMinutes(data.chat_interval_minutes || 5)
+        setChatIntervalMessages((data as any).chat_interval_messages || 1)
         setChatStartSeconds(data.chat_start_seconds || 0)
         setChatEndSeconds(data.chat_end_seconds != null ? String(data.chat_end_seconds) : '')
         const names = data.chat_names as string[] | null
@@ -123,6 +125,7 @@ export default function ChatConfigPage() {
         chat_default_tab: chatDefaultTab,
         chat_mode: chatMode,
         chat_interval_minutes: chatIntervalMinutes,
+        chat_interval_messages: chatIntervalMessages,
         chat_start_seconds: chatStartSeconds,
         chat_end_seconds: endSec,
         chat_phrases: phrasesArray.length > 0 ? phrasesArray : null,
@@ -386,7 +389,17 @@ export default function ChatConfigPage() {
             </>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>1 mensagem a cada</span>
+              <input
+                type="number"
+                min={1} max={100}
+                className="form-input"
+                style={{ width: 80 }}
+                value={chatIntervalMessages}
+                onChange={e => setChatIntervalMessages(Number(e.target.value))}
+              />
+              <span style={{ fontSize: 14, color: 'var(--text-secondary)' }}>
+                {chatIntervalMessages === 1 ? 'mensagem a cada' : 'mensagens a cada'}
+              </span>
               <select
                 className="form-input"
                 style={{ width: 120 }}
@@ -398,7 +411,7 @@ export default function ChatConfigPage() {
                 ))}
               </select>
               <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                ≈ {(1 / chatIntervalMinutes).toFixed(2)} msg/min
+                ≈ {(chatIntervalMessages / chatIntervalMinutes).toFixed(2)} msg/min
               </span>
             </div>
           )}
