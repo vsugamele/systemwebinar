@@ -409,8 +409,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const hasStartedRef = useRef(hasStarted)
   useEffect(() => { hasStartedRef.current = hasStarted }, [hasStarted])
 
-  // Show countdown ONLY if the session hasn't started yet OR if it ended and the next one is < 24h away.
-  const sessionIsScheduledFuture = countdownToStart > 0 && !isSessionActive && (!isSessionEnded || countdownToStart <= 86400)
+  // Show countdown ONLY if the session hasn't started yet OR if it ended and the next one is <= 12h away.
+  const sessionIsScheduledFuture = countdownToStart > 0 && !isSessionActive && (!isSessionEnded || countdownToStart <= 43200)
 
   // Chat state (managed here, passed down to ChatPanel)
   const defaultTab = webinar.chat_default_tab ?? 'chat'
