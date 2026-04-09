@@ -387,6 +387,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const ytUnmutedRef = useRef(false)
   // Stable YouTube src — empty string during SSR, set on client after mount
   const [ytSrc, setYtSrc] = useState('')
+  // ytIframeLoaded: true once the iframe onLoad fires — reveals the video background
+  const [ytIframeLoaded, setYtIframeLoaded] = useState(false)
   const sessionOnBgRef = useRef(false)
 
   const duration = webinar.duration_seconds || 3600
@@ -557,6 +559,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   
   const ytPlayingRef = useRef(ytPlaying)
   useEffect(() => { ytPlayingRef.current = ytPlaying }, [ytPlaying])
+
+  // Reset ytIframeLoaded when the iframe remounts (ytKey increments)
+  useEffect(() => { setYtIframeLoaded(false) }, [ytKey])
 
   // ---- Elapsed time counter (wall-clock aware) ----
   useEffect(() => {
@@ -1311,38 +1316,48 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen={false}
                   title={webinar.name}
+                  onLoad={() => setYtIframeLoaded(true)}
                 />
-                {/* Overlay preto cobre thumbnail até o vídeo começar */}
-                {!ytPlaying && (
+
+                {/* Enquanto o iframe não carregou: spinner mínimo */}
+                {!ytIframeLoaded && (
                   <div style={{
-                    position: 'absolute', inset: 0, zIndex: 3,
+                    position: 'absolute', inset: 0, zIndex: 4,
                     background: '#000',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     flexDirection: 'column', gap: 14, pointerEvents: 'none',
                   }}>
                     <div style={{
-                      width: 48, height: 48, borderRadius: '50%',
-                      border: '3px solid rgba(255,255,255,0.15)',
-                      borderTopColor: '#fff',
+                      width: 40, height: 40, borderRadius: '50%',
+                      border: '3px solid rgba(255,255,255,0.12)',
+                      borderTopColor: 'rgba(255,255,255,0.7)',
                       animation: 'spin 0.8s linear infinite',
                     }} />
-                    <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.04em' }}>
+                    <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.04em' }}>
                       Carregando transmissão...
                     </span>
                   </div>
                 )}
-                {/* Botão de ativar som — aparece assim que o vídeo começa (mutado) */}
-                {ytPlaying && ytMuted && (
+
+                {/* Barras que cobrem elementos da UI do YouTube — visíveis assim que o iframe carrega */}
+                {ytIframeLoaded && (
+                  <>
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 50, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 0, left: 0, width: 220, height: 44, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 0, right: 0, width: 180, height: 44, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
+                  </>
+                )}
+
+                {/* Botão de ativar som — aparece assim que o iframe carrega (vídeo já tocando mutado ao fundo) */}
+                {ytIframeLoaded && ytMuted && (
                   <div style={{
                     position: 'absolute', inset: 0, zIndex: 6,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: 'rgba(0,0,0,0.6)',
-                    backdropFilter: 'blur(2px)',
+                    background: 'rgba(0,0,0,0.45)',
+                    backdropFilter: 'blur(3px)',
                   }}>
                     <button
                       onClick={() => {
-                        // Remount iframe at current position without silencing
-                        // Browser allows autoplay audio when triggered by a user gesture
                         ytUnmutedRef.current = true
                         const offset = Math.floor(elapsedRef.current)
                         setYtSrc(getYouTubeEmbedUrl(webinar.video_url!, offset) || '')
@@ -1361,14 +1376,6 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       🔊 Clique para ativar o som
                     </button>
                   </div>
-                )}
-                {/* Cobrir barra inferior e cantos do YouTube quando estiver tocando */}
-                {ytPlaying && (
-                  <>
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 48, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
-                    <div style={{ position: 'absolute', top: 0, left: 0, width: 200, height: 40, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
-                    <div style={{ position: 'absolute', top: 0, right: 0, width: 160, height: 40, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
-                  </>
                 )}
               </>
             ) : isVimeoUrl(webinar.video_url) ? (
