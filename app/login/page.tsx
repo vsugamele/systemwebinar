@@ -23,7 +23,10 @@ export default function LoginPage() {
       setError(error.message)
       setLoading(false)
     } else {
-      router.push('/admin')
+      // Use window.location.href instead of router.push to force a hard navigation.
+      // This ensures that the newly set Supabase auth cookies are properly sent 
+      // to the Next.js middleware, preventing the redirect-loop back to /login.
+      window.location.href = '/admin'
     }
   }
 
