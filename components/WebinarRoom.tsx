@@ -590,7 +590,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
     const segments = webinar.chat_segments?.length ? webinar.chat_segments : null
 
     function getPhrasesForSegment(seg: ChatSegment): string[] {
-      const w = webinar as Record<string, unknown>;
+      const w = webinar as any;
       if (seg.phrases === 'elogios') {
         const p = w.chat_phrases_elogios as string[];
         return p?.length ? p : CHAT_PHRASES_ELOGIOS;
@@ -645,7 +645,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
     const mode = webinar.chat_mode ?? 'cpm'
     const cpm = webinar.chat_cpm || 0
     const intervalMin = webinar.chat_interval_minutes ?? 5
-    const intervalMsgs = (webinar as Record<string, unknown>).chat_interval_messages as number || 1
+    const intervalMsgs = (webinar as any).chat_interval_messages as number || 1
 
     const intervalMs = mode === 'interval'
       ? (intervalMin * 60 * 1000) / intervalMsgs
