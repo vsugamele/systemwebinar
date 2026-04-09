@@ -195,7 +195,7 @@ export default function ChatConfigPage() {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
         <button
           onClick={() => setActiveTab('simulacao')}
           className={`btn ${activeTab === 'simulacao' ? 'btn-primary' : 'btn-ghost'}`}
@@ -213,6 +213,37 @@ export default function ChatConfigPage() {
       </div>
 
       <div className="page-body" style={{ display: activeTab === 'simulacao' ? 'flex' : 'none', flexDirection: 'column', gap: 20 }}>
+        
+        {/* ---- METER / MASTER SWITCH ---- */}
+        <div className="card" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>Status da Simulação Fictícia</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              Se você não configurou frases, desativar aqui impede que o sistema use frases genéricas.
+            </div>
+          </div>
+          <div>
+            {chatCpm > 0 || useSegments ? (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)' }}
+                onClick={() => {
+                  setChatMode('cpm')
+                  setChatCpm(0)
+                  setUseSegments(false)
+                  toast('Simulação Fictícia foi desativada.', { icon: '🛑' })
+                }}
+              >
+                🛑 Desativar Mensagens Fakes
+              </button>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: 'rgba(239, 68, 68, 0.08)', borderRadius: 8, color: '#ef4444', fontWeight: 600, fontSize: 14 }}>
+                🚫 Simulação Desativada
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* ---- SEGMENTS ---- */}
         <div className="card">
