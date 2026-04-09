@@ -15,6 +15,15 @@ import {
 
 const ALL_PHRASES = [...CHAT_PHRASES_ELOGIOS, ...CHAT_PHRASES_VAGA, ...CHAT_PHRASES_ENGAJAMENTO]
 
+const OPENROUTER_MODELS = [
+  { value: 'google/gemini-flash-1.5', label: 'Gemini 1.5 Flash (Google) — Mais rápido e barato' },
+  { value: 'openai/gpt-4o-mini', label: 'GPT-4o Mini (OpenAI) — Excelente custo-benefício' },
+  { value: 'anthropic/claude-3-haiku', label: 'Claude 3 Haiku (Anthropic) — Respostas naturais' },
+  { value: 'mistralai/mistral-7b-instruct', label: 'Mistral 7B — Open source, muito barato' },
+  { value: 'google/gemini-pro-1.5', label: 'Gemini 1.5 Pro (Google) — Mais avançado' },
+  { value: 'openai/gpt-4o', label: 'GPT-4o (OpenAI) — Maior qualidade' },
+]
+
 const PHRASE_OPTIONS = [
   { value: null, label: 'Todas (mix)' },
   { value: 'elogios', label: '👏 Elogios' },
@@ -38,6 +47,18 @@ export default function ChatConfigPage() {
   const [segments, setSegments] = useState<ChatSegment[]>([])
   const [useSegments, setUseSegments] = useState(false)
 
+  // Tabs
+  const [activeTab, setActiveTab] = useState<'simulacao' | 'ia'>('simulacao')
+
+  // AI State
+  const [projectApiKey, setProjectApiKey] = useState('')
+  const [aiEnabled, setAiEnabled] = useState(false)
+  const [aiModel, setAiModel] = useState('google/gemini-flash-1.5')
+  const [aiKnowledgeBase, setAiKnowledgeBase] = useState('')
+  const [aiSystemPrompt, setAiSystemPrompt] = useState('')
+  const [aiPersonaName, setAiPersonaName] = useState('')
+  const [aiPersonaAvatar, setAiPersonaAvatar] = useState('')
+
   // Global CPM state
   const [chatMode, setChatMode] = useState<'cpm' | 'interval'>('cpm')
   const [chatCpm, setChatCpm] = useState(0)
@@ -52,11 +73,14 @@ export default function ChatConfigPage() {
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
-        .from('webi_webinars')
-        .select('name, chat_cpm, chat_names, chat_default_tab, chat_mode, chat_interval_minutes, chat_start_seconds, chat_end_seconds, chat_phrases, chat_segments')
-        .eq('id', webinarId)
-        .single()
+      const [{ data }, { data: project }] = await Promise.all([
+        supabase
+          .from('webi_webinars')
+          .select('name, chat_cpm, chat_names, chat_default_tab, chat_mode, chat_interval_minutes, chat_start_seconds, chat_end_seconds, chat_phrases, chat_segments, ai_enabled, ai_model, ai_knowledge_base, ai_system_prompt, ai_persona_name, ai_persona_avatar')
+          .eq('id', webinarId)
+          .single(),
+        supabase.from('webi_projects').select('openrouter_api_key').eq('id', projectId).single(),
+      ])
       if (data) {
         setWebinarName(data.name)
         setChatCpm(data.chat_cpm || 0)
@@ -74,7 +98,14 @@ export default function ChatConfigPage() {
           setSegments(segs)
           setUseSegments(true)
         }
+        setAiEnabled(data.ai_enabled || false)
+        setAiModel(data.ai_model || 'google/gemini-flash-1.5')
+        setAiKnowledgeBase(data.ai_knowledge_base || '')
+        setAiSystemPrompt(data.ai_system_prompt || '')
+        setAiPersonaName((data as Record<string, unknown>).ai_persona_name as string || '')
+        setAiPersonaAvatar((data as Record<string, unknown>).ai_persona_avatar as string || '')
       }
+      if (project) setProjectApiKey(project.openrouter_api_key || '')
       setLoading(false)
     }
     load()
@@ -85,17 +116,26 @@ export default function ChatConfigPage() {
     const namesArray = chatNamesRaw.split('\n').map(n => n.trim()).filter(Boolean)
     const phrasesArray = chatPhrasesRaw.split('\n').map(p => p.trim()).filter(Boolean)
     const endSec = chatEndSeconds.trim() !== '' ? Number(chatEndSeconds) : null
-    await supabase.from('webi_webinars').update({
-      chat_cpm: chatMode === 'cpm' ? chatCpm : 0,
-      chat_names: namesArray,
-      chat_default_tab: chatDefaultTab,
-      chat_mode: chatMode,
-      chat_interval_minutes: chatIntervalMinutes,
-      chat_start_seconds: chatStartSeconds,
-      chat_end_seconds: endSec,
-      chat_phrases: phrasesArray.length > 0 ? phrasesArray : null,
-      chat_segments: useSegments && segments.length > 0 ? segments : null,
-    }).eq('id', webinarId)
+    await Promise.all([
+      supabase.from('webi_webinars').update({
+        chat_cpm: chatMode === 'cpm' ? chatCpm : 0,
+        chat_names: namesArray,
+        chat_default_tab: chatDefaultTab,
+        chat_mode: chatMode,
+        chat_interval_minutes: chatIntervalMinutes,
+        chat_start_seconds: chatStartSeconds,
+        chat_end_seconds: endSec,
+        chat_phrases: phrasesArray.length > 0 ? phrasesArray : null,
+        chat_segments: useSegments && segments.length > 0 ? segments : null,
+        ai_enabled: aiEnabled,
+        ai_model: aiModel,
+        ai_knowledge_base: aiKnowledgeBase,
+        ai_system_prompt: aiSystemPrompt,
+        ai_persona_name: aiPersonaName,
+        ai_persona_avatar: aiPersonaAvatar,
+      }).eq('id', webinarId),
+      supabase.from('webi_projects').update({ openrouter_api_key: projectApiKey }).eq('id', projectId)
+    ])
     setSaving(false)
     toast.success('Chat salvo!')
   }
@@ -124,15 +164,32 @@ export default function ChatConfigPage() {
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
             <Link href={`/admin/projects/${projectId}/webinars`} style={{ color: 'var(--brand-light)' }}>Webinars</Link> / {webinarName}
           </div>
-          <h1 className="page-title">💬 Simulação do Chat</h1>
-          <p className="page-subtitle">Configure a frequência de mensagens simuladas e os participantes fictícios do seu webinar</p>
+          <h1 className="page-title">💬 Chat & IA</h1>
+          <p className="page-subtitle">Configure a simulação de chat e o assistente de Inteligência Artificial para responder dúvidas</p>
         </div>
         <button className="btn btn-primary" onClick={save} disabled={saving}>
-          {saving ? <span className="spinner" /> : '💾 Salvar'}
+          {saving ? <span className="spinner" /> : '💾 Salvar Alterações'}
         </button>
       </div>
 
-      <div className="page-body" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+        <button
+          onClick={() => setActiveTab('simulacao')}
+          className={`btn ${activeTab === 'simulacao' ? 'btn-primary' : 'btn-ghost'}`}
+          style={{ padding: '10px 20px', borderRadius: 20 }}
+        >
+          {activeTab === 'simulacao' ? '✅' : '💬'} Simulação Fictícia
+        </button>
+        <button
+          onClick={() => setActiveTab('ia')}
+          className={`btn ${activeTab === 'ia' ? 'btn-primary' : 'btn-ghost'}`}
+          style={{ padding: '10px 20px', borderRadius: 20 }}
+        >
+          {activeTab === 'ia' ? '✅' : '🤖'} Assistente IA
+        </button>
+      </div>
+
+      <div className="page-body" style={{ display: activeTab === 'simulacao' ? 'flex' : 'none', flexDirection: 'column', gap: 20 }}>
 
         {/* ---- SEGMENTS ---- */}
         <div className="card">
@@ -503,6 +560,59 @@ export default function ChatConfigPage() {
             Quando um evento <strong>Pitch Button</strong> disparar, mensagens &quot;{'{nome}'} acabou de comprar!&quot; aparecerão
             automaticamente usando os nomes cadastrados acima.
           </div>
+        </div>
+      </div>
+
+      {/* ---- AI CONFIG TAB ---- */}
+      <div className="page-body" style={{ display: activeTab === 'ia' ? 'flex' : 'none', flexDirection: 'column', gap: 20 }}>
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>Ativar IA no Chat</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Muitas mensagens? A IA pode detectar perguntas e responder automaticamente no chat.</div>
+          </div>
+          <label style={{ cursor: 'pointer', position: 'relative', display: 'inline-block', width: 44, height: 24 }}>
+            <input type="checkbox" checked={aiEnabled} onChange={e => setAiEnabled(e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
+            <span style={{ position: 'absolute', inset: 0, borderRadius: 99, background: aiEnabled ? '#6366f1' : 'var(--border)', transition: '0.3s' }}>
+              <span style={{ position: 'absolute', height: 18, width: 18, left: aiEnabled ? 22 : 3, bottom: 3, background: 'white', borderRadius: '50%', transition: '0.3s' }} />
+            </span>
+          </label>
+        </div>
+
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, opacity: aiEnabled ? 1 : 0.5, pointerEvents: aiEnabled ? 'auto' : 'none' }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>OpenRouter API Key</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>Obtenha grátis em <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a> (compartilhado na conta).</div>
+          <input className="form-input" type="password" placeholder="sk-or-v1-..." value={projectApiKey} onChange={e => setProjectApiKey(e.target.value)} />
+        </div>
+
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, opacity: aiEnabled ? 1 : 0.5, pointerEvents: aiEnabled ? 'auto' : 'none' }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Modelo de IA</div>
+          <select className="form-input" value={aiModel} onChange={e => setAiModel(e.target.value)}>
+            {OPENROUTER_MODELS.map(m => (
+              <option key={m.value} value={m.value}>{m.label}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, opacity: aiEnabled ? 1 : 0.5, pointerEvents: aiEnabled ? 'auto' : 'none' }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Base de Conhecimento</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>O produto, preços, detalhes, FAQ. Use isso para balizar a resposta.</div>
+          <textarea className="form-input" rows={8} placeholder="Ex: PRODUTO: Curso X, PREÇO: R$ 500, ACESSO: Imediato..." value={aiKnowledgeBase} onChange={e => setAiKnowledgeBase(e.target.value)} style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: 13 }} />
+        </div>
+
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, opacity: aiEnabled ? 1 : 0.5, pointerEvents: aiEnabled ? 'auto' : 'none' }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Identidade do Assistente</div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">Nome</label>
+              <input className="form-input" placeholder="Ex: Ana — Suporte" value={aiPersonaName} onChange={e => setAiPersonaName(e.target.value)} />
+            </div>
+            <div className="form-group" style={{ margin: 0 }}>
+              <label className="form-label">URL da Foto</label>
+              <input className="form-input" placeholder="https://..." value={aiPersonaAvatar} onChange={e => setAiPersonaAvatar(e.target.value)} />
+            </div>
+          </div>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Instrução Customizada (System Prompt)</div>
+          <textarea className="form-input" rows={4} placeholder={`Você é assistente. Responda dúvidas baseadas na Base de Dados. Seja conciso.`} value={aiSystemPrompt} onChange={e => setAiSystemPrompt(e.target.value)} style={{ resize: 'vertical', fontSize: 13 }} />
         </div>
       </div>
     </>

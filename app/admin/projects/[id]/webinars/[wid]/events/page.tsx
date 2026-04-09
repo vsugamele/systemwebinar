@@ -574,9 +574,7 @@ export default function EventsPage() {
               {/* Tab switcher */}
               <div style={{ display: 'flex', gap: 4, marginBottom: 14, background: 'var(--bg-elevated)', borderRadius: 10, padding: 3 }}>
                 {[
-                  { key: 'quick' as const, label: '➕ Rápido', desc: 'Uma mensagem por vez' },
-                  { key: 'bulk' as const, label: '📋 Importar Lote', desc: 'Colar várias de uma vez' },
-                  { key: 'ai' as const, label: '✨ Gerar com AI', desc: 'Roteiro → mensagens automáticas' },
+                  { key: 'quick' as const, label: '➕ Mensagem Pontual', desc: 'Destacar um comentário chave no vídeo' },
                 ].map(tab => (
                   <button
                     key={tab.key}
@@ -619,125 +617,13 @@ export default function EventsPage() {
                 </div>
               )}
 
-              {/* TAB: Bulk Import */}
-              {chatTab === 'bulk' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6, background: 'var(--bg-elevated)', borderRadius: 8, padding: '10px 14px', border: '1px solid var(--border)' }}>
-                    📌 <strong>Formato:</strong> cada linha no formato <code style={{ color: 'var(--brand-light)' }}>MM:SS Nome: Texto da mensagem</code><br />
-                    Exemplo:<br />
-                    <code style={{ color: 'var(--brand-light)', fontSize: 11 }}>
-                      01:30 Maria: Nossa, que incrível!<br />
-                      03:45 João Silva: Isso faz muito sentido<br />
-                      05:00 Ana: Pode repetir essa parte?
-                    </code>
-                  </div>
-                  <textarea
-                    className="form-input form-textarea"
-                    style={{ minHeight: 150, fontFamily: 'monospace', fontSize: 12, resize: 'vertical' }}
-                    placeholder={`01:30 Maria: Nossa, que incrível!\n03:45 João: Isso faz muito sentido\n05:00 Ana: Pode repetir essa parte?\n08:20 Carlos: Nunca vi nada igual!`}
-                    value={bulkText}
-                    onChange={e => {
-                      setBulkText(e.target.value)
-                      setBulkParsed(parseBulkText(e.target.value))
-                    }}
-                  />
-                  {bulkParsed.length > 0 && (
-                    <div style={{ fontSize: 12, color: 'var(--text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>✅ <strong style={{ color: 'var(--success)' }}>{bulkParsed.length} mensagens</strong> reconhecidas</span>
-                      <button className="btn btn-primary btn-sm" onClick={insertBulkMessages} disabled={bulkInserting}>
-                        {bulkInserting ? <><span className="spinner" /> Inserindo...</> : `📋 Inserir ${bulkParsed.length} mensagens`}
-                      </button>
-                    </div>
-                  )}
-                  {bulkText.trim() && bulkParsed.length === 0 && (
-                    <div style={{ fontSize: 12, color: 'var(--warning)' }}>
-                      ⚠️ Nenhuma mensagem reconhecida. Verifique o formato: <code>MM:SS Nome: Texto</code>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* TAB: AI Generation */}
-              {chatTab === 'ai' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {aiPreview.length === 0 ? (
-                    <>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
-                        Cole o roteiro do seu webinar abaixo. A IA vai gerar mensagens de chat realistas que combinam com cada momento da apresentação.
-                      </div>
-                      <textarea
-                        className="form-input form-textarea"
-                        style={{ minHeight: 160, fontFamily: 'monospace', fontSize: 12, resize: 'vertical' }}
-                        placeholder={`Exemplo de roteiro:\n\n00:00 - Boas-vindas e apresentação pessoal\n05:00 - Por que 95% das pessoas falham em X\n15:00 - Os 3 pilares do método\n25:00 - Demonstração prática ao vivo\n40:00 - Revelação do produto/oferta\n50:00 - Bônus e garantia\n55:00 - Perguntas e respostas`}
-                        value={aiScript}
-                        onChange={e => setAiScript(e.target.value)}
-                      />
-                      <div style={{ display: 'flex', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
-                        <div style={{ flex: 1 }}>
-                          <label style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4, display: 'block' }}>
-                            Quantidade: <strong style={{ color: 'var(--brand-light)' }}>{aiCount} mensagens</strong>
-                          </label>
-                          <input type="range" min={5} max={60} step={5} value={aiCount}
-                            onChange={e => setAiCount(Number(e.target.value))}
-                            style={{ width: '100%', accentColor: 'var(--brand)' }} />
-                        </div>
-                        <button className="btn btn-primary" onClick={generateWithAI}
-                          disabled={aiGenerating || !aiScript.trim()}
-                          style={{ whiteSpace: 'nowrap', minWidth: 160 }}>
-                          {aiGenerating ? <><span className="spinner" /> Gerando...</> : '✨ Gerar Mensagens'}
-                        </button>
-                      </div>
-                      {aiError && (
-                        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '10px 14px', fontSize: 12, color: '#f87171' }}>
-                          {aiError}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                          <strong style={{ color: 'var(--brand-light)' }}>{aiPreview.length} mensagens</strong> geradas — revise e confirme:
-                        </div>
-                        <button className="btn btn-ghost btn-sm" style={{ fontSize: 11 }} onClick={() => setAiPreview([])}>← Voltar</button>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 300, overflowY: 'auto', paddingRight: 4 }}>
-                        {aiPreview.map((ev, i) => (
-                          <div key={i} style={{
-                            display: 'grid', gridTemplateColumns: '48px 100px 1fr 28px',
-                            gap: 6, alignItems: 'center',
-                            background: 'var(--bg-elevated)', borderRadius: 8, padding: '6px 10px',
-                            border: '1px solid var(--border)', fontSize: 12,
-                          }}>
-                            <code style={{ color: 'var(--brand-light)', fontFamily: 'monospace', fontSize: 11 }}>
-                              {formatTime(ev.timestamp_seconds)}
-                            </code>
-                            <input className="form-input" style={{ fontSize: 11, padding: '3px 6px' }}
-                              value={ev.author}
-                              onChange={e => setAiPreview(prev => prev.map((x, j) => j === i ? { ...x, author: e.target.value } : x))} />
-                            <input className="form-input" style={{ fontSize: 11, padding: '3px 6px' }}
-                              value={ev.text}
-                              onChange={e => setAiPreview(prev => prev.map((x, j) => j === i ? { ...x, text: e.target.value } : x))} />
-                            <button className="btn btn-ghost btn-sm" style={{ padding: '2px 4px', fontSize: 10 }}
-                              onClick={() => setAiPreview(prev => prev.filter((_, j) => j !== i))}>✕</button>
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                        <button className="btn btn-primary" onClick={insertGeneratedEvents} disabled={aiInserting}>
-                          {aiInserting ? <><span className="spinner" /> Inserindo...</> : `Inserir ${aiPreview.length} mensagens na timeline`}
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
+              {/* AI & Bulk generation code completely removed in favor of dynamic CPM logic from Chat Tab */}
             </div>
 
             {/* Chat list */}
             {chatEvents.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '28px 0', color: 'var(--text-muted)', fontSize: 13, background: 'var(--bg-card)', borderRadius: 12, border: '1px dashed var(--border)' }}>
-                Nenhuma mensagem ainda — use <strong>Importar Lote</strong> ou <strong>✨ AI</strong> para gerar dezenas de uma vez
+                Nenhuma mensagem pontual criada ainda — use a caixa acima. Configurações massivas agora ficam em <Link href={`/admin/projects/${projectId}/webinars/${webinarId}/chat`} style={{ color: 'var(--brand)' }}>💬 Chat & IA</Link>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
@@ -990,8 +876,35 @@ export default function EventsPage() {
                   </div>
                   <div className="form-group">
                     <label className="form-label">Imagem URL</label>
-                    <input className="form-input" placeholder="https://..." value={form.payload.image_url || ''}
-                      onChange={e => updatePayload('image_url', e.target.value)} />
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input className="form-input" placeholder="https://... ou faça upload" value={form.payload.image_url || ''}
+                        onChange={e => updatePayload('image_url', e.target.value)} style={{ flex: 1 }} />
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        style={{ whiteSpace: 'nowrap' }}
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                      >
+                        {uploading ? <span className="spinner" /> : '📁 Upload'}
+                      </button>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0]
+                          if (!file) return
+                          const url = await uploadImage(file, 'image_url')
+                          if (url) updatePayload('image_url', url)
+                          e.target.value = ''
+                        }}
+                      />
+                    </div>
+                    {form.payload.image_url && (
+                      <img src={form.payload.image_url} alt="preview" style={{ marginTop: 8, height: 80, borderRadius: 8, objectFit: 'contain', border: '1px solid var(--border)' }} />
+                    )}
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div className="form-group">

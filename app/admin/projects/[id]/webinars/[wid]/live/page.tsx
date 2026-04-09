@@ -107,17 +107,21 @@ export default function LivePage() {
           schedule_recurrence: 'once',
           schedule_time: null,
           schedule_days: null,
+          // Auto-activate if a date is set — ensures the webinar is publicly accessible
+          ...(iso ? { status: 'active' } : {}),
         }
       } else {
         updatePayload = {
           schedule_recurrence: scheduleRecurrence,
           schedule_time: scheduleTime,
           schedule_days: scheduleRecurrence === 'weekly' ? scheduleDays : null,
+          // Recurring schedules always need the webinar to be active
+          status: 'active',
         }
       }
       const { error } = await supabase.from('webi_webinars').update(updatePayload).eq('id', wid)
       if (error) throw error
-      toast.success('Agendamento salvo!')
+      toast.success('Agendamento salvo! Webinar ativado automaticamente.')
     } catch {
       toast.error('Erro ao salvar agendamento. Tente novamente.')
     } finally {

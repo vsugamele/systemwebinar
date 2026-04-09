@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { toast } from 'react-hot-toast'
 import { EventEngine } from '@/lib/event-engine'
 import { createClient } from '@/lib/supabase/client'
 import type { RealtimeChannel } from '@supabase/supabase-js'
@@ -526,6 +525,14 @@ export default function WebinarRoom({ webinar, events }: Props) {
     // Seed with startOffset so the counter reflects real session time
     elapsedRef.current = startOffset
     setElapsedSeconds(startOffset)
+
+    const isNativeVideo = !!(
+      webinar.video_url &&
+      !isYouTubeUrl(webinar.video_url) &&
+      !isVimeoUrl(webinar.video_url) &&
+      !isVturbUrl(webinar.video_url)
+    )
+
     elapsedIntervalRef.current = setInterval(() => {
       const videoEl = videoRef.current
       if (videoEl && !videoEl.paused) {
@@ -534,6 +541,12 @@ export default function WebinarRoom({ webinar, events }: Props) {
         elapsedRef.current += 1
       }
       setElapsedSeconds(elapsedRef.current)
+
+      // For non-native videos (YouTube, Vimeo, VTurb), track watch_second every 30s
+      // Native videos use onTimeUpdate (every 10s) in the video setup effect below
+      if (!isNativeVideo && elapsedRef.current > 0 && elapsedRef.current % 30 === 0) {
+        trackEvent('watch_second', elapsedRef.current)
+      }
     }, 1000)
     trackEvent('joined', 0)
     return () => {
@@ -1017,6 +1030,13 @@ export default function WebinarRoom({ webinar, events }: Props) {
   function handleCTAClick() {
     if (!pitchPayload) return
     trackEvent('cta_clicked', Math.floor(videoRef.current?.currentTime || 0))
+    // Trigger the webhook in the background
+    fetch('/api/webhooks/pitch-click', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ webinarId: webinar.id, sessionId: sessionId.current })
+    }).catch(e => console.error('Error triggering pitch click webhook:', e))
+
     window.open(pitchPayload.cta_url, '_blank')
   }
 
@@ -1268,7 +1288,13 @@ export default function WebinarRoom({ webinar, events }: Props) {
               <button className="pitch-close" onClick={handleCTADismiss}>✕</button>
               {pitchPayload.image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={pitchPayload.image_url} alt="Oferta" className="pitch-image" />
+                <img 
+                  src={pitchPayload.image_url} 
+                  alt="Oferta" 
+                  className="pitch-image" 
+                  onClick={handleCTAClick}
+                  style={{ cursor: 'pointer' }}
+                />
               )}
               <div className="pitch-body">
                 {/* Text above button */}

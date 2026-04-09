@@ -2,6 +2,12 @@ import { createClient } from '@/lib/supabase/server'
 import { notFound } from 'next/navigation'
 import type { Metadata, Viewport } from 'next'
 import WebinarRoom from '@/components/WebinarRoom'
+import RegistrationGate from '@/components/RegistrationGate'
+import { cookies } from 'next/headers'
+
+// Force every request to be server-rendered so session_started_at is always fresh
+// Without this, CDN/Next.js edge cache returns stale session offsets
+export const dynamic = 'force-dynamic'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -72,6 +78,10 @@ export default async function WebinarPage({
 
   if (!webinar) return notFound()
 
+  // Squeeze Page Logic
+  const cookieStore = await cookies()
+  const hasLeadCookie = cookieStore.get(`webi_lead_id_${webinar.id}`)
+  
   // Flatten project fields onto webinar for convenience
   const project = (webinar as Record<string, unknown> & { webi_projects?: { brand_color?: string | null; openrouter_api_key?: string | null; name?: string; timezone?: string | null } | null }).webi_projects || {}
   const projectTimezone = (project as { timezone?: string | null }).timezone || 'America/Sao_Paulo'
@@ -119,7 +129,9 @@ export default async function WebinarPage({
       for (let i = 1; i <= 8; i++) {
         const base = new Date(now.getTime() + i * 86400000)
         const d = getScheduledDate(base, hh, mm, projectTimezone)
-        if (days.includes(base.getDay())) return d.toISOString()
+        // Use local weekday in project timezone (not UTC) to match computeEffectiveStart
+        const localDay = new Date(base.toLocaleString('en-US', { timeZone: projectTimezone })).getDay()
+        if (days.includes(localDay)) return d.toISOString()
       }
       return null
     }
@@ -199,5 +211,27 @@ export default async function WebinarPage({
     project_name: project.name,
   }
 
-  return <WebinarRoom webinar={enrichedWebinar} events={events || []} />
+  if (!hasLeadCookie && !isTest) {
+    return (
+      <RegistrationGate
+        webinarId={webinar.id}
+        webinarName={webinar.name}
+        description={webinar.description}
+        thumbnailUrl={webinar.thumbnail_url}
+        projectId={webinar.project_id}
+      />
+    )
+  }
+
+  return (
+    <>
+      {webinar.tracking_head_code && (
+        <div dangerouslySetInnerHTML={{ __html: webinar.tracking_head_code }} />
+      )}
+      <WebinarRoom webinar={enrichedWebinar} events={events || []} />
+      {webinar.tracking_body_code && (
+        <div dangerouslySetInnerHTML={{ __html: webinar.tracking_body_code }} />
+      )}
+    </>
+  )
 }

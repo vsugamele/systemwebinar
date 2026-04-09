@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useParams } from 'next/navigation'
-import Link from 'next/link'
+import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
 
 interface WebinarData {
@@ -12,384 +11,360 @@ interface WebinarData {
   slug: string
   status: string
   video_url: string | null
-  chat_cpm: number
-  chat_names: string[] | null
   waiting_room_enabled: boolean
-  ai_enabled: boolean
-  session_started_at: string | null
-  form_fields: unknown[]
+  waiting_delay_seconds: number
   theme?: 'dark' | 'light' | 'youtube'
+  tracking_head_code?: string
+  tracking_body_code?: string
+  webhook_url?: string
+  whatsapp_api_url?: string
+  whatsapp_api_key?: string
+  whatsapp_welcome_message?: string
+  whatsapp_pitch_message?: string
 }
 
-interface Counts {
-  events: number
-  materials: number
-  emailTemplates: number
-  quiz: number
-}
-
-type AreaStatus = 'done' | 'warn' | 'empty'
-
-interface Area {
-  id: string
-  icon: string
-  label: string
-  description: string
-  href: string
-  status: AreaStatus
-  hint: string
-  priority: 'required' | 'recommended' | 'optional'
-}
-
-function statusDot(s: AreaStatus) {
-  if (s === 'done') return { bg: '#22c55e', label: 'Configurado' }
-  if (s === 'warn') return { bg: '#f59e0b', label: 'Incompleto' }
-  return { bg: 'var(--border)', label: 'Não configurado' }
-}
-
-export default function WebinarHubPage() {
+export default function WebinarOverviewPage() {
   const { id, wid } = useParams() as { id: string; wid: string }
   const supabase = createClient()
+  const router = useRouter()
 
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [webinar, setWebinar] = useState<WebinarData | null>(null)
-  const [counts, setCounts] = useState<Counts>({ events: 0, materials: 0, emailTemplates: 0, quiz: 0 })
-  const [publishing, setPublishing] = useState(false)
-  const [showPublishModal, setShowPublishModal] = useState(false)
-  const [publishSaved, setPublishSaved] = useState(false)
+
+  const [form, setForm] = useState({
+    name: '',
+    video_url: '',
+    waiting_room_enabled: false,
+    waiting_delay_seconds: 120,
+    tracking_head_code: '',
+    tracking_body_code: '',
+    webhook_url: '',
+    whatsapp_api_url: '',
+    whatsapp_api_key: '',
+    whatsapp_welcome_message: '',
+    whatsapp_pitch_message: '',
+  })
 
   useEffect(() => {
     async function load() {
-      const [{ data: w }, { count: evCount }, { count: matCount }, { count: emailCount }, { count: quizCount }] =
-        await Promise.all([
-          supabase.from('webi_webinars').select('*').eq('id', wid).single(),
-          supabase.from('webi_events').select('id', { count: 'exact', head: true }).eq('webinar_id', wid),
-          supabase.from('webi_materials').select('id', { count: 'exact', head: true }).eq('webinar_id', wid),
-          supabase.from('webi_email_templates').select('id', { count: 'exact', head: true }).eq('webinar_id', wid).eq('enabled', true),
-          supabase.from('webi_quiz_questions').select('id', { count: 'exact', head: true }).eq('webinar_id', wid),
-        ])
-      if (w) setWebinar(w as WebinarData)
-      setCounts({ events: evCount || 0, materials: matCount || 0, emailTemplates: emailCount || 0, quiz: quizCount || 0 })
+      const { data: w } = await supabase.from('webi_webinars').select('*').eq('id', wid).single()
+      if (w) {
+        setWebinar(w as WebinarData)
+        setForm({
+          name: w.name || '',
+          video_url: w.video_url || '',
+          waiting_room_enabled: w.waiting_room_enabled || false,
+          waiting_delay_seconds: w.waiting_delay_seconds ?? 120,
+          tracking_head_code: w.tracking_head_code || '',
+          tracking_body_code: w.tracking_body_code || '',
+          webhook_url: w.webhook_url || '',
+          whatsapp_api_url: w.whatsapp_api_url || '',
+          whatsapp_api_key: w.whatsapp_api_key || '',
+          whatsapp_welcome_message: w.whatsapp_welcome_message || '',
+          whatsapp_pitch_message: w.whatsapp_pitch_message || '',
+        })
+      }
       setLoading(false)
     }
     load()
   }, [wid])
 
-  async function publishWebinar() {
-    setPublishing(true)
-    await supabase.from('webi_webinars').update({ status: 'active' }).eq('id', wid)
-    setWebinar(w => w ? { ...w, status: 'active' } : w)
-    setPublishing(false)
-    setPublishSaved(true)
-    setTimeout(() => { setShowPublishModal(false); setPublishSaved(false) }, 1200)
+  async function save(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    const { error } = await supabase.from('webi_webinars').update({
+      name: form.name,
+      video_url: form.video_url,
+      waiting_room_enabled: form.waiting_room_enabled,
+      waiting_delay_seconds: form.waiting_delay_seconds,
+      tracking_head_code: form.tracking_head_code,
+      tracking_body_code: form.tracking_body_code,
+      webhook_url: form.webhook_url,
+      whatsapp_api_url: form.whatsapp_api_url,
+      whatsapp_api_key: form.whatsapp_api_key,
+      whatsapp_welcome_message: form.whatsapp_welcome_message,
+      whatsapp_pitch_message: form.whatsapp_pitch_message,
+    }).eq('id', wid)
+    
+    setSaving(false)
+    
+    if (error) {
+      toast.error('Erro ao salvar as configurações.')
+    } else {
+      toast.success('Configurações salvas!')
+      // Update local state to reflect new saved values
+      setWebinar(w => w ? { ...w, name: form.name, video_url: form.video_url, waiting_room_enabled: form.waiting_room_enabled, waiting_delay_seconds: form.waiting_delay_seconds, tracking_head_code: form.tracking_head_code, tracking_body_code: form.tracking_body_code, webhook_url: form.webhook_url, whatsapp_api_url: form.whatsapp_api_url, whatsapp_api_key: form.whatsapp_api_key, whatsapp_welcome_message: form.whatsapp_welcome_message, whatsapp_pitch_message: form.whatsapp_pitch_message } : null)
+      router.refresh()
+    }
   }
 
-  async function pauseWebinar() {
-    await supabase.from('webi_webinars').update({ status: 'paused' }).eq('id', wid)
-    setWebinar(w => w ? { ...w, status: 'paused' } : w)
+  async function toggleStatus() {
+    if (!webinar) return
+    const newStatus = webinar.status === 'active' ? 'paused' : 'active'
+    const { error } = await supabase.from('webi_webinars').update({ status: newStatus }).eq('id', wid)
+    if (!error) {
+      setWebinar({ ...webinar, status: newStatus })
+      toast.success(newStatus === 'active' ? 'Webinar publicado!' : 'Webinar pausado.')
+      router.refresh()
+    }
   }
 
   if (loading || !webinar) return <div className="loading-screen"><div className="spinner" /></div>
 
   const isActive = webinar.status === 'active'
-  const isPaused = webinar.status === 'paused'
-
-  // Completeness checks
-  const areas: Area[] = [
-    {
-      id: 'video',
-      icon: '🎬',
-      label: 'Vídeo',
-      description: 'URL do vídeo MP4 ou YouTube',
-      href: `/admin/projects/${id}/webinars/${wid}/events`,
-      status: webinar.video_url ? 'done' : 'empty',
-      hint: webinar.video_url ? 'Vídeo configurado' : 'Sem vídeo — edite o webinar',
-      priority: 'required',
-    },
-    {
-      id: 'events',
-      icon: '⚡',
-      label: 'Eventos',
-      description: 'Timeline de mensagens, popups e pitch',
-      href: `/admin/projects/${id}/webinars/${wid}/events`,
-      status: counts.events >= 3 ? 'done' : counts.events > 0 ? 'warn' : 'empty',
-      hint: counts.events === 0 ? 'Nenhum evento criado' : `${counts.events} evento${counts.events > 1 ? 's' : ''} na timeline`,
-      priority: 'required',
-    },
-    {
-      id: 'chat',
-      icon: '💬',
-      label: 'Chat',
-      description: 'Simulação de mensagens e participantes',
-      href: `/admin/projects/${id}/webinars/${wid}/chat`,
-      status: (webinar.chat_cpm ?? 0) > 0 || (webinar.chat_names?.length ?? 0) > 0 ? 'done' : 'warn',
-      hint: (webinar.chat_cpm ?? 0) > 0 ? `${webinar.chat_cpm} msg/min simuladas` : 'CPM = 0 — chat sem simulação',
-      priority: 'recommended',
-    },
-    {
-      id: 'waiting-room',
-      icon: '⏳',
-      label: 'Sala de Espera',
-      description: 'Timer antes de entrar na sala',
-      href: `/admin/projects/${id}/webinars/${wid}/waiting-room`,
-      status: webinar.waiting_room_enabled ? 'done' : 'warn',
-      hint: webinar.waiting_room_enabled ? 'Sala de espera ativa' : 'Desativada — participante entra direto',
-      priority: 'recommended',
-    },
-    {
-      id: 'live',
-      icon: '📡',
-      label: 'Ao Vivo',
-      description: 'Curva de audiência e relógio da sessão',
-      href: `/admin/projects/${id}/webinars/${wid}/live`,
-      status: webinar.session_started_at ? 'done' : 'warn',
-      hint: webinar.session_started_at ? 'Sessão iniciada' : 'Sem sessão — viewers não sincronizados',
-      priority: 'recommended',
-    },
-    {
-      id: 'emails',
-      icon: '✉️',
-      label: 'E-mails',
-      description: 'Sequência automática de lembretes',
-      href: `/admin/emails?project=${id}&webinar=${wid}`,
-      status: counts.emailTemplates > 0 ? 'done' : 'warn',
-      hint: counts.emailTemplates > 0 ? `${counts.emailTemplates} templates ativos` : 'Nenhum e-mail ativo',
-      priority: 'recommended',
-    },
-    {
-      id: 'materials',
-      icon: '📂',
-      label: 'Materiais',
-      description: 'PDFs e recursos liberados durante a live',
-      href: `/admin/projects/${id}/webinars/${wid}/materials`,
-      status: counts.materials > 0 ? 'done' : 'empty',
-      hint: counts.materials > 0 ? `${counts.materials} material(is)` : 'Sem materiais',
-      priority: 'optional',
-    },
-    {
-      id: 'ai-config',
-      icon: '🤖',
-      label: 'IA no Chat',
-      description: 'Assistente que responde perguntas',
-      href: `/admin/projects/${id}/webinars/${wid}/ai-config`,
-      status: webinar.ai_enabled ? 'done' : 'empty',
-      hint: webinar.ai_enabled ? 'IA ativada' : 'Desativada',
-      priority: 'optional',
-    },
-    {
-      id: 'quiz',
-      icon: '📝',
-      label: 'Quiz',
-      description: 'Perguntas interativas',
-      href: `/admin/projects/${id}/webinars/${wid}/quiz`,
-      status: counts.quiz > 0 ? 'done' : 'empty',
-      hint: counts.quiz > 0 ? `${counts.quiz} pergunta${counts.quiz > 1 ? 's' : ''} configurada${counts.quiz > 1 ? 's' : ''}` : 'Nenhuma questão',
-      priority: 'optional',
-    },
-  ]
-
-  const required = areas.filter(a => a.priority === 'required')
-  const recommended = areas.filter(a => a.priority === 'recommended')
-  const optional = areas.filter(a => a.priority === 'optional')
-
-  const doneCount = areas.filter(a => a.status === 'done').length
-  const totalCount = areas.length
-  const readyToPublish = required.every(a => a.status === 'done')
-
-  // Publish modal checklist
-  const publishChecks = [
-    { label: 'Vídeo configurado', ok: !!webinar.video_url },
-    { label: 'Pelo menos 1 evento na timeline', ok: counts.events > 0 },
-    { label: 'Chat com participantes fictícios', ok: (webinar.chat_names?.length ?? 0) > 0 },
-    { label: 'E-mail de confirmação ativo', ok: counts.emailTemplates > 0 },
-  ]
 
   return (
-    <>
+    <div style={{ maxWidth: 840, margin: '0 auto', padding: '32px 24px' }}>
+      
       {/* HEADER */}
-      <div className="page-header">
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
         <div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
-            <Link href={`/admin/projects/${id}/webinars`} style={{ color: 'var(--brand-light)' }}>
-              ← Webinars
-            </Link>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <h1 className="page-title" style={{ margin: 0 }}>{webinar.name}</h1>
-            <span className={`badge badge-${webinar.status}`} style={{ fontSize: 12 }}>
-              {isActive ? '● Ativo' : isPaused ? '⏸ Pausado' : '○ Rascunho'}
+          <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
+            ⚙️ Visão Geral
+            <span className={`badge badge-${webinar.status}`} style={{ fontSize: 12, fontWeight: 600 }}>
+              {isActive ? '● Ativo' : webinar.status === 'paused' ? '⏸ Pausado' : '○ Rascunho'}
             </span>
-          </div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-            /w/<strong>{webinar.slug}</strong>
+          </h1>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+            Link público: <a href={`/w/${webinar.slug}`} target="_blank" className="text-brand hover:underline">/w/{webinar.slug}</a>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          {isActive && (
-            <button className="btn btn-ghost btn-sm" onClick={pauseWebinar}>
-              ⏸ Pausar
-            </button>
-          )}
-          {!isActive && (
-            <button
-              className="btn btn-primary"
-              onClick={() => setShowPublishModal(true)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-            >
-              🚀 Publicar
-            </button>
-          )}
-        </div>
+        <button 
+          onClick={toggleStatus}
+          className={isActive ? 'btn btn-ghost' : 'btn btn-primary'}
+          style={{ padding: '8px 16px' }}
+        >
+          {isActive ? '⏸ Pausar Webinar' : '🚀 Publicar Webinar'}
+        </button>
       </div>
 
-      <div className="page-body" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-
-        {/* PROGRESS BAR */}
-        <div className="card" style={{ padding: '16px 20px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-            <span style={{ fontWeight: 600, fontSize: 14 }}>Setup do webinar</span>
-            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{doneCount}/{totalCount} áreas configuradas</span>
-          </div>
-          <div style={{ height: 6, background: 'var(--bg)', borderRadius: 99, overflow: 'hidden' }}>
-            <div style={{
-              height: '100%', width: `${(doneCount / totalCount) * 100}%`,
-              background: 'linear-gradient(90deg, #6366f1, #818cf8)',
-              borderRadius: 99, transition: 'width 0.4s ease',
-            }} />
-          </div>
-          {!readyToPublish && (
-            <div style={{ fontSize: 12, color: 'var(--warning)', marginTop: 8 }}>
-              ⚠️ Configure as áreas obrigatórias antes de publicar
+      <form onSubmit={save} style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        
+        {/* INFORMAÇÕES BÁSICAS */}
+        <div className="card" style={{ padding: '24px' }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: 'var(--brand)' }}>1.</span> Informações Básicas
+          </h2>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>Nome do Webinar</label>
+              <input
+                type="text"
+                required
+                className="form-input"
+                style={{ width: '100%', maxWidth: 400 }}
+                value={form.name}
+                onChange={e => setForm({ ...form, name: e.target.value })}
+                placeholder="Ex: Masterclass Vendas em Dobro"
+              />
             </div>
-          )}
-          {readyToPublish && !isActive && (
-            <div style={{ fontSize: 12, color: 'var(--success)', marginTop: 8 }}>
-              ✅ Pronto para publicar
-            </div>
-          )}
-        </div>
-
-        {/* QUICK ACTIONS */}
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <Link href={`/admin/projects/${id}/webinars/${wid}/live`}
-            className="btn btn-primary" style={{ flex: 1, minWidth: 160, justifyContent: 'center' }}>
-            🎬 Ao Vivo
-          </Link>
-          <Link href={`/admin/projects/${id}/webinars/${wid}/events`}
-            className="btn btn-secondary" style={{ flex: 1, minWidth: 160, justifyContent: 'center' }}>
-            ⚡ Eventos
-          </Link>
-          <a href={`/w/${webinar.slug}?test=1`} target="_blank" rel="noopener noreferrer"
-            className="btn btn-ghost" style={{ flex: 1, minWidth: 160, justifyContent: 'center' }}>
-            👁 Preview sala
-          </a>
-          <Link href={`/admin/projects/${id}/analytics`}
-            className="btn btn-ghost" style={{ flex: 1, minWidth: 160, justifyContent: 'center' }}>
-            📊 Analytics
-          </Link>
-        </div>
-
-        {/* THEME SELECTOR */}
-        <ThemeSelector webinarId={wid} currentTheme={webinar.theme || 'dark'} />
-
-        {/* REQUIRED */}
-        <section>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
-            Obrigatório
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-            {required.map(a => <AreaCard key={a.id} area={a} />)}
-          </div>
-        </section>
-
-        {/* RECOMMENDED */}
-        <section>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
-            Recomendado
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-            {recommended.map(a => <AreaCard key={a.id} area={a} />)}
-          </div>
-        </section>
-
-        {/* OPTIONAL */}
-        <section>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
-            Opcional
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
-            {optional.map(a => <AreaCard key={a.id} area={a} />)}
-          </div>
-        </section>
-      </div>
-
-      {/* PUBLISH MODAL */}
-      {showPublishModal && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setShowPublishModal(false)}>
-          <div className="modal" style={{ maxWidth: 480 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">🚀 Publicar Webinar</h2>
-              <button className="modal-close" onClick={() => setShowPublishModal(false)}>✕</button>
-            </div>
-
-            <div style={{ padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
-                Ao publicar, o webinar fica acessível para quem tiver o link de registro.
-                Revise os itens abaixo antes de confirmar.
-              </p>
-
-              {/* Checklist */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {publishChecks.map((c, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{
-                      width: 20, height: 20, borderRadius: 6, flexShrink: 0,
-                      background: c.ok ? 'rgba(34,197,94,0.15)' : 'rgba(245,158,11,0.1)',
-                      border: `1px solid ${c.ok ? 'rgba(34,197,94,0.4)' : 'rgba(245,158,11,0.3)'}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 11,
-                    }}>
-                      {c.ok ? '✓' : '!'}
-                    </div>
-                    <span style={{ fontSize: 13, color: c.ok ? 'var(--text-secondary)' : 'var(--warning)' }}>
-                      {c.label}
-                    </span>
-                  </div>
-                ))}
+            
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>URL do Vídeo Mestre</label>
+              <input
+                type="url"
+                className="form-input"
+                style={{ width: '100%' }}
+                value={form.video_url}
+                onChange={e => setForm({ ...form, video_url: e.target.value })}
+                placeholder="Ex: https://vimeo.com/... ou script VTurb..."
+              />
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                Insira o link do YouTube, Vimeo, VTurb ou .mp4 direto.
               </div>
+            </div>
+          </div>
+        </div>
 
-              {/* Preview link */}
-              <div style={{
-                background: 'var(--bg)', borderRadius: 10, padding: '10px 14px',
-                fontSize: 12, color: 'var(--text-muted)',
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        {/* SALA DE ESPERA */}
+        <div className="card" style={{ padding: '24px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+             <h2 style={{ fontSize: 16, fontWeight: 700, display: 'flex', alignItems: 'center', gap: 8 }}>
+               <span style={{ color: 'var(--brand)' }}>2.</span> Sala de Espera
+             </h2>
+             <label style={{ cursor: 'pointer', position: 'relative', display: 'inline-block', width: 44, height: 24 }}>
+              <input
+                type="checkbox"
+                checked={form.waiting_room_enabled}
+                onChange={e => setForm(f => ({ ...f, waiting_room_enabled: e.target.checked }))}
+                style={{ opacity: 0, width: 0, height: 0 }}
+              />
+              <span style={{
+                position: 'absolute', inset: 0, borderRadius: 99, transition: '0.3s',
+                background: form.waiting_room_enabled ? '#6366f1' : 'var(--border)',
               }}>
-                <span>Revise a sala antes de publicar</span>
-                <a href={`/w/${webinar.slug}?test=1`} target="_blank" rel="noopener noreferrer"
-                  className="btn btn-ghost btn-sm" style={{ flexShrink: 0 }}>
-                  👁 Abrir preview →
-                </a>
-              </div>
+                <span style={{
+                  position: 'absolute', height: 18, width: 18,
+                  left: form.waiting_room_enabled ? 22 : 3, bottom: 3,
+                  background: 'white', borderRadius: '50%', transition: '0.3s',
+                }} />
+              </span>
+            </label>
+          </div>
+          
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: form.waiting_room_enabled ? 16 : 0 }}>
+            Retém os convidados em uma tela de timer antes de redirecionar para a sala do vídeo.
+          </div>
 
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button className="btn btn-ghost" onClick={() => setShowPublishModal(false)}>
-                  Cancelar
-                </button>
-                <button
-                  className="btn btn-primary"
-                  onClick={publishWebinar}
-                  disabled={publishing}
-                  style={{ minWidth: 140 }}
-                >
-                  {publishSaved ? '✅ Publicado!' : publishing ? '⏳ Publicando...' : '🚀 Confirmar Publicação'}
-                </button>
-              </div>
+          {form.waiting_room_enabled && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'var(--bg)', padding: 16, borderRadius: 12 }}>
+              <span style={{ fontSize: 13, fontWeight: 600 }}>Tempo de atraso (segundos)</span>
+              <input
+                type="number" min={0} max={3600}
+                className="form-input"
+                style={{ width: 100 }}
+                value={form.waiting_delay_seconds}
+                onChange={e => setForm({ ...form, waiting_delay_seconds: +e.target.value })}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* TRACKING E PIXELS */}
+        <div className="card" style={{ padding: '24px' }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: 'var(--brand)' }}>3.</span> Pixel e Tracking
+          </h2>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
+            Insira scripts de rastreamento (Facebook Pixel, Google Analytics, etc.) para monitorar acessos e conversões no webinar.
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>Scripts no &lt;head&gt;</label>
+              <textarea
+                className="form-input form-textarea"
+                style={{ width: '100%', minHeight: 120, fontFamily: 'monospace', fontSize: 12 }}
+                value={form.tracking_head_code}
+                onChange={e => setForm({ ...form, tracking_head_code: e.target.value })}
+                placeholder="<!-- Facebook Pixel Code -->..."
+              />
+            </div>
+            
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>Scripts no final do &lt;body&gt;</label>
+              <textarea
+                className="form-input form-textarea"
+                style={{ width: '100%', minHeight: 120, fontFamily: 'monospace', fontSize: 12 }}
+                value={form.tracking_body_code}
+                onChange={e => setForm({ ...form, tracking_body_code: e.target.value })}
+                placeholder="<!-- Scripts adicionais -->..."
+              />
             </div>
           </div>
         </div>
-      )}
-    </>
+
+        {/* INTEGRAÇÕES & WEBHOOKS */}
+        <div className="card" style={{ padding: '24px' }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: 'var(--brand)' }}>4.</span> Integrações (Webhook)
+          </h2>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
+            Dispare ações externas assim que ocorrerem eventos de alta intenção, como clicar no botão do Pitch.
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
+            {/* MAKE / N8N Webhook */}
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>Webhook URL (Disparado em Cliques no Pitch)</label>
+              <input
+                type="url"
+                className="form-input"
+                style={{ width: '100%', fontFamily: 'monospace', fontSize: 13 }}
+                value={form.webhook_url}
+                onChange={e => setForm({ ...form, webhook_url: e.target.value })}
+                placeholder="https://hook.us1.make.com/..."
+              />
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                Envio POST com a Payload: <code>{`{ event: "pitch_clicked", lead: { name, email, phone } }`}</code>
+              </div>
+            </div>
+
+            <hr style={{ border: '0', borderTop: '1px solid var(--border)', margin: '8px 0' }} />
+
+            {/* WhatsApp NATIVE */}
+            <div>
+              <label style={{ display: 'block', fontSize: 14, fontWeight: 700, marginBottom: 12, color: 'var(--brand)' }}>
+                 Integração WhatsApp Nativa (Evolution / Z-API)
+              </label>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>Endpoint URL (Envio de Texto)</label>
+                  <input
+                    type="url"
+                    className="form-input"
+                    style={{ width: '100%', fontFamily: 'monospace', fontSize: 13 }}
+                    value={form.whatsapp_api_url}
+                    onChange={e => setForm({ ...form, whatsapp_api_url: e.target.value })}
+                    placeholder="https://sua-api.com/message/sendText/{{instance}}"
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>API Key ou Token (Header apikey)</label>
+                  <input
+                    type="password"
+                    className="form-input"
+                    style={{ width: '100%', fontFamily: 'monospace', fontSize: 13 }}
+                    value={form.whatsapp_api_key}
+                    onChange={e => setForm({ ...form, whatsapp_api_key: e.target.value })}
+                    placeholder="Token de autenticação"
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>Mensagem de Boas-vindas (Squeeze Page)</label>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Use <code>[NOME]</code> para personalizar. <br/>Deixe em branco para não enviar.</div>
+                  <textarea
+                    className="form-input form-textarea"
+                    style={{ width: '100%', minHeight: 100, fontSize: 13 }}
+                    value={form.whatsapp_welcome_message}
+                    onChange={e => setForm({ ...form, whatsapp_welcome_message: e.target.value })}
+                    placeholder="Olá [NOME]! Seu acesso está confirmado..."
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>Mensagem Recuperação (Clique no Pitch)</label>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Enviada quando ele(a) clica no botão de compra.<br/>Deixe em branco para não enviar.</div>
+                  <textarea
+                    className="form-input form-textarea"
+                    style={{ width: '100%', minHeight: 100, fontSize: 13 }}
+                    value={form.whatsapp_pitch_message}
+                    onChange={e => setForm({ ...form, whatsapp_pitch_message: e.target.value })}
+                    placeholder="Vi que você se interessou pela oferta, [NOME]..."
+                  />
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+
+        {/* TEMA */}
+        <div className="card" style={{ padding: '24px' }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ color: 'var(--brand)' }}>4.</span> Tema Visual
+          </h2>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
+            A aparência da sala (sidebar do chat, cabeçalho e cores) que seu público vai experimentar.
+          </div>
+          <ThemeSelector webinarId={wid} currentTheme={webinar.theme || 'dark'} />
+        </div>
+
+        {/* SAVE BOTTOM ROW */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end', paddingTop: 12, borderTop: '1px solid var(--border)' }}>
+          <button type="submit" className="btn btn-primary" disabled={saving}>
+            {saving ? '⏳ Salvando...' : '💾 Salvar Alterações'}
+          </button>
+        </div>
+
+      </form>
+    </div>
   )
 }
 
@@ -397,19 +372,19 @@ const THEMES = [
   {
     id: 'dark' as const,
     label: 'Dark',
-    desc: 'Padrão — fundo escuro profissional',
+    desc: 'Padrão — escuro profissional',
     preview: { bg: '#0a0a0f', header: '#111118', chat: '#111118', accent: '#6366f1', text: '#f0f0ff', chatText: '#8b8ba7' },
   },
   {
     id: 'light' as const,
     label: 'Branco',
-    desc: 'Fundo claro, texto escuro',
+    desc: 'Fundo claro, visual leve',
     preview: { bg: '#f0f0f5', header: '#ffffff', chat: '#ffffff', accent: '#6366f1', text: '#111118', chatText: '#44444f' },
   },
   {
     id: 'youtube' as const,
     label: 'YouTube',
-    desc: 'Clone do YouTube Live',
+    desc: 'Semelhante a um vídeo público',
     preview: { bg: '#0f0f0f', header: '#0f0f0f', chat: '#212121', accent: '#cc0000', text: '#ffffff', chatText: '#aaaaaa' },
   },
 ]
@@ -429,123 +404,60 @@ function ThemeSelector({ webinarId, currentTheme }: { webinarId: string; current
       setTheme(prev)
       toast.error('Erro ao salvar tema.')
     } else {
-      toast.success('Tema salvo!')
+      toast.success('Tema atualizado!')
     }
   }
 
   return (
-    <div className="card" style={{ padding: '16px 20px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 14 }}>🎨 Tema da Sala</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Aparência da sala de webinar para os participantes</div>
-        </div>
-        {saving && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Salvando...</span>}
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-        {THEMES.map(t => {
-          const p = t.preview
-          const active = theme === t.id
-          return (
-            <button
-              key={t.id}
-              onClick={() => applyTheme(t.id)}
-              style={{
-                background: 'none', border: `2px solid ${active ? 'var(--brand)' : 'var(--border)'}`,
-                borderRadius: 12, padding: 0, cursor: 'pointer', textAlign: 'left',
-                transition: 'border-color 0.15s',
-                boxShadow: active ? '0 0 0 3px var(--brand-glow)' : 'none',
-                overflow: 'hidden',
-              }}
-            >
-              {/* Mini preview */}
-              <div style={{ background: p.bg, padding: 8, display: 'flex', gap: 4, height: 72, position: 'relative' }}>
-                {/* Video area */}
-                <div style={{ flex: 1, background: '#000', borderRadius: 4, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                  <div style={{ background: p.header, height: 10, borderBottom: `1px solid rgba(255,255,255,0.08)` }} />
-                  <div style={{ flex: 1, background: '#000' }} />
-                </div>
-                {/* Chat sidebar */}
-                <div style={{ width: 40, background: p.chat, borderRadius: 4, display: 'flex', flexDirection: 'column', gap: 3, padding: 4, overflow: 'hidden' }}>
-                  {[1,2,3].map(i => (
-                    <div key={i} style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-                      <div style={{ width: 6, height: 6, borderRadius: '50%', background: p.accent, flexShrink: 0 }} />
-                      <div style={{ flex: 1, height: 3, background: p.chatText, borderRadius: 2, opacity: 0.6 }} />
-                    </div>
-                  ))}
-                </div>
-                {/* Active checkmark */}
-                {active && (
-                  <div style={{
-                    position: 'absolute', top: 4, right: 4,
-                    width: 16, height: 16, borderRadius: '50%',
-                    background: 'var(--brand)', color: '#fff',
-                    fontSize: 9, fontWeight: 900,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>✓</div>
-                )}
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+      {THEMES.map(t => {
+        const p = t.preview
+        const active = theme === t.id
+        return (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => applyTheme(t.id)}
+            style={{
+              background: 'none', border: `2px solid ${active ? 'var(--brand)' : 'var(--border)'}`,
+              borderRadius: 12, padding: 0, cursor: 'pointer', textAlign: 'left',
+              transition: 'border-color 0.15s',
+              boxShadow: active ? '0 0 0 3px var(--brand-glow)' : 'none',
+              overflow: 'hidden',
+            }}
+          >
+            {/* Mini preview */}
+            <div style={{ background: p.bg, padding: 8, display: 'flex', gap: 4, height: 72, position: 'relative' }}>
+              <div style={{ flex: 1, background: '#000', borderRadius: 4, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div style={{ background: p.header, height: 10, borderBottom: `1px solid rgba(255,255,255,0.08)` }} />
+                <div style={{ flex: 1, background: '#000' }} />
               </div>
-              {/* Label */}
-              <div style={{ padding: '8px 10px', background: 'var(--bg-elevated)' }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 1 }}>{t.label}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.desc}</div>
+              <div style={{ width: 40, background: p.chat, borderRadius: 4, display: 'flex', flexDirection: 'column', gap: 3, padding: 4, overflow: 'hidden' }}>
+                {[1,2,3].map(i => (
+                  <div key={i} style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: p.accent, flexShrink: 0 }} />
+                    <div style={{ flex: 1, height: 3, background: p.chatText, borderRadius: 2, opacity: 0.6 }} />
+                  </div>
+                ))}
               </div>
-            </button>
-          )
-        })}
-      </div>
+              {active && (
+                <div style={{
+                  position: 'absolute', top: 4, right: 4,
+                  width: 16, height: 16, borderRadius: '50%',
+                  background: 'var(--brand)', color: '#fff',
+                  fontSize: 9, fontWeight: 900,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>✓</div>
+              )}
+            </div>
+            {/* Label */}
+            <div style={{ padding: '8px 10px', background: 'var(--bg-elevated)' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>{t.label}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.desc}</div>
+            </div>
+          </button>
+        )
+      })}
     </div>
-  )
-}
-
-function AreaCard({ area }: { area: Area }) {
-  const dot = statusDot(area.status)
-  return (
-    <Link
-      href={area.href}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 14,
-        background: 'var(--bg-card)', border: '1px solid var(--border)',
-        borderRadius: 14, padding: '14px 16px',
-        textDecoration: 'none', transition: 'all 0.15s ease',
-      }}
-      onMouseEnter={e => {
-        const el = e.currentTarget as HTMLAnchorElement
-        el.style.borderColor = 'rgba(99,102,241,0.4)'
-        el.style.background = 'var(--bg-hover)'
-      }}
-      onMouseLeave={e => {
-        const el = e.currentTarget as HTMLAnchorElement
-        el.style.borderColor = 'var(--border)'
-        el.style.background = 'var(--bg-card)'
-      }}
-    >
-      <div style={{
-        width: 40, height: 40, borderRadius: 10, flexShrink: 0,
-        background: 'var(--bg-elevated)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 20,
-      }}>
-        {area.icon}
-      </div>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-primary)', marginBottom: 2 }}>
-          {area.label}
-        </div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {area.hint}
-        </div>
-      </div>
-
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-        <div style={{
-          width: 8, height: 8, borderRadius: '50%',
-          background: dot.bg,
-          boxShadow: area.status === 'done' ? `0 0 6px ${dot.bg}` : 'none',
-        }} />
-        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>→</span>
-      </div>
-    </Link>
   )
 }

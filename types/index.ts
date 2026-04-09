@@ -69,6 +69,12 @@ export interface Webinar {
   display_name?: string
   // AI Config
   ai_model?: string
+  // Integrations (013)
+  webhook_url?: string | null
+  whatsapp_api_url?: string | null
+  whatsapp_api_key?: string | null
+  whatsapp_welcome_message?: string | null
+  whatsapp_pitch_message?: string | null
 }
 
 // ---- Event Payloads ----
