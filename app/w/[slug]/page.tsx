@@ -201,10 +201,19 @@ export default async function WebinarPage({
     supabase.from('webi_quiz_questions').select('id').eq('webinar_id', webinar.id).limit(1),
   ])
 
+  const nextScheduledStart = computeNextScheduledStart(webinar)
+  const effectiveStart = computeEffectiveStart(webinar)
+
+  // Compute countdown server-side so WebinarRoom gets the correct initial value
+  // without needing Date.now() on the client (which causes SSR/hydration flash)
+  const initialCountdownSeconds = nextScheduledStart
+    ? Math.max(0, Math.ceil((new Date(nextScheduledStart).getTime() - Date.now()) / 1000))
+    : 0
+
   const enrichedWebinar = {
     ...webinar,
-    session_started_at: computeEffectiveStart(webinar),
-    next_scheduled_start: computeNextScheduledStart(webinar),
+    session_started_at: effectiveStart,
+    next_scheduled_start: nextScheduledStart,
     has_quiz: (quizQs?.length ?? 0) > 0,
     brand_color: project.brand_color || '#6366f1',
     openrouter_api_key: project.openrouter_api_key,
@@ -228,7 +237,7 @@ export default async function WebinarPage({
       {webinar.tracking_head_code && (
         <div dangerouslySetInnerHTML={{ __html: webinar.tracking_head_code }} />
       )}
-      <WebinarRoom webinar={enrichedWebinar} events={events || []} />
+      <WebinarRoom webinar={enrichedWebinar} events={events || []} initialCountdownSeconds={initialCountdownSeconds} />
       {webinar.tracking_body_code && (
         <div dangerouslySetInnerHTML={{ __html: webinar.tracking_body_code }} />
       )}

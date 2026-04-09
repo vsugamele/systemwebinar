@@ -79,6 +79,8 @@ function getTargetViewers(
 interface Props {
   webinar: Webinar & WebinarConfig
   events: WebinarEvent[]
+  /** Pre-computed server-side countdown (seconds until next_scheduled_start). Prevents client flash. */
+  initialCountdownSeconds?: number
 }
 
 // EMOJI_REACTIONS moved to ChatPanel.tsx
@@ -116,7 +118,9 @@ function getYouTubeEmbedUrl(url: string, startSeconds = 0): string | null {
 
     if (!videoId) return null
     const start = startSeconds > 0 ? `&start=${startSeconds}` : ''
-    return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&modestbranding=1&rel=0&disablekb=1&iv_load_policy=3&playsinline=1&fs=0&showinfo=0&enablejsapi=1${start}`
+    // NOTE: mute=1 intentionally REMOVED — we silence via postMessage setVolume(0) instead.
+    // mute=1 in the URL makes the player ignore unMute() commands, which breaks our sound button.
+    return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&controls=0&modestbranding=1&rel=0&disablekb=1&iv_load_policy=3&playsinline=1&fs=0&showinfo=0&enablejsapi=1${start}`
   } catch {
     return null
   }
@@ -328,7 +332,7 @@ export const DEFAULT_NAMES = [
   'Floripes Correia', 'Godofredo Ramos', 'Preciliana Campos', 'Geraldo Ferreira', 'Geralda Farias',
 ]
 
-export default function WebinarRoom({ webinar, events }: Props) {
+export default function WebinarRoom({ webinar, events, initialCountdownSeconds = 0 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const engineRef = useRef<EventEngine | null>(null)
   const sessionId = useRef(generateSessionId())
@@ -380,14 +384,9 @@ export default function WebinarRoom({ webinar, events }: Props) {
   // Scheduled start countdown — driven by next_scheduled_start (future occurrence)
   const nextScheduledStart = (webinar as unknown as Record<string, unknown>).next_scheduled_start as string | undefined
 
-  // Compute ONCE on mount (same formula server and client share — no Date.now() at render time)
-  // We use a lazy initializer that runs only on the client, after hydration, to avoid mismatch.
-  // The key insight: we read nextScheduledStart from the prop which is a fixed ISO string.
-  const [countdownToStart, setCountdownToStart] = useState<number>(() => {
-    if (typeof window === 'undefined') return 0 // SSR: always 0
-    if (!nextScheduledStart) return 0
-    return Math.max(0, Math.ceil((new Date(nextScheduledStart).getTime() - Date.now()) / 1000))
-  })
+  // initialCountdownSeconds comes from the SERVER (computed at request time).
+  // Using it directly eliminates the 0 → real-value flip that caused the flash.
+  const [countdownToStart, setCountdownToStart] = useState<number>(initialCountdownSeconds)
 
   // A session is active if it has formally started (has session_started_at or there's no future schedule at all) and it hasn't ended.
   const hasStarted = !!webinar.session_started_at || !nextScheduledStart
@@ -918,53 +917,54 @@ export default function WebinarRoom({ webinar, events }: Props) {
   useEffect(() => {
     if (!isYouTubeUrl(webinar.video_url || '')) return
 
-    // 'fired' guard prevents markPlaying from running twice (once via message, once via fallback)
-    // which was causing the 1-second mute reset
     let fired = false
+    const iframe = ytIframeRef.current
 
-    function sendPlay() {
-      if (fired) return // Stop sending once we know it's playing
-      ytIframeRef.current?.contentWindow?.postMessage(
-        JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
-        '*'
+    function post(fn: string, args: unknown[] = []) {
+      iframe?.contentWindow?.postMessage(
+        JSON.stringify({ event: 'command', func: fn, args }), '*'
       )
     }
 
-    // Retry every 500ms until YouTube confirms it's playing
-    const tryInterval = setInterval(sendPlay, 500)
+    function sendPlay() {
+      if (fired) return
+      post('playVideo')
+      // Silence immediately via volume=0 (NOT mute= URL param, so unMute works later)
+      post('setVolume', [0])
+    }
+
+    // Retry every 600ms until YouTube confirms it's playing
+    const tryInterval = setInterval(sendPlay, 600)
 
     function markPlaying() {
-      if (fired) return // Idempotent — only run once
+      if (fired) return
       fired = true
       clearInterval(tryInterval)
       clearTimeout(fallbackTimeout)
+      // Keep volume at 0 — user activates sound via button
+      post('setVolume', [0])
       setYtPlaying(true)
-      // Do NOT unmute here — user must click 🔊 button
-      // Browser autoplay policy requires videos to start muted;
-      // calling unMute() here would cause the audio to cut off after ~1s
     }
 
     function onMessage(e: MessageEvent) {
       try {
         const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
-        // playerState 1 = playing
         if (data?.event === 'infoDelivery' && data?.info?.playerState === 1) {
           markPlaying()
         }
       } catch { /* ignore */ }
     }
 
-    // Fallback: if YouTube never confirms in 4s, mark as playing anyway
-    // (handles browsers that block postMessage responses)
     const fallbackTimeout = setTimeout(markPlaying, 4000)
-
     window.addEventListener('message', onMessage)
+
     return () => {
-      fired = true // Prevent any late callbacks from running after unmount
+      fired = true
       clearInterval(tryInterval)
       clearTimeout(fallbackTimeout)
       window.removeEventListener('message', onMessage)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [webinar.video_url])
 
   // ---- Video setup (evergreen offset + block controls) ----
