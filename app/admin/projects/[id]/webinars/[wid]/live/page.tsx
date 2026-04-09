@@ -225,6 +225,74 @@ export default function LivePage() {
 
       <div className="page-body" style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 700 }}>
 
+        {/* SESSION CLOCK — primary action */}
+        <div className="card" style={{
+          border: isLive ? '1px solid rgba(34,197,94,0.4)' : '1px solid var(--border)',
+          background: isLive ? 'rgba(34,197,94,0.04)' : 'var(--bg-card)',
+        }}>
+          {scheduleRecurrence === 'once' ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                    <div style={{
+                      width: 10, height: 10, borderRadius: '50%',
+                      background: isLive ? '#22c55e' : 'var(--border)',
+                      boxShadow: isLive ? '0 0 8px #22c55e' : 'none',
+                      animation: isLive ? 'livePulse 1.5s ease-in-out infinite' : 'none',
+                    }} />
+                    <span style={{ fontWeight: 700, fontSize: 16 }}>
+                      {isLive ? 'Sessão em andamento' : 'Sessão não iniciada'}
+                    </span>
+                  </div>
+                  {isLive && (
+                    <div style={{ fontSize: 13, color: 'var(--success)', fontFamily: 'monospace', marginBottom: 4 }}>
+                      ⏱ {elapsed}
+                    </div>
+                  )}
+                  <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 420 }}>
+                    {isLive
+                      ? `Todos os participantes que entrarem verão o vídeo a partir do segundo correto. Reiniciar zerou o clock.`
+                      : 'Clique em Iniciar para que todos os participantes vejam o mesmo ponto do vídeo em tempo real.'}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
+                  <button
+                    className="btn btn-primary"
+                    style={{ minWidth: 200 }}
+                    onClick={startSession}
+                    disabled={restarting}
+                  >
+                    {restarting ? '⏳ Iniciando...' : isLive ? '🔄 Reiniciar Sessão' : '▶ Iniciar Sessão'}
+                  </button>
+                  {isLive && (
+                    <button className="btn btn-ghost btn-sm" onClick={stopSession} style={{ textAlign: 'center' }}>
+                      ✕ Parar e remover clock
+                    </button>
+                  )}
+                </div>
+              </div>
+            </>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{
+                width: 10, height: 10, borderRadius: '50%',
+                background: '#3b82f6',
+                boxShadow: '0 0 8px #3b82f6',
+                animation: 'livePulse 2s ease-in-out infinite',
+              }} />
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>Piloto Automático (Evergreen)</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+                  O modo de início manual está desativado pois você configurou um agendamento recorrente. 
+                  As sessões iniciarão e desligarão sozinhas nos horários programados.
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* SCHEDULING */}
         <div className="card">
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>🗓 Agendamento</div>
@@ -270,84 +338,84 @@ export default function LivePage() {
           {/* Daily: just time */}
           {scheduleRecurrence === 'daily' && (
             <div style={{ marginBottom: 12 }}>
-              <label className="form-label">Horário diário</label>
-              <input
-                type="time"
-                className="form-input"
-                value={scheduleTime}
-                onChange={e => setScheduleTime(e.target.value)}
-                style={{ width: 160 }}
-              />
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                O webinar recomeça do início todos os dias neste horário.
-              </div>
+               <label className="form-label">Horário diário</label>
+               <input
+                 type="time"
+                 className="form-input"
+                 value={scheduleTime}
+                 onChange={e => setScheduleTime(e.target.value)}
+                 style={{ width: 160 }}
+               />
+               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                 O webinar recomeça do início todos os dias neste horário.
+               </div>
             </div>
           )}
 
           {/* Weekly: day checkboxes + time */}
           {scheduleRecurrence === 'weekly' && (
             <div style={{ marginBottom: 12 }}>
-              <label className="form-label">Dias da semana</label>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-                {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setScheduleDays(prev =>
-                      prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]
-                    )}
-                    style={{
-                      width: 40, height: 40, borderRadius: 8, fontSize: 11, fontWeight: 700,
-                      border: `1px solid ${scheduleDays.includes(i) ? 'var(--brand)' : 'var(--border)'}`,
-                      background: scheduleDays.includes(i) ? 'rgba(99,102,241,0.15)' : 'transparent',
-                      color: scheduleDays.includes(i) ? 'var(--brand)' : 'var(--text-muted)',
-                      cursor: 'pointer', transition: 'all 0.15s',
-                    }}
-                  >
-                    {d}
-                  </button>
-                ))}
-              </div>
-              <label className="form-label">Horário</label>
-              <input
-                type="time"
-                className="form-input"
-                value={scheduleTime}
-                onChange={e => setScheduleTime(e.target.value)}
-                style={{ width: 160 }}
-              />
+               <label className="form-label">Dias da semana</label>
+               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+                 {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map((d, i) => (
+                   <button
+                     key={i}
+                     onClick={() => setScheduleDays(prev =>
+                       prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]
+                     )}
+                     style={{
+                       width: 40, height: 40, borderRadius: 8, fontSize: 11, fontWeight: 700,
+                       border: `1px solid ${scheduleDays.includes(i) ? 'var(--brand)' : 'var(--border)'}`,
+                       background: scheduleDays.includes(i) ? 'rgba(99,102,241,0.15)' : 'transparent',
+                       color: scheduleDays.includes(i) ? 'var(--brand)' : 'var(--text-muted)',
+                       cursor: 'pointer', transition: 'all 0.15s',
+                     }}
+                   >
+                     {d}
+                   </button>
+                 ))}
+               </div>
+               <label className="form-label">Horário</label>
+               <input
+                 type="time"
+                 className="form-input"
+                 value={scheduleTime}
+                 onChange={e => setScheduleTime(e.target.value)}
+                 style={{ width: 160 }}
+               />
             </div>
           )}
 
           {/* Monthly: day of month + time */}
           {scheduleRecurrence === 'monthly' && (
             <div style={{ marginBottom: 12 }}>
-              <label className="form-label">Dia do mês e horário</label>
-              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Dia</span>
-                <select
-                  className="form-input"
-                  value={scheduledAt ? new Date(scheduledAt).getDate() : 1}
-                  onChange={e => {
-                    const d = scheduledAt ? new Date(scheduledAt) : new Date()
-                    d.setDate(Number(e.target.value))
-                    const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
-                    setScheduledAt(local)
-                  }}
-                  style={{ width: 80 }}
-                >
-                  {Array.from({ length: 31 }, (_, i) => i + 1).map(n => (
-                    <option key={n} value={n}>{n}</option>
-                  ))}
-                </select>
-                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>às</span>
-                <input
-                  type="time"
-                  className="form-input"
-                  value={scheduleTime}
-                  onChange={e => setScheduleTime(e.target.value)}
-                  style={{ width: 120 }}
-                />
-              </div>
+               <label className="form-label">Dia do mês e horário</label>
+               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                 <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Dia</span>
+                 <select
+                   className="form-input"
+                   value={scheduledAt ? new Date(scheduledAt).getDate() : 1}
+                   onChange={e => {
+                     const d = scheduledAt ? new Date(scheduledAt) : new Date()
+                     d.setDate(Number(e.target.value))
+                     const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+                     setScheduledAt(local)
+                   }}
+                   style={{ width: 80 }}
+                 >
+                   {Array.from({ length: 31 }, (_, i) => i + 1).map(n => (
+                     <option key={n} value={n}>{n}</option>
+                   ))}
+                 </select>
+                 <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>às</span>
+                 <input
+                   type="time"
+                   className="form-input"
+                   value={scheduleTime}
+                   onChange={e => setScheduleTime(e.target.value)}
+                   style={{ width: 120 }}
+                 />
+               </div>
             </div>
           )}
 
@@ -381,61 +449,13 @@ export default function LivePage() {
 
           <div style={{ display: 'flex', gap: 8 }}>
             <button className="btn btn-primary btn-sm" onClick={saveScheduled} disabled={savingScheduled}>
-              {savingScheduled ? '⏳...' : '💾 Salvar agendamento'}
+               {savingScheduled ? '⏳...' : '💾 Salvar agendamento'}
             </button>
             {(scheduledAt || scheduleRecurrence !== 'once') && (
               <button className="btn btn-ghost btn-sm" onClick={clearScheduled}>
                 ✕ Remover agendamento
               </button>
             )}
-          </div>
-        </div>
-
-        {/* SESSION CLOCK — primary action */}
-        <div className="card" style={{
-          border: isLive ? '1px solid rgba(34,197,94,0.4)' : '1px solid var(--border)',
-          background: isLive ? 'rgba(34,197,94,0.04)' : 'var(--bg-card)',
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                <div style={{
-                  width: 10, height: 10, borderRadius: '50%',
-                  background: isLive ? '#22c55e' : 'var(--border)',
-                  boxShadow: isLive ? '0 0 8px #22c55e' : 'none',
-                  animation: isLive ? 'livePulse 1.5s ease-in-out infinite' : 'none',
-                }} />
-                <span style={{ fontWeight: 700, fontSize: 16 }}>
-                  {isLive ? 'Sessão em andamento' : 'Sessão não iniciada'}
-                </span>
-              </div>
-              {isLive && (
-                <div style={{ fontSize: 13, color: 'var(--success)', fontFamily: 'monospace', marginBottom: 4 }}>
-                  ⏱ {elapsed}
-                </div>
-              )}
-              <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 420 }}>
-                {isLive
-                  ? `Todos os participantes que entrarem verão o vídeo a partir do segundo correto. Reiniciar zerou o clock.`
-                  : 'Clique em Iniciar para que todos os participantes vejam o mesmo ponto do vídeo em tempo real.'}
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-              <button
-                className="btn btn-primary"
-                style={{ minWidth: 200 }}
-                onClick={startSession}
-                disabled={restarting}
-              >
-                {restarting ? '⏳ Iniciando...' : isLive ? '🔄 Reiniciar Sessão' : '▶ Iniciar Sessão'}
-              </button>
-              {isLive && (
-                <button className="btn btn-ghost btn-sm" onClick={stopSession} style={{ textAlign: 'center' }}>
-                  ✕ Parar e remover clock
-                </button>
-              )}
-            </div>
           </div>
         </div>
 

@@ -225,7 +225,7 @@ export const CHAT_PHRASES_ELOGIOS = [
   'Vocês são incríveis!',
   'Quero mais conteúdo assim!',
   'Compartilhei com 3 amigos já haha',
-  'Melhor webinar que já assisti!',
+  'Melhor aula que já assisti! 🔥',
 ]
 
 export const CHAT_PHRASES_VAGA = [
@@ -258,8 +258,8 @@ export const CHAT_PHRASES_ENGAJAMENTO = [
   'Tomando notas aqui, tudo muito útil',
   'Isso aqui vale ouro 💰',
   'Quem mais tá anotando tudo?',
-  'Conteúdo de R$10.000 de graça!',
-  'Cada minuto vale muito aqui',
+  'Conteúdo de R$ 10.000 de graça!',
+  'Cada minuto aqui vale muito',
   'Acompanhando do trabalho, valeu demais!',
   'Entrei com dúvida e já tá sendo respondida',
   'Meu sócio precisa ver isso 😅',
@@ -370,16 +370,28 @@ export default function WebinarRoom({ webinar, events }: Props) {
   // YouTube overlay state
   const ytIframeRef = useRef<HTMLIFrameElement>(null)
   const [ytPlaying, setYtPlaying] = useState(false)
+  // ytMuted tracks whether user has explicitly clicked to unmute
   const [ytMuted, setYtMuted] = useState(true)
   const sessionOnBgRef = useRef(false)
 
+  const duration = webinar.duration_seconds || 3600
+  const isSessionEnded = elapsedSeconds >= duration
+
   // Scheduled start countdown — driven by next_scheduled_start (future occurrence)
+  // Initialize as 0 to avoid SSR/hydration mismatch (Date.now() differs server vs client)
   const nextScheduledStart = (webinar as unknown as Record<string, unknown>).next_scheduled_start as string | undefined
-  const [countdownToStart, setCountdownToStart] = useState(() => {
-    if (!nextScheduledStart) return 0
-    return Math.max(0, Math.ceil((new Date(nextScheduledStart).getTime() - Date.now()) / 1000))
-  })
-  const sessionIsScheduledFuture = countdownToStart > 0
+  const [countdownToStart, setCountdownToStart] = useState(0)
+  
+  // A session is active if it has formally started (has session_started_at or there's no future schedule at all) and it hasn't ended.
+  const hasStarted = !!webinar.session_started_at || !nextScheduledStart
+  const isSessionActive = hasStarted && elapsedSeconds >= 0 && !isSessionEnded
+
+  // Ref for use inside interval closures
+  const hasStartedRef = useRef(hasStarted)
+  useEffect(() => { hasStartedRef.current = hasStarted }, [hasStarted])
+  
+  // Show countdown ONLY if the session hasn't started yet OR if it ended and the next one is < 24h away.
+  const sessionIsScheduledFuture = countdownToStart > 0 && !isSessionActive && (!isSessionEnded || countdownToStart <= 86400)
 
   // Chat state (managed here, passed down to ChatPanel)
   const defaultTab = webinar.chat_default_tab ?? 'chat'
@@ -401,18 +413,23 @@ export default function WebinarRoom({ webinar, events }: Props) {
   }, [elapsedSeconds, materials])
 
   // ---- Scheduled start countdown ticker ----
+  // Initialize on client only to avoid SSR hydration mismatch
   useEffect(() => {
     if (!nextScheduledStart) return
     const targetMs = new Date(nextScheduledStart).getTime()
+    // Set initial value immediately on client
+    setCountdownToStart(Math.max(0, Math.ceil((targetMs - Date.now()) / 1000)))
     const tick = setInterval(() => {
       const remaining = Math.max(0, Math.ceil((targetMs - Date.now()) / 1000))
-      setCountdownToStart(prev => {
-        if (prev > 0 && remaining === 0) {
-          // Session just started — reload so server recomputes effective start offset
-          setTimeout(() => window.location.reload(), 500)
-        }
-        return remaining
-      })
+      setCountdownToStart(remaining)
+      if (remaining === 0) {
+        // Session just started — no page reload, just let the hasStarted flag flip on next render
+        clearInterval(tick)
+        // Force a re-check by refreshing server data via Next.js router
+        import('next/navigation').then(({ useRouter: _unused }) => {
+          window.location.reload()
+        }).catch(() => window.location.reload())
+      }
     }, 1000)
     return () => clearInterval(tick)
   }, [nextScheduledStart])
@@ -461,7 +478,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
 
     navigator.mediaSession.metadata = new MediaMetadata({
       title: webinar.display_name || webinar.name,
-      artist: 'Webinar ao Vivo',
+      artist: 'Aula Ao Vivo',
     })
 
     navigator.mediaSession.setActionHandler('play', () => video.play())
@@ -519,6 +536,13 @@ export default function WebinarRoom({ webinar, events }: Props) {
     return () => clearTimeout(t)
   }, [])
 
+  // Sync state to refs for interval closures
+  const waitingDoneRef = useRef(waitingDone)
+  useEffect(() => { waitingDoneRef.current = waitingDone }, [waitingDone])
+  
+  const ytPlayingRef = useRef(ytPlaying)
+  useEffect(() => { ytPlayingRef.current = ytPlaying }, [ytPlaying])
+
   // ---- Elapsed time counter (wall-clock aware) ----
   useEffect(() => {
     // Seed with startOffset so the counter reflects real session time
@@ -533,20 +557,35 @@ export default function WebinarRoom({ webinar, events }: Props) {
     )
 
     elapsedIntervalRef.current = setInterval(() => {
+      // Pause ticking if still in Waiting Room OR if the session hasn't formally started yet
+      if (!waitingDoneRef.current) return
+      if (!hasStartedRef.current) return
+
       const videoEl = videoRef.current
-      if (videoEl && !videoEl.paused) {
-        elapsedRef.current = Math.floor(videoEl.currentTime)
+      let currentTick = elapsedRef.current
+
+      if (videoEl) {
+        if (!videoEl.paused) currentTick = Math.floor(videoEl.currentTime)
       } else {
-        elapsedRef.current += 1
+        // Non-native videos
+        if (isYouTubeUrl(webinar.video_url || '') && !ytPlayingRef.current) {
+          // Pause ticking until YouTube starts playing
+          return
+        }
+        currentTick += 1
       }
-      setElapsedSeconds(elapsedRef.current)
+
+      elapsedRef.current = currentTick
+      setElapsedSeconds(currentTick)
+      engineRef.current?.tick(currentTick)
 
       // For non-native videos (YouTube, Vimeo, VTurb), track watch_second every 30s
-      // Native videos use onTimeUpdate (every 10s) in the video setup effect below
-      if (!isNativeVideo && elapsedRef.current > 0 && elapsedRef.current % 30 === 0) {
-        trackEvent('watch_second', elapsedRef.current)
+      // Native videos use onTimeUpdate (every 10s) in the video setup effect
+      if (!isNativeVideo && currentTick > 0 && currentTick % 30 === 0) {
+        trackEvent('watch_second', currentTick)
       }
     }, 1000)
+    
     trackEvent('joined', 0)
     return () => {
       if (elapsedIntervalRef.current) clearInterval(elapsedIntervalRef.current)
@@ -566,6 +605,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
     setViewers(initial)
 
     const interval = setInterval(() => {
+      if (!waitingDoneRef.current) return // Only start viewer simulation when in room
       const elapsed = elapsedRef.current
       const pct = Math.min(elapsed / duration, 1)
       const target = getTargetViewers(pct, vStart, vPeak, vEnd, peakPct)
@@ -610,7 +650,12 @@ export default function WebinarRoom({ webinar, events }: Props) {
       // ---- Segment-based mode ----
       const segs: ChatSegment[] = segments
       function tick() {
-        const currentTime = videoRef.current?.currentTime ?? 0
+        // Don't fire chat if session hasn't formally started
+        if (!hasStartedRef.current || !waitingDoneRef.current) {
+          cpmTimerRef.current = setTimeout(tick, 2000)
+          return
+        }
+        const currentTime = videoRef.current?.currentTime ?? elapsedRef.current
         const seg = findActiveSegment(segs, currentTime)
 
         if (!seg || seg.cpm <= 0) {
@@ -623,7 +668,8 @@ export default function WebinarRoom({ webinar, events }: Props) {
         const delay = intervalMs + (Math.random() * jitter * 2 - jitter)
 
         cpmTimerRef.current = setTimeout(() => {
-          const fireTime = videoRef.current?.currentTime ?? 0
+          if (!hasStartedRef.current || !waitingDoneRef.current) { tick(); return }
+          const fireTime = videoRef.current?.currentTime ?? elapsedRef.current
           const activeSeg = findActiveSegment(segs, fireTime)
           if (activeSeg && activeSeg.cpm > 0) {
             const phrases = getPhrasesForSegment(activeSeg)
@@ -663,7 +709,12 @@ export default function WebinarRoom({ webinar, events }: Props) {
     function scheduleNext() {
       const delay = intervalMs + (Math.random() * jitter * 2 - jitter)
       cpmTimerRef.current = setTimeout(() => {
-        const currentTime = videoRef.current?.currentTime ?? 0
+        // Guard: don't fire if session hasn't started or user is in waiting room
+        if (!hasStartedRef.current || !waitingDoneRef.current) {
+          scheduleNext()
+          return
+        }
+        const currentTime = videoRef.current?.currentTime ?? elapsedRef.current
         if (currentTime >= startSec && currentTime <= endSec) {
           const name = poolNames[Math.floor(Math.random() * poolNames.length)]
           const text = phrases[Math.floor(Math.random() * phrases.length)]
@@ -870,19 +921,14 @@ export default function WebinarRoom({ webinar, events }: Props) {
     }
 
     // Retry play every 500ms until YouTube confirms playing
+    // Start muted (browsers require this for autoplay)
     const tryInterval = setInterval(sendPlay, 500)
-
-    function unMute() {
-      ytIframeRef.current?.contentWindow?.postMessage(
-        JSON.stringify({ event: 'command', func: 'unMute', args: [] }),
-        '*'
-      )
-    }
 
     function markPlaying() {
       setYtPlaying(true)
+      // Do NOT unmute here — user must click the 🔊 button to unmute
+      // This prevents the "sound fires then stops" behavior from browser autoplay policy
       clearInterval(tryInterval)
-      unMute()
     }
 
     function onMessage(e: MessageEvent) {
@@ -1157,7 +1203,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
               gap: 12,
             }}>
               <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.06em' }}>
-                A TRANSMISSÃO COMEÇA EM
+                A AULA AO VIVO COMEÇA EM
               </div>
               <div style={{ fontSize: 52, fontWeight: 800, fontFamily: 'monospace', color: '#fff', letterSpacing: '0.04em' }}>
                 {(() => {
@@ -1169,7 +1215,24 @@ export default function WebinarRoom({ webinar, events }: Props) {
                 })()}
               </div>
               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.3)' }}>
-                Aguarde o início da transmissão ao vivo
+                Aguarde o início da aula ao vivo
+              </div>
+            </div>
+          )}
+
+          {/* Session Ended overlay */}
+          {isSessionEnded && !sessionIsScheduledFuture && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 30, background: '#000',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 16,
+            }}>
+              <div style={{ fontSize: 48 }}>✅</div>
+              <div style={{ fontSize: 24, fontWeight: 800, color: '#fff', letterSpacing: '0.04em', textAlign: 'center' }}>
+                Transmissão Encerrada
+              </div>
+              <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.6)', textAlign: 'center' }}>
+                Obrigado por participar! Fique atento às próximas sessões.
               </div>
             </div>
           )}
