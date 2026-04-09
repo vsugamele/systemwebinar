@@ -378,10 +378,17 @@ export default function WebinarRoom({ webinar, events }: Props) {
   const isSessionEnded = elapsedSeconds >= duration
 
   // Scheduled start countdown — driven by next_scheduled_start (future occurrence)
-  // Initialize as 0 to avoid SSR/hydration mismatch (Date.now() differs server vs client)
   const nextScheduledStart = (webinar as unknown as Record<string, unknown>).next_scheduled_start as string | undefined
-  const [countdownToStart, setCountdownToStart] = useState(0)
-  
+
+  // Compute ONCE on mount (same formula server and client share — no Date.now() at render time)
+  // We use a lazy initializer that runs only on the client, after hydration, to avoid mismatch.
+  // The key insight: we read nextScheduledStart from the prop which is a fixed ISO string.
+  const [countdownToStart, setCountdownToStart] = useState<number>(() => {
+    if (typeof window === 'undefined') return 0 // SSR: always 0
+    if (!nextScheduledStart) return 0
+    return Math.max(0, Math.ceil((new Date(nextScheduledStart).getTime() - Date.now()) / 1000))
+  })
+
   // A session is active if it has formally started (has session_started_at or there's no future schedule at all) and it hasn't ended.
   const hasStarted = !!webinar.session_started_at || !nextScheduledStart
   const isSessionActive = hasStarted && elapsedSeconds >= 0 && !isSessionEnded
@@ -389,7 +396,7 @@ export default function WebinarRoom({ webinar, events }: Props) {
   // Ref for use inside interval closures
   const hasStartedRef = useRef(hasStarted)
   useEffect(() => { hasStartedRef.current = hasStarted }, [hasStarted])
-  
+
   // Show countdown ONLY if the session hasn't started yet OR if it ended and the next one is < 24h away.
   const sessionIsScheduledFuture = countdownToStart > 0 && !isSessionActive && (!isSessionEnded || countdownToStart <= 86400)
 
@@ -413,22 +420,16 @@ export default function WebinarRoom({ webinar, events }: Props) {
   }, [elapsedSeconds, materials])
 
   // ---- Scheduled start countdown ticker ----
-  // Initialize on client only to avoid SSR hydration mismatch
   useEffect(() => {
     if (!nextScheduledStart) return
     const targetMs = new Date(nextScheduledStart).getTime()
-    // Set initial value immediately on client
-    setCountdownToStart(Math.max(0, Math.ceil((targetMs - Date.now()) / 1000)))
     const tick = setInterval(() => {
       const remaining = Math.max(0, Math.ceil((targetMs - Date.now()) / 1000))
       setCountdownToStart(remaining)
       if (remaining === 0) {
-        // Session just started — no page reload, just let the hasStarted flag flip on next render
         clearInterval(tick)
-        // Force a re-check by refreshing server data via Next.js router
-        import('next/navigation').then(({ useRouter: _unused }) => {
-          window.location.reload()
-        }).catch(() => window.location.reload())
+        // Reload so the server recomputes effective start offset
+        window.location.reload()
       }
     }, 1000)
     return () => clearInterval(tick)
@@ -457,6 +458,10 @@ export default function WebinarRoom({ webinar, events }: Props) {
       '  100% { transform: translateY(-120px) scale(0.8); opacity: 0; }',
       '}',
       '@keyframes spin { to { transform: rotate(360deg); } }',
+      '@keyframes pulse-btn {',
+      '  0%, 100% { transform: scale(1); box-shadow: 0 4px 32px rgba(0,0,0,0.5); }',
+      '  50% { transform: scale(1.06); box-shadow: 0 8px 40px rgba(255,255,255,0.25); }',
+      '}',
       'video::-webkit-media-controls { display: none !important; }',
       'video::-webkit-media-controls-enclosure { display: none !important; }',
       'video::-webkit-media-controls-panel { display: none !important; }',
@@ -913,39 +918,49 @@ export default function WebinarRoom({ webinar, events }: Props) {
   useEffect(() => {
     if (!isYouTubeUrl(webinar.video_url || '')) return
 
+    // 'fired' guard prevents markPlaying from running twice (once via message, once via fallback)
+    // which was causing the 1-second mute reset
+    let fired = false
+
     function sendPlay() {
+      if (fired) return // Stop sending once we know it's playing
       ytIframeRef.current?.contentWindow?.postMessage(
         JSON.stringify({ event: 'command', func: 'playVideo', args: [] }),
         '*'
       )
     }
 
-    // Retry play every 500ms until YouTube confirms playing
-    // Start muted (browsers require this for autoplay)
+    // Retry every 500ms until YouTube confirms it's playing
     const tryInterval = setInterval(sendPlay, 500)
 
     function markPlaying() {
-      setYtPlaying(true)
-      // Do NOT unmute here — user must click the 🔊 button to unmute
-      // This prevents the "sound fires then stops" behavior from browser autoplay policy
+      if (fired) return // Idempotent — only run once
+      fired = true
       clearInterval(tryInterval)
+      clearTimeout(fallbackTimeout)
+      setYtPlaying(true)
+      // Do NOT unmute here — user must click 🔊 button
+      // Browser autoplay policy requires videos to start muted;
+      // calling unMute() here would cause the audio to cut off after ~1s
     }
 
     function onMessage(e: MessageEvent) {
       try {
         const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
+        // playerState 1 = playing
         if (data?.event === 'infoDelivery' && data?.info?.playerState === 1) {
           markPlaying()
         }
       } catch { /* ignore */ }
     }
 
-    // Fallback: if YouTube never confirms in 3s, show video anyway
+    // Fallback: if YouTube never confirms in 4s, mark as playing anyway
     // (handles browsers that block postMessage responses)
-    const fallbackTimeout = setTimeout(markPlaying, 3000)
+    const fallbackTimeout = setTimeout(markPlaying, 4000)
 
     window.addEventListener('message', onMessage)
     return () => {
+      fired = true // Prevent any late callbacks from running after unmount
       clearInterval(tryInterval)
       clearTimeout(fallbackTimeout)
       window.removeEventListener('message', onMessage)
@@ -1284,21 +1299,34 @@ export default function WebinarRoom({ webinar, events }: Props) {
                   <div style={{
                     position: 'absolute', inset: 0, zIndex: 6,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: 'rgba(0,0,0,0.55)',
+                    background: 'rgba(0,0,0,0.6)',
+                    backdropFilter: 'blur(2px)',
                   }}>
                     <button
                       onClick={() => {
-                        ytIframeRef.current?.contentWindow?.postMessage(
-                          JSON.stringify({ event: 'command', func: 'unMute', args: [] }), '*'
-                        )
+                        const iframe = ytIframeRef.current
+                        if (!iframe?.contentWindow) return
+                        // Send unMute + setVolume to ensure audio activates
+                        const send = (fn: string, args: unknown[] = []) =>
+                          iframe.contentWindow!.postMessage(
+                            JSON.stringify({ event: 'command', func: fn, args }), '*'
+                          )
+                        send('unMute')
+                        send('setVolume', [100])
+                        // Retry once after 300ms in case first message was dropped
+                        setTimeout(() => {
+                          send('unMute')
+                          send('setVolume', [100])
+                        }, 300)
                         setYtMuted(false)
                       }}
                       style={{
                         background: 'rgba(255,255,255,0.95)', color: '#111',
-                        border: 'none', borderRadius: 50, padding: '14px 28px',
-                        fontSize: 15, fontWeight: 700, cursor: 'pointer',
+                        border: 'none', borderRadius: 50, padding: '16px 32px',
+                        fontSize: 16, fontWeight: 700, cursor: 'pointer',
                         display: 'flex', alignItems: 'center', gap: 10,
-                        boxShadow: '0 4px 24px rgba(0,0,0,0.4)',
+                        boxShadow: '0 4px 32px rgba(0,0,0,0.5)',
+                        animation: 'pulse-btn 1.8s ease-in-out infinite',
                       }}
                     >
                       🔊 Clique para ativar o som
