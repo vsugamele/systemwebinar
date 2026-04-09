@@ -574,11 +574,13 @@ export default function EventsPage() {
               {/* Tab switcher */}
               <div style={{ display: 'flex', gap: 4, marginBottom: 14, background: 'var(--bg-elevated)', borderRadius: 10, padding: 3 }}>
                 {[
-                  { key: 'quick' as const, label: '➕ Mensagem Pontual', desc: 'Destacar um comentário chave no vídeo' },
+                  { key: 'quick' as const, label: '➕ Ponto a Ponto', desc: 'Adicionar mensagem específica na timeline' },
+                  { key: 'ai' as const, label: '✨ LIA (Gerador IA)', desc: 'Gerar mensagens automáticas a partir do roteiro' },
                 ].map(tab => (
                   <button
                     key={tab.key}
                     onClick={() => { setChatTab(tab.key); setAiError('') }}
+                    title={tab.desc}
                     style={{
                       flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none',
                       cursor: 'pointer', fontSize: 12, fontWeight: chatTab === tab.key ? 700 : 500,
@@ -617,7 +619,60 @@ export default function EventsPage() {
                 </div>
               )}
 
-              {/* AI & Bulk generation code completely removed in favor of dynamic CPM logic from Chat Tab */}
+              {/* TAB: AI Generation */}
+              {chatTab === 'ai' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 10, padding: 14 }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>🧠 LIA - Preparar Chat Automaticamente</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
+                      Cole o <b>Roteiro ou Transcrição</b> do seu vídeo. A LIA (Inteligência Artificial) usará o motor configurado na aba "Chat & IA" do Webinar (através do OpenRouter) para analisar o conteúdo e gerar mensagens autênticas distribuídas em toda a duração do vídeo.
+                    </div>
+                    {aiError && <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 12 }}>{aiError}</div>}
+                    
+                    <textarea 
+                      className="form-input form-textarea" 
+                      placeholder="Ex: [00:00] Olá pessoal, bem vindos à Masterclass de hoje. Meu nome é... [02:30] O primeiro grande erro que vejo é... [15:00] E por isso o método X funciona." 
+                      value={aiScript} 
+                      onChange={e => setAiScript(e.target.value)} 
+                      style={{ minHeight: 120, marginBottom: 12, fontSize: 13 }}
+                    />
+                    
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+                      <div className="form-group" style={{ margin: 0, width: 150 }}>
+                        <label className="form-label" style={{ fontSize: 11 }}>Qtd. de Mensagens</label>
+                        <input type="number" className="form-input" min={1} max={200} value={aiCount} onChange={e => setAiCount(Number(e.target.value))} />
+                      </div>
+                      
+                      <button className="btn btn-primary" onClick={generateWithAI} disabled={aiGenerating || !aiScript.trim()} style={{ flex: 1, minWidth: 200, padding: '10px 16px' }}>
+                        {aiGenerating ? <span className="spinner" /> : '✨ Analisar Com IA e Gerar Chat'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {aiPreview.length > 0 && (
+                    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: 14 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--success)' }}>
+                          ✅ {aiPreview.length} mensagens geradas!
+                        </div>
+                        <button className="btn btn-success btn-sm" onClick={insertGeneratedEvents} disabled={aiInserting} style={{ padding: '6px 12px', fontSize: 12 }}>
+                          {aiInserting ? <span className="spinner" /> : '📥 Inserir todas na timeline'}
+                        </button>
+                      </div>
+                      
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto', paddingRight: 6 }}>
+                        {aiPreview.map((ev, i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-elevated)', borderRadius: 8, padding: '6px 10px', fontSize: 12 }}>
+                            <code style={{ color: 'var(--brand-light)' }}>{formatTime(ev.timestamp_seconds)}</code>
+                            <span style={{ fontWeight: 700, color: 'var(--text-primary)', flexShrink: 0 }}>{ev.author}:</span>
+                            <span style={{ color: 'var(--text-secondary)' }}>{ev.text}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Chat list */}
