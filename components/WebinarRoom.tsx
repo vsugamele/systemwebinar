@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { EventEngine } from '@/lib/event-engine'
 import { createClient } from '@/lib/supabase/client'
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import type { Webinar, WebinarEvent, ChatMessage, ChatMessagePayload, OfferPopupPayload, PitchButtonPayload, ChatSegment } from '@/types'
+import type { Webinar, WebinarEvent, ChatMessage, ChatMessagePayload, OfferPopupPayload, PitchButtonPayload, ChatSegment, PollPayload } from '@/types'
 import dynamic from 'next/dynamic'
 import ChatPanel from './ChatPanel'
 import type { Material } from './ChatPanel'
@@ -44,6 +44,26 @@ interface WebinarConfig {
   chat_default_tab?: 'chat' | 'qa'
   theme?: 'dark' | 'light' | 'youtube'
   display_name?: string
+  bad_words_filter?: boolean
+  fallback_url?: string | null
+  is_panic_active?: boolean
+  custom_background_url?: string | null
+}
+
+const PT_BAD_WORDS = [
+  'porra', 'caralho', 'buceta', 'puta', 'merda', 'bosta', 'filho da puta', 'fdp',
+  'cu', 'cú', 'arrombado', 'viado', 'corno', 'pau', 'cacete', 'caceta',
+  'foder', 'foda', 'foda-se', 'fodase', 'krl', 'vtnc', 'vsf'
+]
+
+function filterBadWords(text: string): string {
+  let filtered = text
+  PT_BAD_WORDS.forEach(word => {
+    // Escape regex chars just to be safe, though our list is safe
+    const regex = new RegExp(`\\b${word}\\b`, 'gi')
+    filtered = filtered.replace(regex, '***')
+  })
+  return filtered
 }
 
 /** Compute seconds elapsed since session_started_at (0 if not set). */
@@ -363,6 +383,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const [countdown, setCountdown] = useState(0)
   const [scarcitySpots, setScarcitySpots] = useState(0)
   const countdownRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Poll state
+  const [pollVisible, setPollVisible] = useState(false)
+  const [pollPayload, setPollPayload] = useState<PollPayload | null>(null)
+  const [pollVotedOption, setPollVotedOption] = useState<string | null>(null)
+  const [pollResults, setPollResults] = useState<Record<string, number>>({})
 
   // New feature state
   const [quizOpen, setQuizOpen] = useState(false)
@@ -789,6 +815,19 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       }
     })
 
+    // Listen to webinar updates (like Panic Button)
+    channel.on('postgres_changes', {
+      event: 'UPDATE',
+      schema: 'public',
+      table: 'webi_webinars',
+      filter: `id=eq.${webinar.id}`
+    }, (payload) => {
+      const data = payload.new
+      if (data.is_panic_active && data.fallback_url) {
+        window.location.href = data.fallback_url
+      }
+    })
+
     // Listen to fallbacks/broadcasts
     channel
       .on('broadcast', { event: 'chat-message' }, ({ payload }) => {
@@ -862,6 +901,19 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // ---- Event engine ----
   useEffect(() => {
     const engine = new EventEngine(events)
+
+    engine.on('poll', (ev) => {
+      const p = ev.payload as PollPayload
+      setPollPayload(p)
+      setPollVisible(true)
+      setPollVotedOption(null)
+      // Simulate initial votes
+      const results: Record<string, number> = {}
+      p.options.forEach(opt => {
+        results[opt] = Math.floor(Math.random() * 15) + 3
+      })
+      setPollResults(results)
+    })
 
     engine.on('chat_message', (ev) => {
       const p = ev.payload as ChatMessagePayload
@@ -1085,10 +1137,15 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   // ---- Chat message sender (called by ChatPanel.onSendMessage) ----
   async function sendChatMessage(text: string) {
+    let finalText = text
+    if (webinar.bad_words_filter) {
+      finalText = filterBadWords(finalText)
+    }
+
     const msg: ChatMessage = {
       id: Math.random().toString(36),
       author: userName,
-      text,
+      text: finalText,
       timestamp: Math.floor(videoRef.current?.currentTime || elapsedRef.current),
       isSimulated: false,
     }
@@ -1173,8 +1230,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   // ---- Q&A sender (called by ChatPanel.onSendQa) ----
   async function sendQaMessage(text: string) {
+    let finalText = text
+    if (webinar.bad_words_filter) {
+      finalText = filterBadWords(finalText)
+    }
+
     const qId = `qa-${Date.now()}`
-    setQaMessages(q => [...q, { id: qId, author: userName, text }])
+    setQaMessages(q => [...q, { id: qId, author: userName, text: finalText }])
 
     if (webinar.ai_enabled) {
       const aiName = webinar.ai_persona_name || '🤖 Assistente'
@@ -1213,7 +1275,16 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       {/* MAIN ROOM — shown after waiting */}
       {waitingDone && (
       <>
-      <div className="webinar-page-wrapper" data-theme={webinar.theme || 'dark'}>
+      <div 
+        className="webinar-page-wrapper" 
+        data-theme={webinar.theme || 'dark'}
+        style={webinar.custom_background_url ? { 
+          backgroundImage: `url(${webinar.custom_background_url})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed'
+        } : undefined}
+      >
       <div className="webinar-room">
       {/* VIDEO SECTION */}
       <div className="video-section">
@@ -1502,6 +1573,97 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 <button className="offer-dismiss" onClick={handlePopupDismiss}>
                   Não, obrigado
                 </button>
+              </div>
+            </div>
+          )}
+
+          {/* POLL OVERLAY */}
+          {pollVisible && pollPayload && (
+            <div className="offer-overlay">
+              <div className="offer-modal" style={{ maxWidth: 400, textAlign: 'left', padding: '24px 24px 32px 24px' }}>
+                <button
+                  onClick={() => setPollVisible(false)}
+                  style={{
+                    position: 'absolute', top: 16, right: 16,
+                    background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                    borderRadius: '50%', width: 32, height: 32,
+                    color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center'
+                  }}>
+                  ✕
+                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+                  <div style={{ background: 'var(--brand-glow)', width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                    📊
+                  </div>
+                  <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: '#fff' }}>Enquete</h3>
+                </div>
+                
+                <h4 style={{ fontSize: 17, fontWeight: 600, marginBottom: 20, color: '#f3f4f6', lineHeight: 1.4 }}>
+                  {pollPayload.question}
+                </h4>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {pollPayload.options.map((opt, i) => {
+                    const isVoted = pollVotedOption === opt
+                    let totalVotes = Object.values(pollResults).reduce((a, b) => a + b, 0)
+                    if (pollVotedOption) totalVotes++
+                    const myVotes = (pollResults[opt] || 0) + (isVoted ? 1 : 0)
+                    const pct = totalVotes > 0 ? Math.round((myVotes / totalVotes) * 100) : 0
+                    
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => {
+                          if (!pollVotedOption) {
+                            setPollVotedOption(opt)
+                            // Simulate small bounce of votes after clicking
+                            setTimeout(() => {
+                              setPollResults(prev => ({ ...prev, [opt]: (prev[opt] || 0) + 4 }))
+                            }, 800)
+                          }
+                        }}
+                        disabled={!!pollVotedOption}
+                        className="poll-option-btn"
+                        style={{
+                          position: 'relative',
+                          background: isVoted ? 'var(--brand-glow)' : 'var(--bg-elevated)',
+                          border: `1px solid ${isVoted ? 'var(--brand)' : 'var(--border)'}`,
+                          padding: '14px 16px',
+                          borderRadius: 8,
+                          cursor: pollVotedOption ? 'default' : 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          overflow: 'hidden',
+                          transition: 'all 0.2s',
+                          color: '#fff',
+                        }}
+                      >
+                        {/* Progress bar background (only shows after voting) */}
+                        {pollVotedOption && (
+                          <div style={{
+                            position: 'absolute', top: 0, left: 0, bottom: 0,
+                            width: `${pct}%`,
+                            background: isVoted ? 'var(--brand-glow)' : 'rgba(255,255,255,0.06)',
+                            zIndex: 1,
+                            transition: 'width 0.8s cubic-bezier(0.16, 1, 0.3, 1)'
+                          }} />
+                        )}
+                        
+                        <span style={{ position: 'relative', zIndex: 2, fontWeight: isVoted ? 600 : 400, color: isVoted ? 'var(--brand)' : '#d1d5db', textAlign: 'left', lineHeight: 1.3, paddingRight: 32 }}>
+                          {opt}
+                        </span>
+                        
+                        {pollVotedOption && (
+                          <span style={{ position: 'relative', zIndex: 2, fontSize: 13, fontWeight: 600, color: isVoted ? 'var(--brand)' : '#9ca3af' }}>
+                            {pct}%
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </div>
           )}

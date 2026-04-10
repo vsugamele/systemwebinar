@@ -13,10 +13,12 @@ export function SidebarWebinar({ projectId, webinarId }: { projectId: string; we
 
   const links = [
     { href: `/admin/projects/${projectId}/webinars/${webinarId}`, label: '⚙️ Visão Geral', exact: true },
-    { href: `/admin/projects/${projectId}/webinars/${webinarId}/events`, label: '⚡ Timeline de Eventos', exact: false },
+    { href: `/admin/projects/${projectId}/webinars/${webinarId}/registration`, label: '🧲 Pág. de Captura', exact: false },
+    { href: `/admin/projects/${projectId}/webinars/${webinarId}/events`, label: '⚡ Timeline', exact: false },
     { href: `/admin/projects/${projectId}/webinars/${webinarId}/chat`, label: '💬 Chat & IA', exact: false },
     { href: `/admin/projects/${projectId}/webinars/${webinarId}/materials`, label: '📂 Materiais', exact: false },
     { href: `/admin/projects/${projectId}/webinars/${webinarId}/quiz`, label: '📝 Quiz', exact: false },
+    { href: `/admin/projects/${projectId}/webinars/${webinarId}/leads`, label: '📇 Leads (CRM)', exact: false },
     { href: `/admin/projects/${projectId}/webinars/${webinarId}/analytics`, label: '📊 Analytics', exact: false },
   ]
 

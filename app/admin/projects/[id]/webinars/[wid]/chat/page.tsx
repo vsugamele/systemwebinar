@@ -73,6 +73,7 @@ export default function ChatConfigPage() {
   const [chatPhrasesEngajamentoRaw, setChatPhrasesEngajamentoRaw] = useState('')
   const [chatNamesRaw, setChatNamesRaw] = useState('')
   const [chatDefaultTab, setChatDefaultTab] = useState<'chat' | 'qa'>('chat')
+  const [badWordsFilter, setBadWordsFilter] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
 
@@ -81,7 +82,7 @@ export default function ChatConfigPage() {
       const [{ data }, { data: project }] = await Promise.all([
         supabase
           .from('webi_webinars')
-          .select('name, chat_cpm, chat_names, chat_default_tab, chat_mode, chat_interval_minutes, chat_interval_messages, chat_start_seconds, chat_end_seconds, chat_phrases, chat_phrases_elogios, chat_phrases_vaga, chat_phrases_engajamento, chat_segments, ai_enabled, ai_model, ai_knowledge_base, ai_system_prompt, ai_persona_name, ai_persona_avatar')
+          .select('name, chat_cpm, chat_names, chat_default_tab, chat_mode, chat_interval_minutes, chat_interval_messages, chat_start_seconds, chat_end_seconds, chat_phrases, chat_phrases_elogios, chat_phrases_vaga, chat_phrases_engajamento, chat_segments, ai_enabled, ai_model, ai_knowledge_base, ai_system_prompt, ai_persona_name, ai_persona_avatar, bad_words_filter')
           .eq('id', webinarId)
           .single(),
         supabase.from('webi_projects').select('openrouter_api_key').eq('id', projectId).single(),
@@ -114,6 +115,7 @@ export default function ChatConfigPage() {
           setSegments(segs)
           setUseSegments(true)
         }
+        setBadWordsFilter(data.bad_words_filter || false)
         setAiEnabled(data.ai_enabled || false)
         setAiModel(data.ai_model || 'google/gemini-flash-1.5')
         setAiKnowledgeBase(data.ai_knowledge_base || '')
@@ -156,6 +158,7 @@ export default function ChatConfigPage() {
         ai_system_prompt: aiSystemPrompt,
         ai_persona_name: aiPersonaName,
         ai_persona_avatar: aiPersonaAvatar,
+        bad_words_filter: badWordsFilter,
       }).eq('id', webinarId),
       supabase.from('webi_projects').update({ openrouter_api_key: projectApiKey }).eq('id', projectId)
     ])
@@ -242,6 +245,25 @@ export default function ChatConfigPage() {
                 🚫 Simulação Desativada
               </div>
             )}
+          </div>
+        </div>
+
+        {/* ---- SEGURANÇA / FILTROS ---- */}
+        <div className="card" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>🛑 Filtro de Palavrões e Ofensas</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              Quando ativo, mensagens enviadas por usuários reais contendo palavrões serão ocultadas ou ignoradas.
+            </div>
+          </div>
+          <div>
+            <button
+              type="button"
+              className={`btn ${badWordsFilter ? 'btn-primary' : 'btn-ghost'}`}
+              onClick={() => setBadWordsFilter(!badWordsFilter)}
+            >
+              {badWordsFilter ? '✅ Filtro Ativo' : 'Ativar Filtro'}
+            </button>
           </div>
         </div>
 

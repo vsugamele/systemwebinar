@@ -6,7 +6,7 @@ export interface ChatSegment {
   cpm: number
   phrases?: 'elogios' | 'vaga' | 'engajamento' | 'todas' | null
 }
-export type EventType = 'chat_message' | 'offer_popup' | 'pitch_button' | 'hide_pitch_button' | 'email_auto'
+export type EventType = 'chat_message' | 'offer_popup' | 'pitch_button' | 'hide_pitch_button' | 'email_auto' | 'poll'
 export type SessionEventType = 'joined' | 'watch_second' | 'cta_clicked' | 'cta_dismissed' | 'popup_seen' | 'popup_dismissed' | 'left' | 'chat_sent'
 
 export interface Project {
@@ -75,6 +75,15 @@ export interface Webinar {
   whatsapp_api_key?: string | null
   whatsapp_welcome_message?: string | null
   whatsapp_pitch_message?: string | null
+  // New features
+  bad_words_filter?: boolean
+  fallback_url?: string | null
+  is_panic_active?: boolean
+  custom_background_url?: string | null
+  // Landing Page
+  landing_headline?: string | null
+  landing_subheadline?: string | null
+  landing_button_text?: string | null
 }
 
 // ---- Event Payloads ----
@@ -114,7 +123,13 @@ export type EventPayload =
   | OfferPopupPayload
   | PitchButtonPayload
   | EmailAutoPayload
+  | PollPayload
   | Record<string, never>
+
+export interface PollPayload {
+  question: string
+  options: string[] // Array of option strings
+}
 
 export interface WebinarEvent {
   id: string
@@ -134,6 +149,7 @@ export interface Lead {
   phone: string | null
   attended: boolean
   registered_at: string
+  metadata?: Record<string, any>
 }
 
 export interface SessionEvent {

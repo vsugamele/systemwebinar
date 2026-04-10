@@ -37,6 +37,11 @@ export default function LivePage() {
   const [scheduleDays, setScheduleDays] = useState<number[]>([])
   const [savingScheduled, setSavingScheduled] = useState(false)
   const [scheduleTimeUntil, setScheduleTimeUntil] = useState('')
+
+  // Panic Button states
+  const [isPanicActive, setIsPanicActive] = useState(false)
+  const [fallbackUrl, setFallbackUrl] = useState('')
+
   const [form, setForm] = useState({
     fake_viewers_start: 50,
     fake_viewers_peak: 500,
@@ -47,7 +52,7 @@ export default function LivePage() {
   useEffect(() => {
     supabase
       .from('webi_webinars')
-      .select('name, slug, display_name, session_started_at, scheduled_start_at, schedule_recurrence, schedule_time, schedule_days, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct')
+      .select('name, slug, display_name, session_started_at, scheduled_start_at, schedule_recurrence, schedule_time, schedule_days, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct, is_panic_active, fallback_url')
       .eq('id', wid)
       .single()
       .then(({ data, error }) => {
@@ -60,6 +65,8 @@ export default function LivePage() {
           setScheduleRecurrence((data.schedule_recurrence as 'once' | 'daily' | 'weekly' | 'monthly') || 'once')
           setScheduleTime(data.schedule_time || '20:00')
           setScheduleDays((data.schedule_days as number[]) || [])
+          setIsPanicActive(data.is_panic_active || false)
+          setFallbackUrl(data.fallback_url || '')
           if (data.scheduled_start_at) {
             // Convert to local datetime-local format
             const d = new Date(data.scheduled_start_at)
@@ -179,6 +186,25 @@ export default function LivePage() {
       setSessionStartedAt(null)
     } catch {
       toast.error('Erro ao encerrar sessão.')
+    }
+  }
+
+  async function togglePanic(active: boolean) {
+    if (active && (!fallbackUrl || !fallbackUrl.startsWith('http'))) {
+      toast.error('Informe uma URL de fallback válida antes de ativar o Pânico.')
+      return
+    }
+
+    try {
+      const { error } = await supabase.from('webi_webinars').update({
+        is_panic_active: active,
+        fallback_url: fallbackUrl
+      }).eq('id', wid)
+      if (error) throw error
+      setIsPanicActive(active)
+      toast.success(active ? 'Botão de Pânico ATIVADO! Usuários serão redirecionados.' : 'Botão de Pânico Desativado.')
+    } catch {
+      toast.error('Erro ao atualizar Pânico.')
     }
   }
 
@@ -455,6 +481,44 @@ export default function LivePage() {
               <button className="btn btn-ghost btn-sm" onClick={clearScheduled}>
                 ✕ Remover agendamento
               </button>
+            )}
+          </div>
+        </div>
+
+        {/* PANIC BUTTON */}
+        <div className="card" style={{ border: isPanicActive ? '1px solid #ef4444' : '1px solid var(--border)', background: isPanicActive ? 'rgba(239,68,68,0.05)' : 'var(--bg-card)' }}>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, color: isPanicActive ? '#ef4444' : 'inherit' }}>🚨 Botão de Pânico</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+            Em caso de emergência ou queda da transmissão, ative para redirecionar todos os participantes imediatamente para uma URL de suporte ou sala reserva.
+          </div>
+          
+          <div style={{ marginBottom: 16 }}>
+            <label className="form-label">URL de Fallback / Redirecionamento</label>
+            <input
+              type="url"
+              className="form-input"
+              value={fallbackUrl}
+              onChange={e => setFallbackUrl(e.target.value)}
+              placeholder="https://..."
+              style={{ width: '100%' }}
+              disabled={isPanicActive}
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            {!isPanicActive ? (
+              <button className="btn btn-primary" style={{ background: '#ef4444', borderColor: '#ef4444' }} onClick={() => togglePanic(true)}>
+                🚨 Ativar Pânico
+              </button>
+            ) : (
+              <button className="btn btn-primary" onClick={() => togglePanic(false)}>
+                ✅ Desativar e Normalizar
+              </button>
+            )}
+            {isPanicActive && (
+               <div style={{ fontSize: 12, color: '#ef4444', alignSelf: 'center', fontWeight: 'bold' }}>
+                 Redirecionamento Ativo!
+               </div>
             )}
           </div>
         </div>

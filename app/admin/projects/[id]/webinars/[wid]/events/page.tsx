@@ -14,6 +14,7 @@ const EVENT_TYPES = [
   { type: 'pitch_button', label: 'Botão de Pitch', icon: '🛒', chipClass: 'chip-pitch' },
   { type: 'hide_pitch_button', label: 'Ocultar Pitch', icon: '🙈', chipClass: 'chip-pitch' },
   { type: 'email_auto', label: 'E-mail Automático', icon: '📧', chipClass: 'chip-email' },
+  { type: 'poll', label: 'Enquete', icon: '📊', chipClass: 'chip-poll' },
 ]
 
 const emptyPayloads: Record<EventType, object> = {
@@ -29,6 +30,7 @@ const emptyPayloads: Record<EventType, object> = {
   },
   hide_pitch_button: {},
   email_auto: { template: 'followup', delay_minutes: 10 },
+  poll: { question: '', options: ['Sim', 'Não'] },
 }
 
 function formatTime(seconds: number) {
@@ -1094,6 +1096,22 @@ export default function EventsPage() {
                     <label className="form-label">Delay pós-webinar (minutos)</label>
                     <input type="number" className="form-input" value={form.payload.delay_minutes || 10}
                       onChange={e => updatePayload('delay_minutes', Number(e.target.value))} />
+                  </div>
+                </>
+              )}
+
+              {form.type === 'poll' && (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Pergunta da Enquete</label>
+                    <input className="form-input" placeholder="Ex: Você já investe em ações?"
+                      value={form.payload.question || ''} onChange={e => updatePayload('question', e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Opções (uma por linha)</label>
+                    <textarea className="form-input form-textarea" placeholder="Sim&#10;Ainda não&#10;Quero aprender"
+                      value={(form.payload.options || []).join('\n')}
+                      onChange={e => updatePayload('options', e.target.value.split('\n'))} />
                   </div>
                 </>
               )}

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams, useRouter } from 'next/navigation'
 import { toast } from 'react-hot-toast'
@@ -21,6 +21,7 @@ interface WebinarData {
   whatsapp_api_key?: string
   whatsapp_welcome_message?: string
   whatsapp_pitch_message?: string
+  custom_background_url?: string | null
 }
 
 export default function WebinarOverviewPage() {
@@ -44,7 +45,29 @@ export default function WebinarOverviewPage() {
     whatsapp_api_key: '',
     whatsapp_welcome_message: '',
     whatsapp_pitch_message: '',
+    custom_background_url: '',
   })
+
+  const [uploading, setUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  async function uploadImage(file: File): Promise<string | null> {
+    setUploading(true)
+    try {
+      const ext = file.name.split('.').pop()
+      const path = `webinar-backgrounds/${wid}/${Date.now()}.${ext}`
+      const { error } = await supabase.storage
+        .from('webinar-images')
+        .upload(path, file, { upsert: true, contentType: file.type })
+      if (error) throw error
+      const { data: pub } = supabase.storage.from('webinar-images').getPublicUrl(path)
+      return pub?.publicUrl || null
+    } catch {
+      return null
+    } finally {
+      setUploading(false)
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -63,6 +86,7 @@ export default function WebinarOverviewPage() {
           whatsapp_api_key: w.whatsapp_api_key || '',
           whatsapp_welcome_message: w.whatsapp_welcome_message || '',
           whatsapp_pitch_message: w.whatsapp_pitch_message || '',
+          custom_background_url: w.custom_background_url || '',
         })
       }
       setLoading(false)
@@ -85,6 +109,7 @@ export default function WebinarOverviewPage() {
       whatsapp_api_key: form.whatsapp_api_key,
       whatsapp_welcome_message: form.whatsapp_welcome_message,
       whatsapp_pitch_message: form.whatsapp_pitch_message,
+      custom_background_url: form.custom_background_url || null,
     }).eq('id', wid)
     
     setSaving(false)
@@ -94,7 +119,7 @@ export default function WebinarOverviewPage() {
     } else {
       toast.success('Configurações salvas!')
       // Update local state to reflect new saved values
-      setWebinar(w => w ? { ...w, name: form.name, video_url: form.video_url, waiting_room_enabled: form.waiting_room_enabled, waiting_delay_seconds: form.waiting_delay_seconds, tracking_head_code: form.tracking_head_code, tracking_body_code: form.tracking_body_code, webhook_url: form.webhook_url, whatsapp_api_url: form.whatsapp_api_url, whatsapp_api_key: form.whatsapp_api_key, whatsapp_welcome_message: form.whatsapp_welcome_message, whatsapp_pitch_message: form.whatsapp_pitch_message } : null)
+      setWebinar(w => w ? { ...w, name: form.name, video_url: form.video_url, waiting_room_enabled: form.waiting_room_enabled, waiting_delay_seconds: form.waiting_delay_seconds, tracking_head_code: form.tracking_head_code, tracking_body_code: form.tracking_body_code, webhook_url: form.webhook_url, whatsapp_api_url: form.whatsapp_api_url, whatsapp_api_key: form.whatsapp_api_key, whatsapp_welcome_message: form.whatsapp_welcome_message, whatsapp_pitch_message: form.whatsapp_pitch_message, custom_background_url: form.custom_background_url } : null)
       router.refresh()
     }
   }
@@ -354,6 +379,50 @@ export default function WebinarOverviewPage() {
             A aparência da sala (sidebar do chat, cabeçalho e cores) que seu público vai experimentar.
           </div>
           <ThemeSelector webinarId={wid} currentTheme={webinar.theme || 'dark'} />
+
+          <hr style={{ border: '0', borderTop: '1px solid var(--border)', margin: '24px 0' }} />
+
+          <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>🖼️ Imagem de Fundo (Custom Background)</h3>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+            Substitua o fundo embaçado (blur do vídeo) por uma imagem personalizada. Se deixar vazio, usaremos o padrão.
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input
+              type="text"
+              className="form-input"
+              style={{ flex: 1 }}
+              value={form.custom_background_url}
+              onChange={e => setForm({ ...form, custom_background_url: e.target.value })}
+              placeholder="https://sua-imagem.com/fundo.jpg"
+              disabled={uploading}
+            />
+            <input 
+              type="file" 
+              accept="image/*" 
+              ref={fileInputRef} 
+              style={{ display: 'none' }} 
+              onChange={async (e) => {
+                const file = e.target.files?.[0]
+                if (!file) return
+                const url = await uploadImage(file)
+                if (url) {
+                  setForm(f => ({ ...f, custom_background_url: url }))
+                  toast.success('Imagem enviada com sucesso!')
+                } else {
+                  toast.error('Erro ao enviar imagem.')
+                }
+                if (fileInputRef.current) fileInputRef.current.value = ''
+              }}
+            />
+            <button 
+              type="button"
+              className="btn btn-ghost"
+              disabled={uploading}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {uploading ? '⏳ Enviando...' : '📁 Upload'}
+            </button>
+          </div>
         </div>
 
         {/* SAVE BOTTOM ROW */}
