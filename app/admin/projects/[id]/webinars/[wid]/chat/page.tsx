@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useCallback, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -37,6 +37,155 @@ function fmtSec(s: number | null): string {
   const m = Math.floor(s / 60)
   const sec = s % 60
   return m > 0 ? `${m}m ${sec}s` : `${sec}s`
+}
+
+const AVATAR_COLORS = ['#6366f1','#8b5cf6','#ec4899','#f59e0b','#10b981','#3b82f6','#ef4444','#14b8a6']
+
+function getAvatarColor(name: string) {
+  let h = 0
+  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) & 0xffffffff
+  return AVATAR_COLORS[Math.abs(h) % AVATAR_COLORS.length]
+}
+
+type PreviewMsg = { id: number; name: string; text: string; type: string }
+
+function ChatPreview({
+  running, messages, namesPool, phrasesPool, cpm,
+  onRunningChange, onMessagesChange, timerRef, counterRef,
+}: {
+  running: boolean
+  messages: PreviewMsg[]
+  namesPool: string[]
+  phrasesPool: string[]
+  cpm: number
+  onRunningChange: (v: boolean) => void
+  onMessagesChange: (fn: (prev: PreviewMsg[]) => PreviewMsg[]) => void
+  timerRef: React.MutableRefObject<ReturnType<typeof setTimeout> | null>
+  counterRef: React.MutableRefObject<number>
+}) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const intervalMs = Math.max(1500, Math.round(60000 / Math.max(cpm, 1)))
+
+  const addMessage = useCallback(() => {
+    if (!namesPool.length || !phrasesPool.length) return
+    const name = namesPool[Math.floor(Math.random() * namesPool.length)]
+    const text = phrasesPool[Math.floor(Math.random() * phrasesPool.length)]
+    counterRef.current++
+    onMessagesChange(prev => [...prev.slice(-19), { id: counterRef.current, name, text, type: 'chat' }])
+  }, [namesPool, phrasesPool, onMessagesChange, counterRef])
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
+    }
+  }, [messages])
+
+  useEffect(() => {
+    if (!running) {
+      if (timerRef.current) clearInterval(timerRef.current)
+      return
+    }
+    timerRef.current = setInterval(addMessage, intervalMs)
+    return () => { if (timerRef.current) clearInterval(timerRef.current) }
+  }, [running, intervalMs, addMessage, timerRef])
+
+  function handleStart() {
+    addMessage() // immediate first
+    onRunningChange(true)
+  }
+  function handlePause() { onRunningChange(false) }
+  function handleReset() {
+    onRunningChange(false)
+    onMessagesChange(() => [])
+    counterRef.current = 0
+  }
+
+  const effectiveInterval = intervalMs >= 60000
+    ? `${Math.round(intervalMs / 60000)}min`
+    : intervalMs >= 1000
+    ? `${(intervalMs / 1000).toFixed(0)}s`
+    : `${intervalMs}ms`
+
+  return (
+    <div style={{ width: '100%' }}>
+      {/* Controls row */}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', marginBottom: 12, flexWrap: 'wrap' }}>
+        {!running ? (
+          <button type="button" className="btn btn-primary btn-sm" onClick={handleStart}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            ▶ Simular
+          </button>
+        ) : (
+          <button type="button" className="btn btn-ghost btn-sm" onClick={handlePause}
+            style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            ⏸ Pausar
+          </button>
+        )}
+        <button type="button" className="btn btn-ghost btn-sm" onClick={handleReset}>↺ Resetar</button>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+          {cpm} msg/min · 1 msg a cada {effectiveInterval}
+          {running && <span style={{ marginLeft: 8, color: '#10b981', fontWeight: 700 }}>● ao vivo</span>}
+        </div>
+      </div>
+
+      {/* Chat window mock */}
+      <div ref={scrollRef} style={{
+        height: 320, overflowY: 'auto', overflowX: 'hidden',
+        background: 'var(--bg)', borderRadius: 12,
+        border: '1px solid var(--border)', padding: '12px 14px',
+        display: 'flex', flexDirection: 'column', gap: 10,
+        scrollBehavior: 'smooth',
+      }}>
+        {messages.length === 0 && (
+          <div style={{
+            flex: 1, display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 8,
+            color: 'var(--text-muted)', fontSize: 13
+          }}>
+            <span style={{ fontSize: 32 }}>💬</span>
+            <span>Clique em ▶ Simular para ver o chat em ação</span>
+          </div>
+        )}
+        {messages.map(msg => (
+          <div key={msg.id} style={{
+            display: 'flex', gap: 10, alignItems: 'flex-start',
+            animation: 'fadeSlideIn 0.25s ease',
+          }}>
+            {/* Avatar */}
+            <div style={{
+              width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+              background: getAvatarColor(msg.name),
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 13, fontWeight: 700, color: '#fff',
+            }}>
+              {msg.name.charAt(0).toUpperCase()}
+            </div>
+            {/* Bubble */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: getAvatarColor(msg.name), marginBottom: 2 }}>
+                {msg.name.split(' ')[0]}
+              </div>
+              <div style={{
+                fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.5,
+                background: 'var(--bg-elevated)', borderRadius: '0 10px 10px 10px',
+                padding: '7px 12px', display: 'inline-block', maxWidth: '100%',
+                wordBreak: 'break-word',
+              }}>
+                {msg.text}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <style>{`
+        @keyframes fadeSlideIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
+    </div>
+  )
 }
 
 export default function ChatConfigPage() {
@@ -90,6 +239,13 @@ export default function ChatConfigPage() {
     phrasesVaga: string[]
     segments: { from: number; to: number | null; cpm: number; phrases: string | null }[]
   }>(null)
+
+  // Preview live state
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewRunning, setPreviewRunning] = useState(false)
+  const [previewMessages, setPreviewMessages] = useState<{ id: number; name: string; text: string; type: string }[]>([])
+  const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const previewCounterRef = useRef(0)
 
   async function handleGenerateAi() {
     if (!aiScriptText.trim()) return toast.error('Digite o roteiro ou contexto da aula.')
@@ -872,6 +1028,53 @@ export default function ChatConfigPage() {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* ---- LIVE PREVIEW ---- */}
+        <div className="card" style={{ overflow: 'hidden', padding: 0 }}>
+          {/* Header */}
+          <button
+            type="button"
+            onClick={() => setPreviewOpen(v => !v)}
+            style={{
+              width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '14px 20px', background: 'none', cursor: 'pointer',
+              borderBottom: previewOpen ? '1px solid var(--border)' : 'none',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 18 }}>👁</span>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>Preview do Chat ao Vivo</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Veja como as mensagens aparecerão para os espectadores</div>
+              </div>
+            </div>
+            <span style={{ color: 'var(--text-muted)', fontSize: 18, transition: 'transform 0.2s', transform: previewOpen ? 'rotate(180deg)' : 'none' }}>▾</span>
+          </button>
+
+          {previewOpen && (
+            <div style={{ padding: '16px 20px' }}>
+              {/* Controls */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16, flexWrap: 'wrap' }}>
+                <ChatPreview
+                  running={previewRunning}
+                  messages={previewMessages}
+                  namesPool={namesArray.length > 0 ? namesArray : DEFAULT_NAMES}
+                  phrasesPool={[
+                    ...(chatPhrasesRaw ? chatPhrasesRaw.split('\n').filter(Boolean) : []),
+                    ...(chatPhrasesElogiosRaw ? chatPhrasesElogiosRaw.split('\n').filter(Boolean) : CHAT_PHRASES_ELOGIOS),
+                    ...(chatPhrasesEngajamentoRaw ? chatPhrasesEngajamentoRaw.split('\n').filter(Boolean) : CHAT_PHRASES_ENGAJAMENTO),
+                    ...(chatPhrasesVagaRaw ? chatPhrasesVagaRaw.split('\n').filter(Boolean) : CHAT_PHRASES_VAGA),
+                  ]}
+                  cpm={chatCpm > 0 ? chatCpm : 5}
+                  onRunningChange={setPreviewRunning}
+                  onMessagesChange={setPreviewMessages}
+                  timerRef={previewTimerRef}
+                  counterRef={previewCounterRef}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
         {/* ---- BROADCAST INFO ---- */}
