@@ -1021,49 +1021,52 @@ export default function ChatConfigPage() {
             <button type="button" className={`btn btn-sm ${chatCpm === 8 && chatMode === 'cpm' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => { setChatMode('cpm'); setChatCpm(8); }}>🚶 Normal</button>
             <button type="button" className={`btn btn-sm ${chatCpm === 15 && chatMode === 'cpm' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => { setChatMode('cpm'); setChatCpm(15); }}>🔥 Agitado</button>
             <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--border)', margin: '0 8px' }} />
-            <button type="button" className={`btn btn-sm ${(chatCpm !== 2 && chatCpm !== 8 && chatCpm !== 15) || chatMode === 'interval' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => { setChatMode('cpm'); setChatCpm(0); }}>⚙️ Personalizado</button>
             
-            {((chatCpm !== 2 && chatCpm !== 8 && chatCpm !== 15) || chatMode === 'interval') && (
-              <select className="form-input" style={{ width: 180, padding: '6px 10px', fontSize: 13 }} value={chatMode} onChange={e => setChatMode(e.target.value as any)}>
-                <option value="cpm">Acompanhar via CPM (Msgs/Minuto)</option>
-                <option value="interval">Acompanhar via Intervalo (Por msgs)</option>
-              </select>
-            )}
+            <select className="form-input" style={{ width: 220, padding: '6px 10px', fontSize: 13 }} value={chatMode} onChange={e => setChatMode(e.target.value as any)}>
+              <option value="cpm">Velocidade (CPM / msgs por min)</option>
+              <option value="interval">Intervalo exato</option>
+            </select>
           </div>
 
           {chatMode === 'cpm' ? (
-            <>
-              {(chatCpm !== 2 && chatCpm !== 8 && chatCpm !== 15) && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <input
-                    type="range" min={0} max={300} step={1}
-                    value={chatCpm}
-                    onChange={e => setChatCpm(Number(e.target.value))}
-                    style={{ flex: 1, accentColor: 'var(--brand)' }}
-                  />
-                  <div style={{
-                    background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-                    borderRadius: 8, padding: '8px 16px', minWidth: 80, textAlign: 'center'
-                  }}>
-                    <span style={{ fontSize: 22, fontWeight: 800, color: chatCpm > 0 ? 'var(--brand-light)' : 'var(--text-muted)' }}>
-                      {chatCpm}
-                    </span>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>msg/min</div>
-                    {chatCpm > 0 && (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
-                        {chatCpm > 30
-                          ? `≈ ${(chatCpm / 60).toFixed(1)}/s`
-                          : `1 a cada ${Math.round(60 / chatCpm)}s`}
-                      </div>
-                    )}
-                    {chatCpm >= 60 && (
-                      <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', marginTop: 2 }}>ENXURRADA</div>
-                    )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <input
+                type="range" min={0} max={300} step={1}
+                value={chatCpm}
+                onChange={e => setChatCpm(Number(e.target.value))}
+                style={{ flex: 1, accentColor: 'var(--brand)' }}
+              />
+              <div style={{
+                background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                borderRadius: 8, padding: '8px 12px', minWidth: 100, textAlign: 'center',
+                display: 'flex', flexDirection: 'column', alignItems: 'center'
+              }}>
+                <input
+                  type="number"
+                  value={chatCpm}
+                  onChange={e => setChatCpm(Number(e.target.value))}
+                  style={{ 
+                    fontSize: 22, fontWeight: 800, textAlign: 'center', 
+                    color: chatCpm > 0 ? 'var(--brand-light)' : 'var(--text-muted)',
+                    background: 'transparent', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.1)', 
+                    outline: 'none', width: '100%', padding: '0 0 2px 0'
+                  }}
+                  min={0}
+                  max={999}
+                />
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>msg/min</div>
+                {chatCpm > 0 && (
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                    {chatCpm > 30
+                      ? `≈ ${(chatCpm / 60).toFixed(1)}/s`
+                      : `1 a cada ${Math.round(60 / chatCpm)}s`}
                   </div>
-                </div>
-              )}
-            </>
-
+                )}
+                {chatCpm >= 60 && (
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', marginTop: 2 }}>ENXURRADA</div>
+                )}
+              </div>
+            </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <input
