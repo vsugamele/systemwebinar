@@ -188,6 +188,200 @@ function ChatPreview({
   )
 }
 
+const SEG_COLORS: Record<string, { bg: string; border: string; text: string; label: string; icon: string }> = {
+  mix:        { bg: '#6366f122', border: '#6366f1', text: '#6366f1', label: 'Mix',        icon: '✨' },
+  elogios:    { bg: '#3b82f622', border: '#3b82f6', text: '#3b82f6', label: 'Elogios',    icon: '👏' },
+  engajamento:{ bg: '#f59e0b22', border: '#f59e0b', text: '#d97706', label: 'Engajamento',icon: '🔥' },
+  vaga:       { bg: '#10b98122', border: '#10b981', text: '#059669', label: 'Vaga',        icon: '🎉' },
+}
+
+function SegmentTimeline({
+  segments, onUpdate, onRemove, onAdd, videoDurationSec,
+}: {
+  segments: ChatSegment[]
+  onUpdate: (idx: number, patch: Partial<ChatSegment>) => void
+  onRemove: (idx: number) => void
+  onAdd: () => void
+  videoDurationSec: number
+}) {
+  const [activeIdx, setActiveIdx] = useState<number | null>(null)
+  const totalSec = videoDurationSec || Math.max(...segments.map(s => s.to ?? 0), 3600)
+
+  function segColor(seg: ChatSegment) {
+    const key = seg.phrases ?? 'mix'
+    return SEG_COLORS[key] ?? SEG_COLORS.mix
+  }
+
+  function pct(sec: number | null) {
+    if (sec == null) return 100
+    return Math.min(100, Math.max(0, (sec / totalSec) * 100))
+  }
+
+  // detect gaps
+  const sortedSegs = [...segments].sort((a, b) => a.from - b.from)
+
+  return (
+    <div>
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+        {Object.entries(SEG_COLORS).map(([k, c]) => (
+          <div key={k} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12, color: c.text }}>
+            <div style={{ width: 10, height: 10, borderRadius: 2, background: c.border }} />
+            {c.icon} {c.label}
+          </div>
+        ))}
+      </div>
+
+      {/* Timeline bar */}
+      {segments.length === 0 ? (
+        <div style={{
+          height: 56, borderRadius: 10, border: '2px dashed var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 13, color: 'var(--text-muted)', cursor: 'pointer',
+        }} onClick={onAdd}>
+          Clique em "+ Adicionar Segmento" para começar →
+        </div>
+      ) : (
+        <div style={{
+          position: 'relative', height: 56, borderRadius: 10,
+          background: 'var(--bg)', border: '1px solid var(--border)',
+          overflow: 'hidden', marginBottom: 12,
+        }}>
+          {sortedSegs.map((seg, idx) => {
+            const left = pct(seg.from)
+            const right = 100 - pct(seg.to)
+            const c = segColor(seg)
+            const isActive = activeIdx === idx
+            return (
+              <button
+                key={idx}
+                type="button"
+                title={`${fmtSec(seg.from)} → ${fmtSec(seg.to)} · ${seg.cpm} msg/min`}
+                onClick={() => setActiveIdx(isActive ? null : idx)}
+                style={{
+                  position: 'absolute', top: 4, bottom: 4,
+                  left: `${left}%`, right: `${right}%`,
+                  minWidth: 20,
+                  background: c.bg,
+                  border: `2px solid ${c.border}`,
+                  borderRadius: 7,
+                  cursor: 'pointer',
+                  display: 'flex', flexDirection: 'column',
+                  alignItems: 'center', justifyContent: 'center',
+                  fontSize: 11, fontWeight: 700, color: c.text,
+                  overflow: 'hidden',
+                  boxShadow: isActive ? `0 0 0 2px ${c.border}` : 'none',
+                  transition: 'box-shadow 0.15s',
+                }}
+              >
+                <span style={{ fontSize: 14 }}>{c.icon}</span>
+                <span style={{ fontSize: 10, whiteSpace: 'nowrap', overflow: 'hidden', maxWidth: '100%', textOverflow: 'ellipsis', padding: '0 4px' }}>
+                  {seg.cpm}cpm
+                </span>
+              </button>
+            )
+          })}
+          {/* Tick marks */}
+          {[0, 25, 50, 75, 100].map(p => (
+            <div key={p} style={{
+              position: 'absolute', top: 0, bottom: 0, left: `${p}%`,
+              width: 1, background: 'var(--border)', opacity: 0.4, pointerEvents: 'none',
+            }} />
+          ))}
+        </div>
+      )}
+
+      {/* Time labels */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginBottom: 16 }}>
+        <span>0:00</span>
+        <span>{fmtSec(Math.round(totalSec * 0.25))}</span>
+        <span>{fmtSec(Math.round(totalSec * 0.5))}</span>
+        <span>{fmtSec(Math.round(totalSec * 0.75))}</span>
+        <span>{fmtSec(totalSec)}</span>
+      </div>
+
+      {/* Inline editor for selected segment */}
+      {activeIdx !== null && segments[activeIdx] && (
+        <div style={{
+          background: 'var(--bg-elevated)', border: `1.5px solid ${segColor(segments[activeIdx]).border}`,
+          borderRadius: 12, padding: '16px', marginBottom: 14, animation: 'fadeSlideIn 0.2s ease',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <span style={{ fontWeight: 700, fontSize: 14 }}>
+              {segColor(segments[activeIdx]).icon} Editando Segmento {activeIdx + 1}
+            </span>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button type="button" className="btn btn-ghost btn-sm" style={{ color: '#ef4444' }}
+                onClick={() => { onRemove(activeIdx); setActiveIdx(null) }}>
+                🗑 Remover
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setActiveIdx(null)}>✕ Fechar</button>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 2fr', gap: 12 }}>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                De (seg)
+              </label>
+              <input type="number" min={0} className="form-input" style={{ fontSize: 13 }}
+                value={segments[activeIdx].from}
+                onChange={e => onUpdate(activeIdx, { from: Number(e.target.value) })} />
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{fmtSec(segments[activeIdx].from)}</div>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Até (seg)
+              </label>
+              <input type="number" min={0} className="form-input" style={{ fontSize: 13 }}
+                value={segments[activeIdx].to ?? ''}
+                placeholder="fim"
+                onChange={e => onUpdate(activeIdx, { to: e.target.value === '' ? null : Number(e.target.value) })} />
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{fmtSec(segments[activeIdx].to)}</div>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Intensidade
+              </label>
+              <input type="number" min={0} max={300} className="form-input" style={{ fontSize: 13 }}
+                value={segments[activeIdx].cpm}
+                onChange={e => onUpdate(activeIdx, { cpm: Number(e.target.value) })} />
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{segments[activeIdx].cpm} msg/min</div>
+            </div>
+            <div>
+              <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Pool de Frases
+              </label>
+              <select className="form-input form-select" style={{ fontSize: 13 }}
+                value={segments[activeIdx].phrases ?? ''}
+                onChange={e => onUpdate(activeIdx, { phrases: e.target.value === '' ? null : e.target.value as ChatSegment['phrases'] })}>
+                {PHRASE_OPTIONS.map(opt => (
+                  <option key={String(opt.value)} value={opt.value ?? ''}>{opt.label}</option>
+                ))}
+              </select>
+              {/* CPM presets inside segment editor */}
+              <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                {([{ label: '🐢 Lento', v: 2 }, { label: '🚶 Normal', v: 8 }, { label: '🔥 Agitado', v: 15 }] as const).map(p => (
+                  <button key={p.v} type="button"
+                    className={`btn btn-sm ${segments[activeIdx].cpm === p.v ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: 11, padding: '3px 8px' }}
+                    onClick={() => onUpdate(activeIdx, { cpm: p.v })}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <button type="button" className="btn btn-ghost btn-sm" onClick={onAdd}>
+        + Adicionar Segmento
+      </button>
+    </div>
+  )
+}
+
 export default function ChatConfigPage() {
   const { id: projectId, wid: webinarId } = useParams<{ id: string; wid: string }>()
   const supabase = createClient()
@@ -612,109 +806,20 @@ export default function ChatConfigPage() {
             Configure CPMs e frases diferentes para cada trecho do vídeo. Quando ativo, sobrepõe as configurações globais abaixo.
           </div>
 
-          {useSegments && (
-            <>
-              {/* Table header */}
-              <div style={{
-                display: 'grid', gridTemplateColumns: '90px 90px 80px 1fr 36px',
-                gap: 8, marginBottom: 6,
-                fontSize: 11, fontWeight: 700, color: 'var(--text-muted)',
-                textTransform: 'uppercase', letterSpacing: '0.06em',
-                paddingBottom: 6, borderBottom: '1px solid var(--border)',
-              }}>
-                <span>De (seg)</span>
-                <span>Até (seg)</span>
-                <span>CPM</span>
-                <span>Frases</span>
-                <span />
+          {useSegments ? (
+            <SegmentTimeline
+              segments={segments}
+              onUpdate={updateSegment}
+              onRemove={removeSegment}
+              onAdd={addSegment}
+              videoDurationSec={chatEndSeconds ? Number(chatEndSeconds) : 3600}
+            />
+          ) : (
+            segments.length > 0 && (
+              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                {segments.length} segmento(s) salvos, mas desativados. Ative para usar.
               </div>
-
-              {segments.length === 0 && (
-                <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '12px 0' }}>
-                  Nenhum segmento ainda. Clique em &quot;+ Adicionar&quot; para começar.
-                </div>
-              )}
-
-              {segments.map((seg, idx) => (
-                <div key={idx} style={{
-                  display: 'grid', gridTemplateColumns: '90px 90px 80px 1fr 36px',
-                  gap: 8, marginBottom: 8, alignItems: 'center',
-                }}>
-                  <input
-                    type="number" min={0}
-                    className="form-input"
-                    style={{ fontSize: 13 }}
-                    value={seg.from}
-                    onChange={e => updateSegment(idx, { from: Number(e.target.value) })}
-                    placeholder="0"
-                  />
-                  <input
-                    type="number" min={0}
-                    className="form-input"
-                    style={{ fontSize: 13 }}
-                    value={seg.to ?? ''}
-                    onChange={e => updateSegment(idx, { to: e.target.value === '' ? null : Number(e.target.value) })}
-                    placeholder="fim"
-                  />
-                  <input
-                    type="number" min={0} max={300}
-                    className="form-input"
-                    style={{ fontSize: 13 }}
-                    value={seg.cpm}
-                    onChange={e => updateSegment(idx, { cpm: Number(e.target.value) })}
-                  />
-                  <select
-                    className="form-input form-select"
-                    style={{ fontSize: 13 }}
-                    value={seg.phrases ?? ''}
-                    onChange={e => updateSegment(idx, {
-                      phrases: e.target.value === '' ? null : e.target.value as ChatSegment['phrases']
-                    })}
-                  >
-                    {PHRASE_OPTIONS.map(opt => (
-                      <option key={String(opt.value)} value={opt.value ?? ''}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    style={{ color: 'var(--text-muted)', padding: '0 8px' }}
-                    onClick={() => removeSegment(idx)}
-                  >
-                    🗑
-                  </button>
-                </div>
-              ))}
-
-              {/* Summary */}
-              {segments.length > 0 && (
-                <div style={{
-                  fontSize: 12, color: 'var(--text-muted)', marginTop: 4, marginBottom: 10,
-                  background: 'var(--bg)', borderRadius: 6, padding: '6px 10px',
-                }}>
-                  {segments.map((s, i) => (
-                    <span key={i}>
-                      {i > 0 && <span style={{ margin: '0 6px', opacity: 0.4 }}>→</span>}
-                      <span style={{ color: s.cpm > 0 ? 'var(--brand-light)' : 'var(--text-muted)' }}>
-                        {fmtSec(s.from)}–{fmtSec(s.to)} ({s.cpm} cpm)
-                      </span>
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              <button type="button" className="btn btn-ghost btn-sm" onClick={addSegment}>
-                + Adicionar Segmento
-              </button>
-            </>
-          )}
-
-          {!useSegments && segments.length > 0 && (
-            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-              {segments.length} segmento(s) salvos, mas desativados. Ative para usar.
-            </div>
+            )
           )}
         </div>
 
