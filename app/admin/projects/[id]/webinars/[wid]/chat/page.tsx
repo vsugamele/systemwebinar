@@ -474,7 +474,7 @@ export default function ChatConfigPage() {
 
           {chatMode === 'cpm' ? (
             <>
-              {((chatCpm !== 2 && chatCpm !== 8 && chatCpm !== 15) || chatMode === 'interval') && (
+              {(chatCpm !== 2 && chatCpm !== 8 && chatCpm !== 15) && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                   <input
                     type="range" min={0} max={300} step={1}
