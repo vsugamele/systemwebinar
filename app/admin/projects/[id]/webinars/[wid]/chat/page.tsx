@@ -188,6 +188,47 @@ function ChatPreview({
   )
 }
 
+// ---- Time helpers ----
+function secToMmss(sec: number | null): string {
+  if (sec == null || sec === 0) return ''
+  const m = Math.floor(sec / 60)
+  const s = sec % 60
+  return `${m}:${String(s).padStart(2, '0')}`
+}
+function mmssToSec(val: string): number {
+  const trimmed = val.trim()
+  if (!trimmed) return 0
+  if (trimmed.includes(':')) {
+    const [m, s] = trimmed.split(':').map(Number)
+    return (isNaN(m) ? 0 : m) * 60 + (isNaN(s) ? 0 : s)
+  }
+  return isNaN(Number(trimmed)) ? 0 : Number(trimmed)
+}
+
+function MmssInput({ value, onChange, placeholder }: { value: number | null; onChange: (v: number | null) => void; placeholder?: string }) {
+  const [localVal, setLocalVal] = useState(value != null && value > 0 ? secToMmss(value) : '')
+  const handleBlur = () => {
+    if (!localVal.trim()) { onChange(null); return }
+    onChange(mmssToSec(localVal))
+  }
+  return (
+    <div>
+      <input
+        type="text"
+        className="form-input"
+        style={{ fontSize: 13 }}
+        placeholder={placeholder ?? 'MM:SS (ex: 5:30)'}
+        value={localVal}
+        onChange={e => setLocalVal(e.target.value)}
+        onBlur={handleBlur}
+      />
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
+        {localVal ? `= ${fmtSec(mmssToSec(localVal))}` : placeholder === 'fim' ? 'Até o fim' : 'Desde o início'}
+      </div>
+    </div>
+  )
+}
+
 const SEG_COLORS: Record<string, { bg: string; border: string; text: string; label: string; icon: string }> = {
   mix:        { bg: '#6366f122', border: '#6366f1', text: '#6366f1', label: 'Mix',        icon: '✨' },
   elogios:    { bg: '#3b82f622', border: '#3b82f6', text: '#3b82f6', label: 'Elogios',    icon: '👏' },
@@ -204,7 +245,8 @@ function SegmentTimeline({
   onAdd: () => void
   videoDurationSec: number
 }) {
-  const [activeIdx, setActiveIdx] = useState<number | null>(null)
+  // activeOrigIdx stores the INDEX in the **original** segments array
+  const [activeOrigIdx, setActiveOrigIdx] = useState<number | null>(null)
   const totalSec = videoDurationSec || Math.max(...segments.map(s => s.to ?? 0), 3600)
 
   function segColor(seg: ChatSegment) {
@@ -217,8 +259,10 @@ function SegmentTimeline({
     return Math.min(100, Math.max(0, (sec / totalSec) * 100))
   }
 
-  // detect gaps
-  const sortedSegs = [...segments].sort((a, b) => a.from - b.from)
+  // Preserve original index through sort so editor always refs the right segment
+  const sortedSegs = segments
+    .map((seg, originalIdx) => ({ seg, originalIdx }))
+    .sort((a, b) => a.seg.from - b.seg.from)
 
   return (
     <div>
@@ -247,17 +291,17 @@ function SegmentTimeline({
           background: 'var(--bg)', border: '1px solid var(--border)',
           overflow: 'hidden', marginBottom: 12,
         }}>
-          {sortedSegs.map((seg, idx) => {
+          {sortedSegs.map(({ seg, originalIdx }) => {
             const left = pct(seg.from)
             const right = 100 - pct(seg.to)
             const c = segColor(seg)
-            const isActive = activeIdx === idx
+            const isActive = activeOrigIdx === originalIdx
             return (
               <button
-                key={idx}
+                key={originalIdx}
                 type="button"
                 title={`${fmtSec(seg.from)} → ${fmtSec(seg.to)} · ${seg.cpm} msg/min`}
-                onClick={() => setActiveIdx(isActive ? null : idx)}
+                onClick={() => setActiveOrigIdx(isActive ? null : originalIdx)}
                 style={{
                   position: 'absolute', top: 4, bottom: 4,
                   left: `${left}%`, right: `${right}%`,
@@ -300,76 +344,79 @@ function SegmentTimeline({
         <span>{fmtSec(totalSec)}</span>
       </div>
 
-      {/* Inline editor for selected segment */}
-      {activeIdx !== null && segments[activeIdx] && (
+      {/* Inline editor for selected segment (uses originalIdx → always correct segment) */}
+      {activeOrigIdx !== null && segments[activeOrigIdx] && (
         <div style={{
-          background: 'var(--bg-elevated)', border: `1.5px solid ${segColor(segments[activeIdx]).border}`,
+          background: 'var(--bg-elevated)', border: `1.5px solid ${segColor(segments[activeOrigIdx]).border}`,
           borderRadius: 12, padding: '16px', marginBottom: 14, animation: 'fadeSlideIn 0.2s ease',
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <span style={{ fontWeight: 700, fontSize: 14 }}>
-              {segColor(segments[activeIdx]).icon} Editando Segmento {activeIdx + 1}
+              {segColor(segments[activeOrigIdx]).icon} Editando Segmento {activeOrigIdx + 1} —{' '}
+              <span style={{ fontWeight: 400, color: 'var(--text-muted)', fontSize: 13 }}>
+                {fmtSec(segments[activeOrigIdx].from)} → {fmtSec(segments[activeOrigIdx].to)}
+              </span>
             </span>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="button" className="btn btn-ghost btn-sm" style={{ color: '#ef4444' }}
-                onClick={() => { onRemove(activeIdx); setActiveIdx(null) }}>
+                onClick={() => { onRemove(activeOrigIdx); setActiveOrigIdx(null) }}>
                 🗑 Remover
               </button>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setActiveIdx(null)}>✕ Fechar</button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setActiveOrigIdx(null)}>✕ Fechar</button>
             </div>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 2fr', gap: 12 }}>
             <div>
               <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                De (seg)
+                Início (MM:SS)
               </label>
-              <input type="number" min={0} className="form-input" style={{ fontSize: 13 }}
-                value={segments[activeIdx].from}
-                onChange={e => onUpdate(activeIdx, { from: Number(e.target.value) })} />
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{fmtSec(segments[activeIdx].from)}</div>
+              <MmssInput
+                value={segments[activeOrigIdx].from}
+                onChange={v => onUpdate(activeOrigIdx, { from: v ?? 0 })}
+                placeholder="0:00"
+              />
             </div>
             <div>
               <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Até (seg)
+                Fim (MM:SS)
               </label>
-              <input type="number" min={0} className="form-input" style={{ fontSize: 13 }}
-                value={segments[activeIdx].to ?? ''}
+              <MmssInput
+                value={segments[activeOrigIdx].to}
+                onChange={v => onUpdate(activeOrigIdx, { to: v === 0 ? null : v })}
                 placeholder="fim"
-                onChange={e => onUpdate(activeIdx, { to: e.target.value === '' ? null : Number(e.target.value) })} />
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{fmtSec(segments[activeIdx].to)}</div>
+              />
             </div>
             <div>
               <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Intensidade
               </label>
               <input type="number" min={0} max={300} className="form-input" style={{ fontSize: 13 }}
-                value={segments[activeIdx].cpm}
-                onChange={e => onUpdate(activeIdx, { cpm: Number(e.target.value) })} />
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{segments[activeIdx].cpm} msg/min</div>
+                value={segments[activeOrigIdx].cpm}
+                onChange={e => onUpdate(activeOrigIdx, { cpm: Number(e.target.value) })} />
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{segments[activeOrigIdx].cpm} msg/min</div>
+              <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
+                {([{ label: '🐢', v: 2 }, { label: '🚶', v: 8 }, { label: '🔥', v: 15 }] as const).map(p => (
+                  <button key={p.v} type="button"
+                    className={`btn btn-sm ${segments[activeOrigIdx].cpm === p.v ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ fontSize: 11, padding: '3px 8px' }}
+                    onClick={() => onUpdate(activeOrigIdx, { cpm: p.v })}>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
             </div>
             <div>
               <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', display: 'block', marginBottom: 4, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 Pool de Frases
               </label>
               <select className="form-input form-select" style={{ fontSize: 13 }}
-                value={segments[activeIdx].phrases ?? ''}
-                onChange={e => onUpdate(activeIdx, { phrases: e.target.value === '' ? null : e.target.value as ChatSegment['phrases'] })}>
+                value={segments[activeOrigIdx].phrases ?? ''}
+                onChange={e => onUpdate(activeOrigIdx, { phrases: e.target.value === '' ? null : e.target.value as ChatSegment['phrases'] })}>
                 {PHRASE_OPTIONS.map(opt => (
                   <option key={String(opt.value)} value={opt.value ?? ''}>{opt.label}</option>
                 ))}
               </select>
-              {/* CPM presets inside segment editor */}
-              <div style={{ display: 'flex', gap: 4, marginTop: 6, flexWrap: 'wrap' }}>
-                {([{ label: '🐢 Lento', v: 2 }, { label: '🚶 Normal', v: 8 }, { label: '🔥 Agitado', v: 15 }] as const).map(p => (
-                  <button key={p.v} type="button"
-                    className={`btn btn-sm ${segments[activeIdx].cpm === p.v ? 'btn-primary' : 'btn-ghost'}`}
-                    style={{ fontSize: 11, padding: '3px 8px' }}
-                    onClick={() => onUpdate(activeIdx, { cpm: p.v })}>
-                    {p.label}
-                  </button>
-                ))}
-              </div>
             </div>
           </div>
         </div>
@@ -378,6 +425,142 @@ function SegmentTimeline({
       <button type="button" className="btn btn-ghost btn-sm" onClick={onAdd}>
         + Adicionar Segmento
       </button>
+    </div>
+  )
+}
+
+// ---- Phrase Pool Editor (Fix 3) ----
+const PHRASE_COLORS: Record<string, { active: string; border: string; bg: string }> = {
+  mix:        { active: '#8b5cf6', border: '#8b5cf622', bg: '#8b5cf608' },
+  elogios:    { active: '#3b82f6', border: '#3b82f622', bg: '#3b82f608' },
+  engajamento:{ active: '#f59e0b', border: '#f59e0b22', bg: '#f59e0b08' },
+  vaga:       { active: '#10b981', border: '#10b98122', bg: '#10b98108' },
+}
+
+function PhrasePoolEditor({
+  poolKey, icon, title, description,
+  defaultPhrases, selected, onChange,
+}: {
+  poolKey: string
+  icon: string
+  title: string
+  description: string
+  defaultPhrases: string[]
+  selected: string[]
+  onChange: (v: string[]) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [customInput, setCustomInput] = useState('')
+  const [customPhrases, setCustomPhrases] = useState<string[]>([])
+  const colors = PHRASE_COLORS[poolKey] ?? PHRASE_COLORS.mix
+  const allPhrases = [...defaultPhrases, ...customPhrases]
+
+  function toggle(phrase: string) {
+    if (selected.includes(phrase)) {
+      onChange(selected.filter(p => p !== phrase))
+    } else {
+      onChange([...selected, phrase])
+    }
+  }
+
+  function addCustom() {
+    const trimmed = customInput.trim()
+    if (!trimmed || allPhrases.includes(trimmed)) { setCustomInput(''); return }
+    setCustomPhrases(prev => [...prev, trimmed])
+    onChange([...selected, trimmed])
+    setCustomInput('')
+  }
+
+  function selectAll() { onChange(allPhrases) }
+  function clearAll() { onChange([]) }
+
+  const activeCount = selected.length
+
+  return (
+    <div style={{ background: 'var(--bg-elevated)', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)' }}>
+      {/* Header / trigger */}
+      <button
+        type="button"
+        onClick={() => setOpen(v => !v)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+          padding: '14px 16px', background: 'none', cursor: 'pointer',
+          borderBottom: open ? '1px solid var(--border)' : 'none',
+        }}
+      >
+        <span style={{ fontSize: 18 }}>{icon}</span>
+        <div style={{ flex: 1, textAlign: 'left' }}>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>{title}</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{description}</div>
+        </div>
+        <span style={{
+          background: activeCount > 0 ? colors.active + '22' : 'var(--bg)',
+          color: activeCount > 0 ? colors.active : 'var(--text-muted)',
+          fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
+          border: `1px solid ${activeCount > 0 ? colors.active + '44' : 'var(--border)'}`,
+          minWidth: 60, textAlign: 'center',
+        }}>
+          {activeCount > 0 ? `${activeCount} ativas` : 'padrão'}
+        </span>
+        <span style={{ color: 'var(--text-muted)', fontSize: 14, transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
+      </button>
+
+      {open && (
+        <div style={{ padding: 16 }}>
+          {/* Actions */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={selectAll}>✅ Todas</button>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={clearAll} style={{ color: '#ef4444' }}>✕ Nenhuma (usar padrão)</button>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)', marginLeft: 'auto' }}>
+              {activeCount}/{allPhrases.length} selecionadas
+            </span>
+          </div>
+
+          {/* Pills grid */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+            {allPhrases.map((phrase, i) => {
+              const isSelected = selected.includes(phrase)
+              const isCustom = i >= defaultPhrases.length
+              return (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => toggle(phrase)}
+                  style={{
+                    padding: '6px 12px', borderRadius: 20, fontSize: 12,
+                    cursor: 'pointer', transition: 'all 0.15s',
+                    background: isSelected ? colors.active + '22' : 'var(--bg)',
+                    border: `1.5px solid ${isSelected ? colors.active : 'var(--border)'}`,
+                    color: isSelected ? colors.active : 'var(--text-secondary)',
+                    fontWeight: isSelected ? 600 : 400,
+                    display: 'flex', alignItems: 'center', gap: 4,
+                  }}
+                >
+                  {isCustom && <span style={{ fontSize: 10, opacity: 0.6 }}>★</span>}
+                  {phrase}
+                  {isSelected && <span style={{ fontSize: 10 }}>✓</span>}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Add custom phrase */}
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Adicionar frase personalizada..."
+              value={customInput}
+              onChange={e => setCustomInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), addCustom())}
+              style={{ flex: 1, fontSize: 13 }}
+            />
+            <button type="button" className="btn btn-ghost btn-sm" onClick={addCustom} disabled={!customInput.trim()}>
+              + Adicionar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -410,11 +593,10 @@ export default function ChatConfigPage() {
   const [chatIntervalMessages, setChatIntervalMessages] = useState(1)
   const [chatStartSeconds, setChatStartSeconds] = useState(0)
   const [chatEndSeconds, setChatEndSeconds] = useState<string>('')
-  const [activePoolTab, setActivePoolTab] = useState<'mix' | 'elogios' | 'vaga' | 'engajamento'>('mix')
-  const [chatPhrasesRaw, setChatPhrasesRaw] = useState('')
-  const [chatPhrasesElogiosRaw, setChatPhrasesElogiosRaw] = useState('')
-  const [chatPhrasesVagaRaw, setChatPhrasesVagaRaw] = useState('')
-  const [chatPhrasesEngajamentoRaw, setChatPhrasesEngajamentoRaw] = useState('')
+  const [chatPhrasesMix, setChatPhrasesMix] = useState<string[]>([])
+  const [chatPhrasesElogios, setChatPhrasesElogios] = useState<string[]>([])
+  const [chatPhrasesVaga, setChatPhrasesVaga] = useState<string[]>([])
+  const [chatPhrasesEngajamento, setChatPhrasesEngajamento] = useState<string[]>([])
   const [chatNamesRaw, setChatNamesRaw] = useState('')
   const [chatDefaultTab, setChatDefaultTab] = useState<'chat' | 'qa'>('chat')
   const [badWordsFilter, setBadWordsFilter] = useState(false)
@@ -454,10 +636,10 @@ export default function ChatConfigPage() {
       if (!res.ok) throw new Error(json.error || 'Erro ao gerar chat falso')
 
       if (json.names?.length) setChatNamesRaw(json.names.join('\n'))
-      if (json.phrasesMix?.length) setChatPhrasesRaw(json.phrasesMix.join('\n'))
-      if (json.phrasesElogios?.length) setChatPhrasesElogiosRaw(json.phrasesElogios.join('\n'))
-      if (json.phrasesEngajamento?.length) setChatPhrasesEngajamentoRaw(json.phrasesEngajamento.join('\n'))
-      if (json.phrasesVaga?.length) setChatPhrasesVagaRaw(json.phrasesVaga.join('\n'))
+      if (json.phrasesMix?.length) setChatPhrasesMix(json.phrasesMix)
+      if (json.phrasesElogios?.length) setChatPhrasesElogios(json.phrasesElogios)
+      if (json.phrasesEngajamento?.length) setChatPhrasesEngajamento(json.phrasesEngajamento)
+      if (json.phrasesVaga?.length) setChatPhrasesVaga(json.phrasesVaga)
       const parsedSegments = json.segments?.length
         ? json.segments.map((s: any) => ({ from: s.from, to: s.to, cpm: s.cpm || 5, phrases: s.phrases === 'mix' ? null : s.phrases }))
         : []
@@ -510,16 +692,16 @@ export default function ChatConfigPage() {
         const names = data.chat_names as string[] | null
         if (Array.isArray(names) && names.length > 0) setChatNamesRaw(names.join('\n'))
         const phrases = data.chat_phrases as string[] | null
-        if (Array.isArray(phrases) && phrases.length > 0) setChatPhrasesRaw(phrases.join('\n'))
+        if (Array.isArray(phrases) && phrases.length > 0) setChatPhrasesMix(phrases)
 
         const phrasesElogios = (data as any).chat_phrases_elogios as string[] | null
-        if (Array.isArray(phrasesElogios) && phrasesElogios.length > 0) setChatPhrasesElogiosRaw(phrasesElogios.join('\n'))
+        if (Array.isArray(phrasesElogios) && phrasesElogios.length > 0) setChatPhrasesElogios(phrasesElogios)
         
         const phrasesVaga = (data as any).chat_phrases_vaga as string[] | null
-        if (Array.isArray(phrasesVaga) && phrasesVaga.length > 0) setChatPhrasesVagaRaw(phrasesVaga.join('\n'))
+        if (Array.isArray(phrasesVaga) && phrasesVaga.length > 0) setChatPhrasesVaga(phrasesVaga)
         
         const phrasesEngajamento = (data as any).chat_phrases_engajamento as string[] | null
-        if (Array.isArray(phrasesEngajamento) && phrasesEngajamento.length > 0) setChatPhrasesEngajamentoRaw(phrasesEngajamento.join('\n'))
+        if (Array.isArray(phrasesEngajamento) && phrasesEngajamento.length > 0) setChatPhrasesEngajamento(phrasesEngajamento)
 
         if (data.chat_default_tab === 'qa') setChatDefaultTab('qa')
         const segs = data.chat_segments as ChatSegment[] | null
@@ -544,10 +726,6 @@ export default function ChatConfigPage() {
   async function save() {
     setSaving(true)
     const namesArray = chatNamesRaw.split('\n').map(n => n.trim()).filter(Boolean)
-    const phrasesArray = chatPhrasesRaw.split('\n').map(p => p.trim()).filter(Boolean)
-    const elogiosArray = chatPhrasesElogiosRaw.split('\n').map(p => p.trim()).filter(Boolean)
-    const vagaArray = chatPhrasesVagaRaw.split('\n').map(p => p.trim()).filter(Boolean)
-    const engajamentoArray = chatPhrasesEngajamentoRaw.split('\n').map(p => p.trim()).filter(Boolean)
     const endSec = chatEndSeconds.trim() !== '' ? Number(chatEndSeconds) : null
     await Promise.all([
       supabase.from('webi_webinars').update({
@@ -559,10 +737,10 @@ export default function ChatConfigPage() {
         chat_interval_messages: chatIntervalMessages,
         chat_start_seconds: chatStartSeconds,
         chat_end_seconds: endSec,
-        chat_phrases: phrasesArray.length > 0 ? phrasesArray : null,
-        chat_phrases_elogios: elogiosArray.length > 0 ? elogiosArray : null,
-        chat_phrases_vaga: vagaArray.length > 0 ? vagaArray : null,
-        chat_phrases_engajamento: engajamentoArray.length > 0 ? engajamentoArray : null,
+        chat_phrases: chatPhrasesMix.length > 0 ? chatPhrasesMix : null,
+        chat_phrases_elogios: chatPhrasesElogios.length > 0 ? chatPhrasesElogios : null,
+        chat_phrases_vaga: chatPhrasesVaga.length > 0 ? chatPhrasesVaga : null,
+        chat_phrases_engajamento: chatPhrasesEngajamento.length > 0 ? chatPhrasesEngajamento : null,
         chat_segments: useSegments && segments.length > 0 ? segments : null,
         ai_enabled: aiEnabled,
         ai_model: aiModel,
@@ -597,10 +775,10 @@ export default function ChatConfigPage() {
 
   // ---- Computed diagnostics ----
   const diagNamesCount = namesArray.length
-  const diagMixCount = chatPhrasesRaw.split('\n').filter(l => l.trim()).length
-  const diagElogiosCount = chatPhrasesElogiosRaw.split('\n').filter(l => l.trim()).length
-  const diagVagaCount = chatPhrasesVagaRaw.split('\n').filter(l => l.trim()).length
-  const diagEngCount = chatPhrasesEngajamentoRaw.split('\n').filter(l => l.trim()).length
+  const diagMixCount = chatPhrasesMix.length
+  const diagElogiosCount = chatPhrasesElogios.length
+  const diagVagaCount = chatPhrasesVaga.length
+  const diagEngCount = chatPhrasesEngajamento.length
   const isSimulationActive = chatCpm > 0 || useSegments
 
   // Segment coverage warnings
@@ -922,36 +1100,37 @@ export default function ChatConfigPage() {
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
             Defina em que momento do vídeo a simulação começa e termina. Ignorado quando segmentos estão ativos.
           </div>
-          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-end', flexWrap: 'wrap' }}>
-            <div>
-              <label className="form-label" style={{ marginBottom: 4, display: 'block' }}>Início (segundos)</label>
+          <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 140 }}>
+              <label className="form-label" style={{ marginBottom: 4, display: 'block' }}>Início (MM:SS)</label>
               <input
-                type="number" min={0}
+                type="text"
                 className="form-input"
                 style={{ width: 140 }}
-                value={chatStartSeconds}
-                onChange={e => setChatStartSeconds(Number(e.target.value))}
-                placeholder="0"
+                placeholder="0:00"
+                defaultValue={chatStartSeconds > 0 ? secToMmss(chatStartSeconds) : ''}
+                onBlur={e => setChatStartSeconds(mmssToSec(e.target.value))}
               />
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                {chatStartSeconds > 0 ? `${Math.floor(chatStartSeconds / 60)}m ${chatStartSeconds % 60}s` : 'Desde o início'}
+                {chatStartSeconds > 0 ? fmtSec(chatStartSeconds) : 'Desde o início'}
               </div>
             </div>
-            <div style={{ fontSize: 18, color: 'var(--text-muted)', paddingBottom: 24 }}>→</div>
-            <div>
-              <label className="form-label" style={{ marginBottom: 4, display: 'block' }}>Fim (segundos)</label>
+            <div style={{ fontSize: 18, color: 'var(--text-muted)', paddingTop: 32 }}>→</div>
+            <div style={{ minWidth: 140 }}>
+              <label className="form-label" style={{ marginBottom: 4, display: 'block' }}>Fim (MM:SS)</label>
               <input
-                type="number" min={0}
+                type="text"
                 className="form-input"
                 style={{ width: 140 }}
-                value={chatEndSeconds}
-                onChange={e => setChatEndSeconds(e.target.value)}
                 placeholder="Até o fim"
+                defaultValue={chatEndSeconds ? secToMmss(Number(chatEndSeconds)) : ''}
+                onBlur={e => {
+                  const v = e.target.value.trim()
+                  setChatEndSeconds(v ? String(mmssToSec(v)) : '')
+                }}
               />
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                {chatEndSeconds
-                  ? `${Math.floor(Number(chatEndSeconds) / 60)}m ${Number(chatEndSeconds) % 60}s`
-                  : 'Até o fim do vídeo'}
+                {chatEndSeconds ? fmtSec(Number(chatEndSeconds)) : 'Até o fim do vídeo'}
               </div>
             </div>
           </div>
@@ -959,116 +1138,50 @@ export default function ChatConfigPage() {
 
         {/* ---- PHRASES ---- */}
         <div className="card">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>💬 Mensagens Simuladas (Pools)</div>
+          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>💬 Biblioteca de Mensagens Simuladas</div>
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-            Personalize as frases que os simuladores enviaram. Cada tipo de mensagem pode ter o seu próprio pool para ser usado nos segmentos específicos. Uma mensagem por linha. Se deixar vazio, o sistema usa as frases padrão.
+            Clique em cada categoria para selecionar as frases ativas. Frases marcadas ✓ serão usadas na simulação.
+            Quando nenhuma estiver selecionada, o sistema usa o pool padrão automaticamente.
           </div>
 
-          <div style={{ borderBottom: '1px solid var(--border)', marginBottom: 16, display: 'flex', gap: 16 }}>
-            {[
-              { id: 'mix', label: '✨ Todas (Mix)', count: chatPhrasesRaw ? chatPhrasesRaw.split('\n').filter(Boolean).length : ALL_PHRASES.length },
-              { id: 'elogios', label: '👏 Elogios', count: chatPhrasesElogiosRaw ? chatPhrasesElogiosRaw.split('\n').filter(Boolean).length : CHAT_PHRASES_ELOGIOS.length },
-              { id: 'vaga', label: '🎉 Garantiu a Vaga', count: chatPhrasesVagaRaw ? chatPhrasesVagaRaw.split('\n').filter(Boolean).length : CHAT_PHRASES_VAGA.length },
-              { id: 'engajamento', label: '🔥 Engajamento', count: chatPhrasesEngajamentoRaw ? chatPhrasesEngajamentoRaw.split('\n').filter(Boolean).length : CHAT_PHRASES_ENGAJAMENTO.length },
-            ].map(tab => (
-              <button
-                key={tab.id}
-                type="button"
-                onClick={() => setActivePoolTab(tab.id as any)}
-                style={{
-                  padding: '8px 4px', fontSize: 13, fontWeight: 600,
-                  borderBottom: `2px solid ${activePoolTab === tab.id ? 'var(--brand)' : 'transparent'}`,
-                  color: activePoolTab === tab.id ? 'var(--text-primary)' : 'var(--text-muted)',
-                  cursor: 'pointer'
-                }}
-              >
-                {tab.label} ({tab.count})
-              </button>
-            ))}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <PhrasePoolEditor
+              poolKey="mix"
+              icon="✨"
+              title="Mix Geral"
+              description="Usado no modo global e em segmentos sem categoria específica"
+              defaultPhrases={ALL_PHRASES}
+              selected={chatPhrasesMix}
+              onChange={setChatPhrasesMix}
+            />
+            <PhrasePoolEditor
+              poolKey="elogios"
+              icon="👏"
+              title="Elogios"
+              description="Usado em segmentos do tipo Elogios — reações positivas ao conteúdo"
+              defaultPhrases={CHAT_PHRASES_ELOGIOS}
+              selected={chatPhrasesElogios}
+              onChange={setChatPhrasesElogios}
+            />
+            <PhrasePoolEditor
+              poolKey="engajamento"
+              icon="🔥"
+              title="Engajamento"
+              description="Usado em segmentos de alta energia — reações e comentários de participação"
+              defaultPhrases={CHAT_PHRASES_ENGAJAMENTO}
+              selected={chatPhrasesEngajamento}
+              onChange={setChatPhrasesEngajamento}
+            />
+            <PhrasePoolEditor
+              poolKey="vaga"
+              icon="🎉"
+              title="Garantiu a Vaga"
+              description="Usado em segmentos de pitch/oferta — confirmações de compra"
+              defaultPhrases={CHAT_PHRASES_VAGA}
+              selected={chatPhrasesVaga}
+              onChange={setChatPhrasesVaga}
+            />
           </div>
-
-          {activePoolTab === 'mix' && (
-            <>
-              <textarea
-                className="form-input form-textarea"
-                style={{ minHeight: 160, fontSize: 13 }}
-                placeholder={`Incrível! Adorando o conteúdo 🔥\nJá garanti minha vaga! 🎉\n...`}
-                value={chatPhrasesRaw}
-                onChange={e => setChatPhrasesRaw(e.target.value)}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                  Usadas no modo Global ou nos segmentos "Todas (mix)".
-                </div>
-                {chatPhrasesRaw && (
-                  <button type="button" className="btn btn-sm btn-ghost" style={{ padding: 0, color: '#ef4444' }} onClick={() => setChatPhrasesRaw('')}>
-                    Limpar e usar padrão
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-
-          {activePoolTab === 'elogios' && (
-            <>
-              <textarea
-                className="form-input form-textarea"
-                style={{ minHeight: 160, fontSize: 13 }}
-                placeholder={`Muito bom!\nExcelente didática!\n...`}
-                value={chatPhrasesElogiosRaw}
-                onChange={e => setChatPhrasesElogiosRaw(e.target.value)}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Usadas em segmentos do tipo "Elogios".</div>
-                {chatPhrasesElogiosRaw && (
-                  <button type="button" className="btn btn-sm btn-ghost" style={{ padding: 0, color: '#ef4444' }} onClick={() => setChatPhrasesElogiosRaw('')}>
-                    Limpar e usar padrão
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-
-          {activePoolTab === 'vaga' && (
-            <>
-              <textarea
-                className="form-input form-textarea"
-                style={{ minHeight: 160, fontSize: 13 }}
-                placeholder={`Estou dentro!\nComprado!\n...`}
-                value={chatPhrasesVagaRaw}
-                onChange={e => setChatPhrasesVagaRaw(e.target.value)}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Usadas em segmentos do tipo "Garantiu a Vaga".</div>
-                {chatPhrasesVagaRaw && (
-                  <button type="button" className="btn btn-sm btn-ghost" style={{ padding: 0, color: '#ef4444' }} onClick={() => setChatPhrasesVagaRaw('')}>
-                    Limpar e usar padrão
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-
-          {activePoolTab === 'engajamento' && (
-            <>
-              <textarea
-                className="form-input form-textarea"
-                style={{ minHeight: 160, fontSize: 13 }}
-                placeholder={`Eu quero!\nSim!\n...`}
-                value={chatPhrasesEngajamentoRaw}
-                onChange={e => setChatPhrasesEngajamentoRaw(e.target.value)}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
-                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Usadas em segmentos do tipo "Engajamento".</div>
-                {chatPhrasesEngajamentoRaw && (
-                  <button type="button" className="btn btn-sm btn-ghost" style={{ padding: 0, color: '#ef4444' }} onClick={() => setChatPhrasesEngajamentoRaw('')}>
-                    Limpar e usar padrão
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-
         </div>
 
         {/* ---- NAMES ---- */}
@@ -1166,10 +1279,10 @@ export default function ChatConfigPage() {
                   messages={previewMessages}
                   namesPool={namesArray.length > 0 ? namesArray : DEFAULT_NAMES}
                   phrasesPool={[
-                    ...(chatPhrasesRaw ? chatPhrasesRaw.split('\n').filter(Boolean) : []),
-                    ...(chatPhrasesElogiosRaw ? chatPhrasesElogiosRaw.split('\n').filter(Boolean) : CHAT_PHRASES_ELOGIOS),
-                    ...(chatPhrasesEngajamentoRaw ? chatPhrasesEngajamentoRaw.split('\n').filter(Boolean) : CHAT_PHRASES_ENGAJAMENTO),
-                    ...(chatPhrasesVagaRaw ? chatPhrasesVagaRaw.split('\n').filter(Boolean) : CHAT_PHRASES_VAGA),
+                    ...(chatPhrasesMix.length > 0 ? chatPhrasesMix : ALL_PHRASES),
+                    ...(chatPhrasesElogios.length > 0 ? chatPhrasesElogios : CHAT_PHRASES_ELOGIOS),
+                    ...(chatPhrasesEngajamento.length > 0 ? chatPhrasesEngajamento : CHAT_PHRASES_ENGAJAMENTO),
+                    ...(chatPhrasesVaga.length > 0 ? chatPhrasesVaga : CHAT_PHRASES_VAGA),
                   ]}
                   cpm={chatCpm > 0 ? chatCpm : 5}
                   onRunningChange={setPreviewRunning}
