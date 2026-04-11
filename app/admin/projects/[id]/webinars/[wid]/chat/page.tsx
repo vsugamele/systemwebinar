@@ -225,6 +225,33 @@ export default function ChatConfigPage() {
 
   const namesArray = chatNamesRaw.split('\n').map(n => n.trim()).filter(Boolean)
 
+  // ---- Computed diagnostics ----
+  const diagNamesCount = namesArray.length
+  const diagMixCount = chatPhrasesRaw.split('\n').filter(l => l.trim()).length
+  const diagElogiosCount = chatPhrasesElogiosRaw.split('\n').filter(l => l.trim()).length
+  const diagVagaCount = chatPhrasesVagaRaw.split('\n').filter(l => l.trim()).length
+  const diagEngCount = chatPhrasesEngajamentoRaw.split('\n').filter(l => l.trim()).length
+  const isSimulationActive = chatCpm > 0 || useSegments
+
+  // Segment coverage warnings
+  const diagSegWarnings: string[] = []
+  if (useSegments && segments.length > 0) {
+    segments.forEach((seg, i) => {
+      const hasCustomPhrases =
+        seg.phrases === 'elogios' ? diagElogiosCount > 0
+        : seg.phrases === 'vaga' ? diagVagaCount > 0
+        : seg.phrases === 'engajamento' ? diagEngCount > 0
+        : diagMixCount > 0
+      if (!hasCustomPhrases) diagSegWarnings.push(`Segmento ${i + 1} (${fmtSec(seg.from)}–${fmtSec(seg.to)}) sem frases personalizadas — usará padrão`)
+    })
+  } else if (!useSegments && isSimulationActive) {
+    if (diagMixCount === 0) diagSegWarnings.push('Nenhuma frase personalizada — usando pool padrão do sistema')
+  }
+
+  const diagStatus = !isSimulationActive ? 'off'
+    : diagSegWarnings.length > 0 ? 'warn'
+    : 'ok'
+
   return (
     <>
       <div className="page-header">
@@ -266,36 +293,109 @@ export default function ChatConfigPage() {
       </div>
 
       <div className="page-body" style={{ display: activeTab === 'simulacao' ? 'flex' : 'none', flexDirection: 'column', gap: 20 }}>
-        
-        {/* ---- METER / MASTER SWITCH ---- */}
-        <div className="card" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 16 }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>Status da Simulação Fictícia</div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-              Se você não configurou frases, desativar aqui impede que o sistema use frases genéricas.
+
+        {/* ---- DIAGNOSTIC STATUS CARD ---- */}
+        <div className="card" style={{
+          border: `1.5px solid ${
+            diagStatus === 'ok' ? 'rgba(34,197,94,0.35)'
+            : diagStatus === 'warn' ? 'rgba(245,158,11,0.4)'
+            : 'rgba(239,68,68,0.3)'
+          }`,
+          background: `${
+            diagStatus === 'ok' ? 'rgba(34,197,94,0.04)'
+            : diagStatus === 'warn' ? 'rgba(245,158,11,0.04)'
+            : 'rgba(239,68,68,0.04)'
+          }`,
+        }}>
+          {/* Header row */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 24 }}>
+                {diagStatus === 'ok' ? '✅' : diagStatus === 'warn' ? '⚠️' : '🚫'}
+              </span>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>
+                  {diagStatus === 'ok' ? 'Simulação configurada e ativa'
+                   : diagStatus === 'warn' ? 'Simulação ativa com avisos'
+                   : 'Simulação desativada'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>
+                  {diagStatus === 'off'
+                    ? 'Configure a frequência (CPM) ou ative os segmentos para ligar a simulação.'
+                    : useSegments
+                    ? `${segments.length} segmento(s) ativos · modo por trechos`
+                    : `Frequência global · ${chatCpm} msg/min`
+                  }
+                </div>
+              </div>
             </div>
-          </div>
-          <div>
-            {chatCpm > 0 || useSegments ? (
+
+            {/* On/Off action button */}
+            {isSimulationActive ? (
               <button
                 type="button"
-                className="btn btn-ghost"
-                style={{ color: '#ef4444', border: '1px solid rgba(239, 68, 68, 0.3)' }}
-                onClick={() => {
-                  setChatMode('cpm')
-                  setChatCpm(0)
-                  setUseSegments(false)
-                  toast('Simulação Fictícia foi desativada.', { icon: '🛑' })
-                }}
+                className="btn btn-ghost btn-sm"
+                style={{ color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)', whiteSpace: 'nowrap' }}
+                onClick={() => { setChatMode('cpm'); setChatCpm(0); setUseSegments(false); toast('Simulação Fictícia foi desativada.', { icon: '🛑' }) }}
               >
-                🛑 Desativar Mensagens Fakes
+                🛑 Desativar
               </button>
             ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 16px', background: 'rgba(239, 68, 68, 0.08)', borderRadius: 8, color: '#ef4444', fontWeight: 600, fontSize: 14 }}>
-                🚫 Simulação Desativada
-              </div>
+              <div style={{ fontSize: 12, color: '#ef4444', fontWeight: 600 }}>CPM = 0</div>
             )}
           </div>
+
+          {/* Metrics row */}
+          {isSimulationActive && (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))',
+              gap: 10,
+              marginTop: 16,
+              paddingTop: 16,
+              borderTop: '1px solid var(--border)',
+            }}>
+              {([
+                { label: 'Nomes', value: diagNamesCount > 0 ? diagNamesCount : `${DEFAULT_NAMES.length} padrão`, icon: '👥', custom: diagNamesCount > 0 },
+                { label: 'Mix de Frases', value: diagMixCount > 0 ? diagMixCount : 'padrão', icon: '✨', custom: diagMixCount > 0 },
+                { label: 'Elogios', value: diagElogiosCount > 0 ? diagElogiosCount : 'padrão', icon: '👏', custom: diagElogiosCount > 0 },
+                { label: 'Engajamento', value: diagEngCount > 0 ? diagEngCount : 'padrão', icon: '🔥', custom: diagEngCount > 0 },
+                { label: 'Garantiu Vaga', value: diagVagaCount > 0 ? diagVagaCount : 'padrão', icon: '🎉', custom: diagVagaCount > 0 },
+              ] as { label: string; value: string | number; icon: string; custom: boolean }[]).map(m => (
+                <div key={m.label} style={{
+                  background: 'var(--bg-elevated)',
+                  borderRadius: 10,
+                  padding: '10px 12px',
+                  textAlign: 'center',
+                }}>
+                  <div style={{ fontSize: 18, marginBottom: 2 }}>{m.icon}</div>
+                  <div style={{
+                    fontSize: 18,
+                    fontWeight: 800,
+                    color: m.custom ? 'var(--brand-light)' : 'var(--text-muted)',
+                  }}>{m.value}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{m.label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Warnings */}
+          {diagSegWarnings.length > 0 && (
+            <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {diagSegWarnings.map((w, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 8,
+                  background: 'rgba(245,158,11,0.08)',
+                  border: '1px solid rgba(245,158,11,0.25)',
+                  borderRadius: 8, padding: '8px 12px',
+                  fontSize: 12, color: '#d97706',
+                }}>
+                  <span>⚠️</span><span>{w}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ---- SEGURANÇA / FILTROS ---- */}
