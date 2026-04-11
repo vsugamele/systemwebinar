@@ -82,6 +82,14 @@ export default function ChatConfigPage() {
   const [showAiModal, setShowAiModal] = useState(false)
   const [aiScriptText, setAiScriptText] = useState('')
   const [aiGenerating, setAiGenerating] = useState(false)
+  const [aiDiff, setAiDiff] = useState<null | {
+    names: string[]
+    phrasesMix: string[]
+    phrasesElogios: string[]
+    phrasesEngajamento: string[]
+    phrasesVaga: string[]
+    segments: { from: number; to: number | null; cpm: number; phrases: string | null }[]
+  }>(null)
 
   async function handleGenerateAi() {
     if (!aiScriptText.trim()) return toast.error('Digite o roteiro ou contexto da aula.')
@@ -94,28 +102,40 @@ export default function ChatConfigPage() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || 'Erro ao gerar chat falso')
-      
+
       if (json.names?.length) setChatNamesRaw(json.names.join('\n'))
       if (json.phrasesMix?.length) setChatPhrasesRaw(json.phrasesMix.join('\n'))
       if (json.phrasesElogios?.length) setChatPhrasesElogiosRaw(json.phrasesElogios.join('\n'))
       if (json.phrasesEngajamento?.length) setChatPhrasesEngajamentoRaw(json.phrasesEngajamento.join('\n'))
       if (json.phrasesVaga?.length) setChatPhrasesVagaRaw(json.phrasesVaga.join('\n'))
-      if (json.segments?.length) {
-        setSegments(json.segments.map((s: any) => ({
-          from: s.from,
-          to: s.to,
-          cpm: s.cpm || 5,
-          phrases: s.phrases === 'mix' ? null : s.phrases
-        })))
-        setUseSegments(true)
-      }
-      
-      toast.success('Roteiro interpretado com sucesso! Verifique os dados abaixo e clique em Salvar.', { duration: 6000 })
-      setShowAiModal(false)
+      const parsedSegments = json.segments?.length
+        ? json.segments.map((s: any) => ({ from: s.from, to: s.to, cpm: s.cpm || 5, phrases: s.phrases === 'mix' ? null : s.phrases }))
+        : []
+      if (parsedSegments.length) { setSegments(parsedSegments); setUseSegments(true) }
+
+      setAiDiff({
+        names: json.names || [],
+        phrasesMix: json.phrasesMix || [],
+        phrasesElogios: json.phrasesElogios || [],
+        phrasesEngajamento: json.phrasesEngajamento || [],
+        phrasesVaga: json.phrasesVaga || [],
+        segments: parsedSegments,
+      })
     } catch (e: any) {
       toast.error(e.message)
     } finally {
       setAiGenerating(false)
+    }
+  }
+
+  function handleDiffConfirm(andSave: boolean) {
+    setAiDiff(null)
+    setShowAiModal(false)
+    setAiScriptText('')
+    if (andSave) {
+      save()
+    } else {
+      toast.success('Dados preenchidos! Revise e clique em Salvar quando estiver pronto.', { duration: 5000 })
     }
   }
 
@@ -922,29 +942,120 @@ export default function ChatConfigPage() {
 
       <Modal
         open={showAiModal}
-        onClose={() => setShowAiModal(false)}
-        title="✨ Gerador Mágico Simulação (IA)"
+        onClose={() => { setShowAiModal(false); setAiDiff(null) }}
+        title={aiDiff ? '✨ Geração Concluída — Revise o Resultado' : '✨ Gerador Mágico Simulação (IA)'}
         footer={
-          <>
-             <button className="btn btn-ghost" onClick={() => setShowAiModal(false)}>Cancelar</button>
-             <button className="btn btn-primary" onClick={handleGenerateAi} disabled={aiGenerating}>
-               {aiGenerating ? <span className="spinner" /> : 'Copilar Roteiro (Gera Textos)'}
-             </button>
-          </>
+          aiDiff ? (
+            <>
+              <button className="btn btn-ghost" onClick={() => handleDiffConfirm(false)}>Revisar antes de salvar</button>
+              <button className="btn btn-primary" onClick={() => handleDiffConfirm(true)}>💾 Salvar agora</button>
+            </>
+          ) : (
+            <>
+              <button className="btn btn-ghost" onClick={() => setShowAiModal(false)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={handleGenerateAi} disabled={aiGenerating}>
+                {aiGenerating ? <><span className="spinner" style={{ marginRight: 6 }} />Gerando...</> : '🪄 Gerar Simulação'}
+              </button>
+            </>
+          )
         }
       >
-         <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
-           Cole abaixo o contexto, cronograma, oferta, tópicos ou roteiro oficial desse webinar.
-           A inteligência artificial fará a leitura inteira da apresentação e vai <strong>preencher absolutamente todo o chat</strong> com as frases certas, nos segmentos certos e citar nomes e dores baseadas na oferta como se fossem pessoas reais.
-         </div>
-         <textarea 
-           className="form-input form-textarea"
-           style={{ minHeight: 250, fontSize: 13, resize: 'vertical' }}
-           placeholder="Módulo 1 de Dieta (0 a 10 min): Quebrando crenças...&#10;Módulo 2 (10 a 25 min): Pergunta à plateia quem tem dificuldade...&#10;Módulo 3 (25 a fim): Promessa Master de Emagrecimento, perca 5kg..."
-           value={aiScriptText}
-           onChange={e => setAiScriptText(e.target.value)}
-           autoFocus
-         />
+        {aiDiff ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{
+              background: 'rgba(34,197,94,0.08)', border: '1px solid rgba(34,197,94,0.25)',
+              borderRadius: 10, padding: '12px 16px', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6
+            }}>
+              ✅ A IA preencheu os campos abaixo com base no seu roteiro.
+              Você pode <strong style={{ color: 'var(--text-primary)' }}>revisar e editar</strong> antes de salvar, ou salvar direto agora.
+            </div>
+
+            {([
+              { icon: '👥', label: 'Nomes de participantes', items: aiDiff.names, color: '#6366f1' },
+              { icon: '✨', label: 'Frases Mix (pool geral)', items: aiDiff.phrasesMix, color: '#8b5cf6' },
+              { icon: '👏', label: 'Frases de Elogios', items: aiDiff.phrasesElogios, color: '#3b82f6' },
+              { icon: '🔥', label: 'Frases de Engajamento', items: aiDiff.phrasesEngajamento, color: '#f59e0b' },
+              { icon: '🎉', label: 'Frases "Garantiu a Vaga"', items: aiDiff.phrasesVaga, color: '#10b981' },
+            ] as { icon: string; label: string; items: string[]; color: string }[])
+              .filter(g => g.items.length > 0)
+              .map(group => (
+                <div key={group.label} style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: 16 }}>{group.icon}</span>
+                    <span style={{ fontWeight: 700, fontSize: 13 }}>{group.label}</span>
+                    <span style={{
+                      marginLeft: 'auto', background: group.color + '22',
+                      color: group.color, fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                    }}>{group.items.length} itens</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {group.items.slice(0, 8).map((item, i) => (
+                      <span key={i} style={{
+                        background: 'var(--bg)', border: '1px solid var(--border)',
+                        borderRadius: 20, padding: '3px 10px', fontSize: 12, color: 'var(--text-secondary)',
+                      }}>{item}</span>
+                    ))}
+                    {group.items.length > 8 && (
+                      <span style={{ fontSize: 12, color: 'var(--text-muted)', alignSelf: 'center' }}>
+                        +{group.items.length - 8} mais...
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            }
+
+            {aiDiff.segments.length > 0 && (
+              <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <span style={{ fontSize: 16 }}>📋</span>
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>Segmentos de tempo criados</span>
+                  <span style={{
+                    marginLeft: 'auto', background: '#6366f122', color: '#6366f1',
+                    fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 20,
+                  }}>{aiDiff.segments.length} segmentos</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {aiDiff.segments.map((seg, i) => (
+                    <div key={i} style={{
+                      display: 'flex', alignItems: 'center', gap: 10,
+                      background: 'var(--bg)', borderRadius: 8, padding: '8px 12px', fontSize: 12,
+                    }}>
+                      <span style={{ fontWeight: 700, color: 'var(--brand-light)', minWidth: 110 }}>
+                        {fmtSec(seg.from)} → {fmtSec(seg.to)}
+                      </span>
+                      <span style={{ color: 'var(--text-muted)' }}>{seg.cpm} msg/min</span>
+                      <span style={{
+                        marginLeft: 'auto', fontSize: 11, padding: '2px 10px',
+                        borderRadius: 20, background: 'var(--bg-elevated)', color: 'var(--text-secondary)'
+                      }}>
+                        {seg.phrases === 'elogios' ? '👏 Elogios'
+                          : seg.phrases === 'vaga' ? '🎉 Vaga'
+                          : seg.phrases === 'engajamento' ? '🔥 Engajamento'
+                          : '✨ Mix'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+              Cole abaixo o contexto, cronograma, oferta, tópicos ou roteiro oficial desse webinar.
+              A inteligência artificial fará a leitura inteira da apresentação e vai <strong>preencher absolutamente todo o chat</strong> com as frases certas, nos segmentos certos e citar nomes e dores baseadas na oferta como se fossem pessoas reais.
+            </div>
+            <textarea
+              className="form-input form-textarea"
+              style={{ minHeight: 250, fontSize: 13, resize: 'vertical' }}
+              placeholder={`Módulo 1 de Dieta (0 a 10 min): Quebrando crenças...\nMódulo 2 (10 a 25 min): Pergunta à plateia quem tem dificuldade...\nMódulo 3 (25 a fim): Promessa Master de Emagrecimento, perca 5kg...`}
+              value={aiScriptText}
+              onChange={e => setAiScriptText(e.target.value)}
+              autoFocus
+            />
+          </>
+        )}
       </Modal>
     </>
   )
