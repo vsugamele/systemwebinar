@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'react-hot-toast'
+import Modal from '@/components/Modal'
 import type { ChatSegment } from '@/types'
 import {
   CHAT_PHRASES_ELOGIOS,
@@ -76,6 +77,47 @@ export default function ChatConfigPage() {
   const [badWordsFilter, setBadWordsFilter] = useState(false)
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
+
+  // AI Generator specific state
+  const [showAiModal, setShowAiModal] = useState(false)
+  const [aiScriptText, setAiScriptText] = useState('')
+  const [aiGenerating, setAiGenerating] = useState(false)
+
+  async function handleGenerateAi() {
+    if (!aiScriptText.trim()) return toast.error('Digite o roteiro ou contexto da aula.')
+    setAiGenerating(true)
+    try {
+      const res = await fetch('/api/ai-script-to-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ projectId, script: aiScriptText })
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || 'Erro ao gerar chat falso')
+      
+      if (json.names?.length) setChatNamesRaw(json.names.join('\n'))
+      if (json.phrasesMix?.length) setChatPhrasesRaw(json.phrasesMix.join('\n'))
+      if (json.phrasesElogios?.length) setChatPhrasesElogiosRaw(json.phrasesElogios.join('\n'))
+      if (json.phrasesEngajamento?.length) setChatPhrasesEngajamentoRaw(json.phrasesEngajamento.join('\n'))
+      if (json.phrasesVaga?.length) setChatPhrasesVagaRaw(json.phrasesVaga.join('\n'))
+      if (json.segments?.length) {
+        setSegments(json.segments.map((s: any) => ({
+          from: s.from,
+          to: s.to,
+          cpm: s.cpm || 5,
+          phrases: s.phrases === 'mix' ? null : s.phrases
+        })))
+        setUseSegments(true)
+      }
+      
+      toast.success('Roteiro interpretado com sucesso! Verifique os dados abaixo e clique em Salvar.', { duration: 6000 })
+      setShowAiModal(false)
+    } catch (e: any) {
+      toast.error(e.message)
+    } finally {
+      setAiGenerating(false)
+    }
+  }
 
   useEffect(() => {
     async function load() {
@@ -198,21 +240,29 @@ export default function ChatConfigPage() {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
-        <button
-          onClick={() => setActiveTab('simulacao')}
-          className={`btn ${activeTab === 'simulacao' ? 'btn-primary' : 'btn-ghost'}`}
-          style={{ padding: '10px 20px', borderRadius: 20 }}
-        >
-          {activeTab === 'simulacao' ? '✅' : '💬'} Simulação Fictícia
-        </button>
-        <button
-          onClick={() => setActiveTab('ia')}
-          className={`btn ${activeTab === 'ia' ? 'btn-primary' : 'btn-ghost'}`}
-          style={{ padding: '10px 20px', borderRadius: 20 }}
-        >
-          {activeTab === 'ia' ? '✅' : '🤖'} Assistente IA
-        </button>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+          <button
+            onClick={() => setActiveTab('simulacao')}
+            className={`btn ${activeTab === 'simulacao' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ padding: '10px 20px', borderRadius: 20 }}
+          >
+            {activeTab === 'simulacao' ? '✅' : '💬'} Simulação Fictícia
+          </button>
+          <button
+            onClick={() => setActiveTab('ia')}
+            className={`btn ${activeTab === 'ia' ? 'btn-primary' : 'btn-ghost'}`}
+            style={{ padding: '10px 20px', borderRadius: 20 }}
+          >
+            {activeTab === 'ia' ? '✅' : '🤖'} Assistente IA
+          </button>
+        </div>
+        
+        {activeTab === 'simulacao' && (
+          <button onClick={() => setShowAiModal(true)} className="btn btn-primary" style={{ background: 'linear-gradient(45deg, #8b5cf6, #ec4899)', border: 'none', color: '#fff', borderRadius: 20, padding: '10px 20px' }}>
+            ✨ Gerar Simulação via Roteiro (IA)
+          </button>
+        )}
       </div>
 
       <div className="page-body" style={{ display: activeTab === 'simulacao' ? 'flex' : 'none', flexDirection: 'column', gap: 20 }}>
@@ -407,59 +457,54 @@ export default function ChatConfigPage() {
             Use <strong style={{ color: 'var(--text-primary)' }}>0</strong> para desativar.
           </div>
 
-          {/* Mode toggle */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
-            {(['cpm', 'interval'] as const).map(m => (
-              <button
-                key={m}
-                type="button"
-                className={`btn btn-sm ${chatMode === m ? 'btn-primary' : 'btn-ghost'}`}
-                onClick={() => setChatMode(m)}
-              >
-                {m === 'cpm' ? '📊 CPM (msgs/min)' : '⏳ Intervalo (a cada N min)'}
-              </button>
-            ))}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 20, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button type="button" className={`btn btn-sm ${chatCpm === 2 && chatMode === 'cpm' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => { setChatMode('cpm'); setChatCpm(2); }}>🐢 Lento / Calmo</button>
+            <button type="button" className={`btn btn-sm ${chatCpm === 8 && chatMode === 'cpm' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => { setChatMode('cpm'); setChatCpm(8); }}>🚶 Normal</button>
+            <button type="button" className={`btn btn-sm ${chatCpm === 15 && chatMode === 'cpm' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => { setChatMode('cpm'); setChatCpm(15); }}>🔥 Agitado</button>
+            <div style={{ width: 1, alignSelf: 'stretch', background: 'var(--border)', margin: '0 8px' }} />
+            <button type="button" className={`btn btn-sm ${(chatCpm !== 2 && chatCpm !== 8 && chatCpm !== 15) || chatMode === 'interval' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => { setChatMode('cpm'); setChatCpm(0); }}>⚙️ Personalizado</button>
+            
+            {((chatCpm !== 2 && chatCpm !== 8 && chatCpm !== 15) || chatMode === 'interval') && (
+              <select className="form-input" style={{ width: 180, padding: '6px 10px', fontSize: 13 }} value={chatMode} onChange={e => setChatMode(e.target.value as any)}>
+                <option value="cpm">Acompanhar via CPM (Msgs/Minuto)</option>
+                <option value="interval">Acompanhar via Intervalo (Por msgs)</option>
+              </select>
+            )}
           </div>
 
           {chatMode === 'cpm' ? (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <input
-                  type="range" min={0} max={300} step={1}
-                  value={chatCpm}
-                  onChange={e => setChatCpm(Number(e.target.value))}
-                  style={{ flex: 1, accentColor: 'var(--brand)' }}
-                />
-                <div style={{
-                  background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-                  borderRadius: 8, padding: '8px 16px', minWidth: 80, textAlign: 'center'
-                }}>
-                  <span style={{ fontSize: 22, fontWeight: 800, color: chatCpm > 0 ? 'var(--brand-light)' : 'var(--text-muted)' }}>
-                    {chatCpm}
-                  </span>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>msg/min</div>
-                  {chatCpm > 0 && (
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
-                      {chatCpm > 30
-                        ? `≈ ${(chatCpm / 60).toFixed(1)}/s`
-                        : `1 a cada ${Math.round(60 / chatCpm)}s`}
-                    </div>
-                  )}
-                  {chatCpm >= 60 && (
-                    <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', marginTop: 2 }}>ENXURRADA</div>
-                  )}
+              {((chatCpm !== 2 && chatCpm !== 8 && chatCpm !== 15) || chatMode === 'interval') && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <input
+                    type="range" min={0} max={300} step={1}
+                    value={chatCpm}
+                    onChange={e => setChatCpm(Number(e.target.value))}
+                    style={{ flex: 1, accentColor: 'var(--brand)' }}
+                  />
+                  <div style={{
+                    background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                    borderRadius: 8, padding: '8px 16px', minWidth: 80, textAlign: 'center'
+                  }}>
+                    <span style={{ fontSize: 22, fontWeight: 800, color: chatCpm > 0 ? 'var(--brand-light)' : 'var(--text-muted)' }}>
+                      {chatCpm}
+                    </span>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>msg/min</div>
+                    {chatCpm > 0 && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>
+                        {chatCpm > 30
+                          ? `≈ ${(chatCpm / 60).toFixed(1)}/s`
+                          : `1 a cada ${Math.round(60 / chatCpm)}s`}
+                      </div>
+                    )}
+                    {chatCpm >= 60 && (
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', marginTop: 2 }}>ENXURRADA</div>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                {[0, 2, 5, 10, 20, 30, 60, 120, 300].map(v => (
-                  <button key={v}
-                    className={`btn btn-sm ${chatCpm === v ? 'btn-primary' : 'btn-ghost'}`}
-                    onClick={() => setChatCpm(v)}>
-                    {v === 0 ? 'Desativado' : v < 60 ? `${v}/min` : `${v}/min (${v / 60}/s)`}
-                  </button>
-                ))}
-              </div>
+              )}
             </>
+
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <input
@@ -740,8 +785,7 @@ export default function ChatConfigPage() {
 
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, opacity: aiEnabled ? 1 : 0.5, pointerEvents: aiEnabled ? 'auto' : 'none' }}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>OpenRouter API Key</div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>Obtenha grátis em <a href="https://openrouter.ai/keys" target="_blank" rel="noopener">openrouter.ai/keys</a> (compartilhado na conta).</div>
-          <input className="form-input" type="password" placeholder="sk-or-v1-..." value={projectApiKey} onChange={e => setProjectApiKey(e.target.value)} />
+          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Você pode gerenciar e adicionar as chaves de inteligência artificial unificadas na página <strong>Ajustes do Projeto</strong>. Essa chave será detectada pela IA do webinar automaticamente e utilizada.</div>
         </div>
 
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, opacity: aiEnabled ? 1 : 0.5, pointerEvents: aiEnabled ? 'auto' : 'none' }}>
@@ -775,6 +819,33 @@ export default function ChatConfigPage() {
           <textarea className="form-input" rows={4} placeholder={`Você é assistente. Responda dúvidas baseadas na Base de Dados. Seja conciso.`} value={aiSystemPrompt} onChange={e => setAiSystemPrompt(e.target.value)} style={{ resize: 'vertical', fontSize: 13 }} />
         </div>
       </div>
+
+      <Modal
+        open={showAiModal}
+        onClose={() => setShowAiModal(false)}
+        title="✨ Gerador Mágico Simulação (IA)"
+        footer={
+          <>
+             <button className="btn btn-ghost" onClick={() => setShowAiModal(false)}>Cancelar</button>
+             <button className="btn btn-primary" onClick={handleGenerateAi} disabled={aiGenerating}>
+               {aiGenerating ? <span className="spinner" /> : 'Copilar Roteiro (Gera Textos)'}
+             </button>
+          </>
+        }
+      >
+         <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+           Cole abaixo o contexto, cronograma, oferta, tópicos ou roteiro oficial desse webinar.
+           A inteligência artificial fará a leitura inteira da apresentação e vai <strong>preencher absolutamente todo o chat</strong> com as frases certas, nos segmentos certos e citar nomes e dores baseadas na oferta como se fossem pessoas reais.
+         </div>
+         <textarea 
+           className="form-input form-textarea"
+           style={{ minHeight: 250, fontSize: 13, resize: 'vertical' }}
+           placeholder="Módulo 1 de Dieta (0 a 10 min): Quebrando crenças...&#10;Módulo 2 (10 a 25 min): Pergunta à plateia quem tem dificuldade...&#10;Módulo 3 (25 a fim): Promessa Master de Emagrecimento, perca 5kg..."
+           value={aiScriptText}
+           onChange={e => setAiScriptText(e.target.value)}
+           autoFocus
+         />
+      </Modal>
     </>
   )
 }

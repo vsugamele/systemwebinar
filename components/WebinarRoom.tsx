@@ -360,7 +360,16 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
   const engineRef = useRef<EventEngine | null>(null)
+  const sectionRef = useRef<HTMLDivElement>(null)
   const sessionId = useRef(generateSessionId())
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      sectionRef.current?.requestFullscreen().catch(() => {})
+    } else {
+      document.exitFullscreen().catch(() => {})
+    }
+  }
   const broadcastTimerRef = useRef<NodeJS.Timeout | null>(null)
   const cpmTimerRef = useRef<NodeJS.Timeout | null>(null)
   const elapsedRef = useRef(0) // seconds watched (for non-YouTube videos)
@@ -1287,7 +1296,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       >
       <div className="webinar-room">
       {/* VIDEO SECTION */}
-      <div className="video-section">
+      <div className="video-section" ref={sectionRef}>
         <div className="video-header">
           <div className="webinar-title-bar">
             <div className="live-badge" style={sessionIsScheduledFuture ? { background: 'rgba(156,163,175,0.15)', borderColor: 'rgba(156,163,175,0.3)' } : {}}>
@@ -1314,6 +1323,18 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 📝 Quiz
               </button>
             )}
+            <button
+              onClick={toggleFullscreen}
+              style={{
+                background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 8, padding: '6px 10px', fontSize: 13, color: 'var(--text-secondary)',
+                cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+              }}
+              title="Alternar Tela Cheia"
+            >
+              ⛶ 
+              <span className="hidden-mobile" style={{ fontSize: 11 }}>Expandir</span>
+            </button>
             <div className="viewer-count">
               <div className="viewer-dot" />
               <span className={viewersPulse ? 'bump-anim' : ''}>{viewers.toLocaleString()}</span> assistindo
@@ -1414,8 +1435,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 {ytIframeLoaded && (
                   <>
                     <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 50, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
-                    <div style={{ position: 'absolute', top: 0, left: 0, width: 220, height: 44, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
-                    <div style={{ position: 'absolute', top: 0, right: 0, width: 180, height: 44, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 0, left: 0, width: '40%', maxWidth: 220, height: 44, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
+                    <div style={{ position: 'absolute', top: 0, right: 0, width: '30%', maxWidth: 180, height: 44, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
                   </>
                 )}
 

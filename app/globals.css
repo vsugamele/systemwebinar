@@ -1445,9 +1445,13 @@ tbody tr:hover td { background: var(--bg-hover); }
 
   .webinar-room {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(250px, 40vh) 1fr;
+    grid-template-rows: auto 1fr;
     height: auto;
     min-height: 100vh;
+  }
+  .video-wrapper {
+    aspect-ratio: 16/9;
+    height: auto;
   }
   .webinar-page-wrapper {
     overflow-y: auto;
@@ -1466,6 +1470,8 @@ tbody tr:hover td { background: var(--bg-hover); }
 }
 
 @media (max-width: 640px) {
+  .hidden-mobile { display: none !important; }
+
   /* Pitch button full-width on small phones, above home indicator */
   .pitch-button {
     width: calc(100% - 32px);
@@ -1477,6 +1483,44 @@ tbody tr:hover td { background: var(--bg-hover); }
 
   /* Smaller video area on portrait to keep chat visible */
   .webinar-room {
-    grid-template-rows: minmax(180px, 32vh) 1fr;
+    grid-template-rows: auto 1fr;
+  }
+  
+  .pitch-image {
+    max-height: 90px; /* Reduced to avoid covering the whole screen */
+  }
+  .pitch-body {
+    padding: 10px;
+  }
+  .pitch-button {
+    bottom: 80px; /* Keep above keyboard potentially, or just slightly higher */
+  }
+}
+
+/* Landscape orientation on mobile / small devices */
+@media (max-width: 900px) and (orientation: landscape) {
+  .webinar-room {
+    grid-template-rows: 1fr;
+  }
+  .chat-section {
+    display: none;
+  }
+  .video-section {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    background: #000;
+  }
+  .video-wrapper {
+    height: 100vh;
+  }
+  /* The video header can sit on top */
+  .video-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.7);
+    border-bottom: none;
   }
 }
