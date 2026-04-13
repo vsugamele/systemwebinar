@@ -477,33 +477,78 @@ function PhrasePoolEditor({
   const activeCount = selected.length
 
   return (
-    <div style={{ background: 'var(--bg-elevated)', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)' }}>
+    <div className="phrase-pool-card" style={{ 
+      background: 'var(--bg-elevated)', 
+      borderRadius: 12, 
+      overflow: 'hidden', 
+      border: `1px solid ${activeCount > 0 ? colors.border : 'var(--border)'}`,
+      boxShadow: activeCount > 0 ? `0 4px 12px ${colors.active}0a` : 'none',
+      transition: 'all 0.2s ease',
+    }}>
       {/* Header / trigger */}
       <button
         type="button"
         onClick={() => setOpen(v => !v)}
         style={{
-          width: '100%', display: 'flex', alignItems: 'center', gap: 12,
-          padding: '14px 16px', background: 'none', cursor: 'pointer',
+          width: '100%', display: 'flex', alignItems: 'center', gap: 14,
+          padding: '16px 18px', background: 'none', cursor: 'pointer',
           borderBottom: open ? '1px solid var(--border)' : 'none',
         }}
       >
-        <span style={{ fontSize: 18 }}>{icon}</span>
-        <div style={{ flex: 1, textAlign: 'left' }}>
-          <div style={{ fontWeight: 700, fontSize: 14 }}>{title}</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{description}</div>
+        <div style={{
+          width: 40, height: 40, borderRadius: 10,
+          background: activeCount > 0 ? colors.bg : 'var(--bg)',
+          border: `1px solid ${activeCount > 0 ? colors.border : 'var(--border)'}`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 22,
+          transition: 'transform 0.2s ease',
+        }} className="category-icon">
+          {icon}
         </div>
-        <span style={{
-          background: activeCount > 0 ? colors.active + '22' : 'var(--bg)',
-          color: activeCount > 0 ? colors.active : 'var(--text-muted)',
-          fontSize: 12, fontWeight: 700, padding: '3px 10px', borderRadius: 20,
-          border: `1px solid ${activeCount > 0 ? colors.active + '44' : 'var(--border)'}`,
-          minWidth: 60, textAlign: 'center',
+        <div style={{ flex: 1, textAlign: 'left' }}>
+          <div style={{ 
+            fontWeight: 700, 
+            fontSize: 15, 
+            color: activeCount > 0 ? colors.active : 'var(--text-primary)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6
+          }}>
+            {title}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{description}</div>
+        </div>
+        <div style={{
+          background: activeCount > 0 ? colors.active : 'var(--bg)',
+          color: activeCount > 0 ? '#fff' : 'var(--text-muted)',
+          fontSize: 11, fontWeight: 800, padding: '4px 12px', borderRadius: 20,
+          border: `1px solid ${activeCount > 0 ? colors.active : 'var(--border)'}`,
+          minWidth: 70, textAlign: 'center',
+          boxShadow: activeCount > 0 ? `0 2px 8px ${colors.active}44` : 'none',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em'
         }}>
           {activeCount > 0 ? `${activeCount} ativas` : 'padrão'}
-        </span>
-        <span style={{ color: 'var(--text-muted)', fontSize: 14, transition: 'transform 0.2s', transform: open ? 'rotate(180deg)' : 'none' }}>▾</span>
+        </div>
+        <span style={{ 
+          color: 'var(--text-muted)', 
+          fontSize: 14, 
+          transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)', 
+          transform: open ? 'rotate(180deg)' : 'none',
+          marginLeft: 4
+        }}>▾</span>
       </button>
+
+      <style>{`
+        .phrase-pool-card:hover {
+          border-color: ${colors.active}66 !important;
+          transform: translateY(-1px);
+          box-shadow: 0 6px 16px ${colors.active}12;
+        }
+        .phrase-pool-card:hover .category-icon {
+          transform: scale(1.05);
+        }
+      `}</style>
 
       {open && (
         <div style={{ padding: 16 }}>

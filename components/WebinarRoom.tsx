@@ -9,6 +9,8 @@ import type { Webinar, WebinarEvent, ChatMessage, ChatMessagePayload, OfferPopup
 import dynamic from 'next/dynamic'
 import ChatPanel from './ChatPanel'
 import type { Material } from './ChatPanel'
+import OfferBar from './OfferBar'
+import SaleToast from './SaleToast'
 
 const WebinarQuiz = dynamic(() => import('./WebinarQuiz'), { ssr: false })
 const WaitingRoom = dynamic(() => import('./WaitingRoom'), { ssr: false })
@@ -404,6 +406,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const [quizOpen, setQuizOpen] = useState(false)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [aiTyping, setAiTyping] = useState(false)
+  const [saleToastActive, setSaleToastActive] = useState(false)
 
   // Waiting room + session clock
   const brandColor = webinar.brand_color || '#6366f1'
@@ -985,11 +988,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       // Broadcast sales
       if (p.broadcast_sales) {
         startBroadcast(p)
+        setSaleToastActive(true)
       }
     })
 
     engine.on('hide_pitch_button', () => {
       setPitchVisible(false)
+      setSaleToastActive(false)
       if (broadcastTimerRef.current) clearTimeout(broadcastTimerRef.current)
     })
 
@@ -1731,6 +1736,27 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       </button>
       </div>{/* end .webinar-room */}
 
+      {/* OFFER BAR — sticky bottom bar when pitch fires */}
+      <OfferBar
+        visible={pitchVisible && !!pitchPayload}
+        ctaText={pitchPayload?.cta_text ?? ''}
+        ctaUrl={pitchPayload?.cta_url ?? '#'}
+        countdown={countdown}
+        scarcitySpots={scarcitySpots}
+        imageUrl={pitchPayload?.image_url}
+        onCTAClick={handleCTAClick}
+      />
+
+      {/* SALE TOAST — purchase notifications bottom-left */}
+      <SaleToast
+        active={saleToastActive}
+        namesPool={
+          pitchPayload?.broadcast_names
+            ? pitchPayload.broadcast_names.split(',').map(n => n.trim()).filter(Boolean)
+            : webinar.chat_names?.length ? webinar.chat_names
+            : DEFAULT_NAMES
+        }
+      />
 
       {/* QUIZ MODAL */}
       <WebinarQuiz
