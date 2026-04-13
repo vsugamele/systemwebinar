@@ -379,6 +379,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const channelRef = useRef<RealtimeChannel | null>(null)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [mobileChatOpen, setMobileChatOpen] = useState(false)
   const [userName] = useState('Você')
   const [viewers, setViewers] = useState(() => {
     const vStart = webinar.fake_viewers_start ?? 30
@@ -711,6 +712,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           return
         }
         const currentTime = videoRef.current?.currentTime ?? elapsedRef.current
+        // Stop firing chat messages after session ends
+        if (currentTime >= (webinar.duration_seconds || 3600)) return
         const seg = findActiveSegment(segs, currentTime)
 
         if (!seg || seg.cpm <= 0) {
@@ -725,6 +728,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         cpmTimerRef.current = setTimeout(() => {
           if (!hasStartedRef.current || !waitingDoneRef.current) { tick(); return }
           const fireTime = videoRef.current?.currentTime ?? elapsedRef.current
+          // Guard: stop when session ended
+          if (fireTime >= (webinar.duration_seconds || 3600)) return
           const activeSeg = findActiveSegment(segs, fireTime)
           if (activeSeg && activeSeg.cpm > 0) {
             const phrases = getPhrasesForSegment(activeSeg)
@@ -770,6 +775,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           return
         }
         const currentTime = videoRef.current?.currentTime ?? elapsedRef.current
+        // Stop firing chat messages after session ends
+        if (currentTime >= (webinar.duration_seconds || 3600)) return
         if (currentTime >= startSec && currentTime <= endSec) {
           const name = poolNames[Math.floor(Math.random() * poolNames.length)]
           const text = phrases[Math.floor(Math.random() * phrases.length)]
@@ -1299,15 +1306,22 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       <div className="video-section" ref={sectionRef}>
         <div className="video-header">
           <div className="webinar-title-bar">
-            <div className="live-badge" style={sessionIsScheduledFuture ? { background: 'rgba(156,163,175,0.15)', borderColor: 'rgba(156,163,175,0.3)' } : {}}>
-              <div className="live-dot" style={sessionIsScheduledFuture ? { background: '#9ca3af', boxShadow: 'none', animation: 'none' } : {}} />
-              {sessionIsScheduledFuture ? 'EM BREVE' : 'AO VIVO'}
-              {!sessionIsScheduledFuture && (
-                <span style={{ opacity: 0.7, fontWeight: 400, marginLeft: 4 }}>
-                  {String(Math.floor(elapsedSeconds / 3600)).padStart(2, '0')}:{String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2, '0')}:{String(elapsedSeconds % 60).padStart(2, '0')}
-                </span>
-              )}
-            </div>
+            {isSessionEnded ? (
+              <div className="live-badge" style={{ background: 'rgba(34,197,94,0.12)', borderColor: 'rgba(34,197,94,0.3)', color: '#22c55e' }}>
+                <div className="live-dot" style={{ background: '#22c55e', animation: 'none', boxShadow: 'none' }} />
+                ENCERRADO
+              </div>
+            ) : (
+              <div className="live-badge" style={sessionIsScheduledFuture ? { background: 'rgba(156,163,175,0.15)', borderColor: 'rgba(156,163,175,0.3)' } : {}}>
+                <div className="live-dot" style={sessionIsScheduledFuture ? { background: '#9ca3af', boxShadow: 'none', animation: 'none' } : {}} />
+                {sessionIsScheduledFuture ? 'EM BREVE' : 'AO VIVO'}
+                {!sessionIsScheduledFuture && (
+                  <span style={{ opacity: 0.7, fontWeight: 400, marginLeft: 4 }}>
+                    {String(Math.floor(elapsedSeconds / 3600)).padStart(2, '0')}:{String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2, '0')}:{String(elapsedSeconds % 60).padStart(2, '0')}
+                  </span>
+                )}
+              </div>
+            )}
             <span style={{ fontSize: 14, fontWeight: 600 }}>{webinar.display_name || webinar.name}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1335,10 +1349,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
               ⛶ 
               <span className="hidden-mobile" style={{ fontSize: 11 }}>Expandir</span>
             </button>
-            <div className="viewer-count">
-              <div className="viewer-dot" />
-              <span className={viewersPulse ? 'bump-anim' : ''}>{viewers.toLocaleString()}</span> assistindo
-            </div>
+            {!isSessionEnded && (
+              <div className="viewer-count">
+                <div className="viewer-dot" />
+                <span className={viewersPulse ? 'bump-anim' : ''}>{viewers.toLocaleString()}</span> assistindo
+              </div>
+            )}
           </div>
         </div>
 
@@ -1701,9 +1717,18 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         elapsedSeconds={elapsedSeconds}
         aiTyping={aiTyping}
         defaultTab={defaultTab}
+        mobileChatOpen={mobileChatOpen}
         onSendMessage={sendChatMessage}
         onSendQa={sendQaMessage}
       />
+      {/* Mobile landscape chat toggle button */}
+      <button
+        className="mobile-chat-toggle"
+        onClick={() => setMobileChatOpen(o => !o)}
+        aria-label={mobileChatOpen ? 'Fechar chat' : 'Abrir chat'}
+      >
+        {mobileChatOpen ? '✕' : '💬'}
+      </button>
       </div>{/* end .webinar-room */}
 
 

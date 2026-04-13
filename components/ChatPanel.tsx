@@ -23,6 +23,7 @@ interface ChatPanelProps {
   elapsedSeconds: number
   aiTyping: boolean
   defaultTab?: ChatTab
+  mobileChatOpen?: boolean
   onSendMessage: (text: string) => void
   onSendQa: (text: string) => void
 }
@@ -35,6 +36,7 @@ export default function ChatPanel({
   elapsedSeconds,
   aiTyping,
   defaultTab = 'chat',
+  mobileChatOpen = false,
   onSendMessage,
   onSendQa,
 }: ChatPanelProps) {
@@ -61,7 +63,7 @@ export default function ChatPanel({
   }
 
   return (
-    <div className="chat-section">
+    <div className={`chat-section${mobileChatOpen ? ' mobile-chat-open' : ''}`}>
       {/* TABS HEADER */}
       <div style={{
         display: 'flex', borderBottom: '1px solid var(--border)',
