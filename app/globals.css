@@ -872,6 +872,22 @@ tbody tr:hover td { background: var(--bg-hover); }
   object-fit: contain;
 }
 
+/* Vimeo / VTurb: scale iframe to cover the wrapper (eliminates black letterbox bars) */
+.iframe-cover {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100% !important;
+  height: 100% !important;
+  /* Scale up slightly so the player content fills the entire area */
+  transform: translate(-50%, -50%) scale(1.005);
+  transform-origin: center center;
+}
+
+.video-wrapper-cover {
+  background: transparent !important;
+}
+
 /* ---- Chat section ---- */
 .chat-section {
   display: flex;

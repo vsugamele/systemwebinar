@@ -107,7 +107,8 @@ export default function ReplayRoomClient({ webinar }: Props) {
       {/* Video */}
       <div style={{ width: '100%', maxWidth: 900, position: 'relative' }}>
         <div style={{
-          background: '#000', borderRadius: 16, overflow: 'hidden',
+          background: webinar.video_url && (isVimeoUrl(webinar.video_url) || isVturbUrl(webinar.video_url)) ? 'transparent' : '#000',
+          borderRadius: 16, overflow: 'hidden',
           aspectRatio: '16/9', border: '1px solid rgba(255,255,255,0.08)',
           boxShadow: '0 40px 80px rgba(0,0,0,0.6)'
         }}>

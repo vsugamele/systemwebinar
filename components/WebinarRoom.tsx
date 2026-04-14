@@ -184,7 +184,7 @@ function getVimeoEmbedUrl(url: string): string | null {
     }
 
     if (!videoId) return null
-    return `https://player.vimeo.com/video/${videoId}?autoplay=1&muted=1&controls=0&title=0&byline=0&portrait=0&loop=0&playsinline=1`
+    return `https://player.vimeo.com/video/${videoId}?autoplay=1&muted=1&controls=0&title=0&byline=0&portrait=0&loop=0&playsinline=1&background=1`
   } catch {
     return null
   }
@@ -1363,7 +1363,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           </div>
         </div>
 
-        <div className="video-wrapper" style={{ position: 'relative' }}>
+        <div className={`video-wrapper${(webinar.video_url && (isVimeoUrl(webinar.video_url) || isVturbUrl(webinar.video_url))) ? ' video-wrapper-cover' : ''}`} style={{ position: 'relative' }}>
           {/* Countdown overlay when session is scheduled for the future */}
           {sessionIsScheduledFuture && (
             <div style={{
@@ -1494,7 +1494,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             ) : isVimeoUrl(webinar.video_url) ? (
               <iframe
                 src={getVimeoEmbedUrl(webinar.video_url) || ''}
-                style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
+                className="iframe-cover"
+                style={{ border: 'none', pointerEvents: 'none' }}
                 allow="autoplay; fullscreen; picture-in-picture"
                 allowFullScreen={false}
                 title={webinar.name}
