@@ -1421,18 +1421,29 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           {!sessionIsScheduledFuture && webinar.video_url ? (
             isYouTubeUrl(webinar.video_url) ? (
               <>
+                {/* iframe escalado além do container para cortar a chrome do YouTube (topo/base)
+                    O container tem overflow:hidden — o excesso some, dando visual limpo sem barras */}
                 <iframe
                   key={ytKey}
                   ref={ytIframeRef}
                   src={ytSrc}
-                  style={{ width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
+                  style={{
+                    position: 'absolute',
+                    // Aumenta 18% para cortar o chrome do YouTube em cima e embaixo
+                    top: '-9%',
+                    left: 0,
+                    width: '100%',
+                    height: '118%',
+                    border: 'none',
+                    pointerEvents: 'none',
+                  }}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen={false}
                   title={webinar.name}
                   onLoad={() => setYtIframeLoaded(true)}
                 />
 
-                {/* Enquanto o iframe não carregou: spinner mínimo */}
+                {/* Spinner enquanto o iframe não carregou */}
                 {!ytIframeLoaded && (
                   <div style={{
                     position: 'absolute', inset: 0, zIndex: 4,
@@ -1452,16 +1463,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                   </div>
                 )}
 
-                {/* Barras que cobrem elementos da UI do YouTube — visíveis assim que o iframe carrega */}
-                {ytIframeLoaded && (
-                  <>
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 50, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
-                    <div style={{ position: 'absolute', top: 0, left: 0, width: '40%', maxWidth: 220, height: 44, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
-                    <div style={{ position: 'absolute', top: 0, right: 0, width: '30%', maxWidth: 180, height: 44, background: '#000', zIndex: 2, pointerEvents: 'none' }} />
-                  </>
-                )}
-
-                {/* Botão de ativar som — aparece assim que o iframe carrega (vídeo já tocando mutado ao fundo) */}
+                {/* Botão de ativar som */}
                 {ytIframeLoaded && ytMuted && (
                   <div style={{
                     position: 'absolute', inset: 0, zIndex: 6,
