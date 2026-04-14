@@ -190,7 +190,7 @@ export default function WebinarOverviewPage() {
             <div>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>URL do Vídeo Mestre</label>
               <input
-                type="url"
+                type="text"
                 className="form-input"
                 style={{ width: '100%' }}
                 value={form.video_url}
@@ -296,12 +296,12 @@ export default function WebinarOverviewPage() {
             <div>
               <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>Webhook URL (Disparado em Cliques no Pitch)</label>
               <input
-                type="url"
+                type="text"
                 className="form-input"
                 style={{ width: '100%', fontFamily: 'monospace', fontSize: 13 }}
                 value={form.webhook_url}
                 onChange={e => setForm({ ...form, webhook_url: e.target.value })}
-                placeholder="https://hook.us1.make.com/..."
+                placeholder="https://hook.us1.make.com/... (opcional)"
               />
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                 Envio POST com a Payload: <code>{`{ event: "pitch_clicked", lead: { name, email, phone } }`}</code>
@@ -320,7 +320,7 @@ export default function WebinarOverviewPage() {
                 <div>
                   <label style={{ display: 'block', fontSize: 13, fontWeight: 600, marginBottom: 6, color: 'var(--text-secondary)' }}>Endpoint URL (Envio de Texto)</label>
                   <input
-                    type="url"
+                    type="text"
                     className="form-input"
                     style={{ width: '100%', fontFamily: 'monospace', fontSize: 13 }}
                     value={form.whatsapp_api_url}
