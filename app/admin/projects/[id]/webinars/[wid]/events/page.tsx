@@ -15,6 +15,7 @@ const EVENT_TYPES = [
   { type: 'hide_pitch_button', label: 'Ocultar Pitch', icon: '🙈', chipClass: 'chip-pitch' },
   { type: 'email_auto', label: 'E-mail Automático', icon: '📧', chipClass: 'chip-email' },
   { type: 'poll', label: 'Enquete', icon: '📊', chipClass: 'chip-poll' },
+  { type: 'quiz_question', label: 'Quiz no Chat', icon: '📝', chipClass: 'chip-quiz' },
 ]
 
 const emptyPayloads: Record<EventType, object> = {
@@ -31,6 +32,7 @@ const emptyPayloads: Record<EventType, object> = {
   hide_pitch_button: {},
   email_auto: { template: 'followup', delay_minutes: 10 },
   poll: { question: '', options: ['Sim', 'Não'] },
+  quiz_question: { question_id: '' },
 }
 
 function formatTime(seconds: number) {
@@ -164,6 +166,7 @@ export default function EventsPage() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editEvent, setEditEvent] = useState<WebinarEvent | null>(null)
+  const [quizQuestions, setQuizQuestions] = useState<{ id: string; question: string }[]>([])
 
   // AI generator state
   const [aiScript, setAiScript] = useState('')
@@ -218,6 +221,8 @@ export default function EventsPage() {
     setDuration(webinar?.duration_seconds || 3600)
     const { data } = await supabase.from('webi_events').select('*').eq('webinar_id', webinarId).order('timestamp_seconds')
     setEvents(data || [])
+    const { data: qs } = await supabase.from('webi_quiz_questions').select('id, question').eq('webinar_id', webinarId).order('sort_order')
+    setQuizQuestions(qs || [])
     setLoading(false)
   }
 
@@ -1114,6 +1119,34 @@ export default function EventsPage() {
                       onChange={e => updatePayload('options', e.target.value.split('\n'))} />
                   </div>
                 </>
+              )}
+
+              {form.type === 'quiz_question' && (
+                <div className="form-group">
+                  <label className="form-label">Questão do Quiz</label>
+                  {quizQuestions.length === 0 ? (
+                    <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: 14, fontSize: 13, color: 'var(--danger)' }}>
+                      ⚠️ Nenhuma questão cadastrada. Vá em{' '}
+                      <a href={`/admin/projects/${projectId}/webinars/${webinarId}/quiz`} target="_blank" style={{ color: 'var(--brand)' }}>📝 Quiz</a>{' '}
+                      e adicione as perguntas primeiro.
+                    </div>
+                  ) : (
+                    <select className="form-input form-select"
+                      value={form.payload.question_id || ''}
+                      onChange={e => updatePayload('question_id', e.target.value)}
+                    >
+                      <option value="">Selecione uma questão...</option>
+                      {quizQuestions.map(q => (
+                        <option key={q.id} value={q.id}>
+                          {q.question.length > 80 ? q.question.slice(0, 80) + '…' : q.question}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>
+                    💡 A questão aparecerá como card interativo no chat da sala, com botões de resposta e simulação de votos automática.
+                  </div>
+                </div>
               )}
             </div>
 

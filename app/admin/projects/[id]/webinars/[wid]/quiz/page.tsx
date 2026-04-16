@@ -44,14 +44,17 @@ export default function QuizAdminPage() {
     correct_index: 0,
     sort_order: 0,
   })
+  const [hasQuiz, setHasQuiz] = useState(false)
+  const [togglingQuiz, setTogglingQuiz] = useState(false)
 
   async function load() {
     const { data: webinar } = await supabase
       .from('webi_webinars')
-      .select('name')
+      .select('name, has_quiz')
       .eq('id', webinarId)
       .single()
     setWebinarName(webinar?.name || '')
+    setHasQuiz(!!(webinar as Record<string, unknown> | null)?.has_quiz)
 
     const { data: qs } = await supabase
       .from('webi_quiz_questions')
@@ -72,13 +75,23 @@ export default function QuizAdminPage() {
   }
 
   useEffect(() => {
-    supabase.from('webi_webinars').select('name').eq('id', webinarId).single()
-      .then(({ data: webinar }) => setWebinarName(webinar?.name || ''))
+    supabase.from('webi_webinars').select('name, has_quiz').eq('id', webinarId).single()
+      .then(({ data: webinar }) => {
+        setWebinarName(webinar?.name || '')
+        setHasQuiz(!!(webinar as Record<string, unknown> | null)?.has_quiz)
+      })
     supabase.from('webi_quiz_questions').select('*').eq('webinar_id', webinarId).order('sort_order')
       .then(({ data: qs }) => setQuestions(qs || []))
     supabase.from('webi_quiz_responses').select('*').eq('webinar_id', webinarId).order('completed_at', { ascending: false }).limit(100)
       .then(({ data: rs }) => { setResponses(rs || []); setLoading(false) })
   }, [webinarId])
+
+  async function toggleHasQuiz(val: boolean) {
+    setTogglingQuiz(true)
+    await supabase.from('webi_webinars').update({ has_quiz: val }).eq('id', webinarId)
+    setHasQuiz(val)
+    setTogglingQuiz(false)
+  }
 
   function openCreate() {
     setEditItem(null)
@@ -173,6 +186,37 @@ export default function QuizAdminPage() {
         {activeTab === 'questions' && (
           <button className="btn btn-primary" onClick={openCreate}>+ Adicionar Questão</button>
         )}
+      </div>
+
+      {/* has_quiz toggle */}
+      <div style={{ margin: '0 24px 20px', background: 'var(--bg-card)', borderRadius: 12, padding: '16px 20px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 3 }}>🎯 Quiz no Chat — Integração Ativa</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+            {hasQuiz
+              ? 'Quiz ativo! Questões aparecem no chat quando configuradas na '
+              : 'Ative para que as questões possam ser disparadas via '}
+            <Link href={`/admin/projects/${projectId}/webinars/${webinarId}/events`} style={{ color: 'var(--brand)' }}>⚡ Timeline</Link>.
+          </div>
+        </div>
+        <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+          <div style={{
+            width: 48, height: 26, borderRadius: 13,
+            background: hasQuiz ? 'var(--brand)' : 'var(--border)',
+            position: 'relative', transition: 'background 0.2s',
+            opacity: togglingQuiz ? 0.6 : 1,
+          }} onClick={() => !togglingQuiz && toggleHasQuiz(!hasQuiz)}>
+            <div style={{
+              position: 'absolute', top: 3, left: hasQuiz ? 24 : 3,
+              width: 20, height: 20, borderRadius: '50%',
+              background: '#fff', transition: 'left 0.2s',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+            }} />
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 600, color: hasQuiz ? 'var(--brand)' : 'var(--text-muted)' }}>
+            {hasQuiz ? 'Ativo' : 'Inativo'}
+          </span>
+        </label>
       </div>
 
       {/* Stats */}

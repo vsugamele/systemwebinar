@@ -6,7 +6,7 @@ export interface ChatSegment {
   cpm: number
   phrases?: 'elogios' | 'vaga' | 'engajamento' | 'todas' | null
 }
-export type EventType = 'chat_message' | 'offer_popup' | 'pitch_button' | 'hide_pitch_button' | 'email_auto' | 'poll'
+export type EventType = 'chat_message' | 'offer_popup' | 'pitch_button' | 'hide_pitch_button' | 'email_auto' | 'poll' | 'quiz_question'
 export type SessionEventType = 'joined' | 'watch_second' | 'cta_clicked' | 'cta_dismissed' | 'popup_seen' | 'popup_dismissed' | 'left' | 'chat_sent'
 
 export interface Project {
@@ -118,12 +118,17 @@ export interface EmailAutoPayload {
   delay_minutes: number
 }
 
+export interface QuizQuestionPayload {
+  question_id: string
+}
+
 export type EventPayload =
   | ChatMessagePayload
   | OfferPopupPayload
   | PitchButtonPayload
   | EmailAutoPayload
   | PollPayload
+  | QuizQuestionPayload
   | Record<string, never>
 
 export interface PollPayload {
@@ -164,6 +169,13 @@ export interface SessionEvent {
   created_at: string
 }
 
+export interface QuizCardData {
+  question_id: string
+  question: string
+  options: string[]
+  correct_index: number
+}
+
 export interface ChatMessage {
   id: string
   author: string
@@ -175,6 +187,7 @@ export interface ChatMessage {
   image_url?: string
   link_url?: string
   link_text?: string
+  quiz_card?: QuizCardData
 }
 
 // Analytics

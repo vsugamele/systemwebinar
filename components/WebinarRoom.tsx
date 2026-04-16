@@ -408,6 +408,15 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const [aiTyping, setAiTyping] = useState(false)
   const [saleToastActive, setSaleToastActive] = useState(false)
 
+  // Quiz-in-chat state
+  const [quizQuestions, setQuizQuestions] = useState<Record<string, { question: string; options: string[]; correct_index: number }>>({}) // keyed by question_id
+  const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({}) // question_id → chosen option
+  const [quizVoteCounts, setQuizVoteCounts] = useState<Record<string, number[]>>({}) // question_id → count per option
+  const hasQuiz = !!(webinar as unknown as Record<string, unknown>).has_quiz
+  // Ref so event engine closure can access quiz questions without stale closure
+  const quizQuestionsRef = useRef<Record<string, { question: string; options: string[]; correct_index: number }>>({})
+  useEffect(() => { quizQuestionsRef.current = quizQuestions }, [quizQuestions])
+
   // Waiting room + session clock
   const brandColor = webinar.brand_color || '#6366f1'
   const startOffset = getStartOffset(webinar.session_started_at)
@@ -464,6 +473,20 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       .then(data => setMaterials(data || []))
       .catch(() => {})
   }, [webinar.id])
+
+  // Load quiz questions for in-chat quiz (fetched upfront so cards can render)
+  useEffect(() => {
+    if (!hasQuiz) return
+    fetch(`/api/quiz?webinar_id=${webinar.id}`)
+      .then(r => r.json())
+      .then((data: { id: string; question: string; options: string[]; correct_index: number }[]) => {
+        const map: Record<string, { question: string; options: string[]; correct_index: number }> = {}
+        data.forEach(q => { map[q.id] = { question: q.question, options: q.options, correct_index: q.correct_index } })
+        setQuizQuestions(map)
+      })
+      .catch(() => {})
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [webinar.id, hasQuiz])
 
   // Reveal materials as time progresses
   useEffect(() => {
@@ -998,6 +1021,69 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       if (broadcastTimerRef.current) clearTimeout(broadcastTimerRef.current)
     })
 
+    engine.on('quiz_question', (ev) => {
+      const p = ev.payload as { question_id: string }
+      const qData = quizQuestionsRef.current[p.question_id]
+      if (!qData) return
+
+      // Insert quiz card message into chat
+      setMessages(m => [...m, {
+        id: `quiz-${p.question_id}`,
+        author: 'Quiz',
+        text: '',
+        timestamp: ev.timestamp_seconds,
+        isSimulated: false,
+        quiz_card: {
+          question_id: p.question_id,
+          question: qData.question,
+          options: qData.options,
+          correct_index: qData.correct_index,
+        },
+      }])
+
+      // Simulate fake votes after 2-6s
+      const numOptions = qData.options.length
+      const correctIdx = qData.correct_index
+      const baseVoters = Math.floor(Math.random() * 35) + 30 // 30-65 fake voters
+      const rawDist = qData.options.map((_, i) => {
+        if (i === correctIdx) return 0.55 + Math.random() * 0.12 // 55-67% na correta
+        return (0.33 / (numOptions - 1)) * (0.6 + Math.random() * 0.8)
+      })
+      const totalDist = rawDist.reduce((a, b) => a + b, 0)
+      const counts = rawDist.map(d => Math.max(1, Math.round((d / totalDist) * baseVoters)))
+
+      setTimeout(() => {
+        setQuizVoteCounts(prev => ({ ...prev, [p.question_id]: counts }))
+      }, 2000 + Math.random() * 4000)
+
+      // Fake voters send chat messages
+      const poolNames = webinar.chat_names?.length ? webinar.chat_names : DEFAULT_NAMES
+      const fakeMsgCount = Math.min(4, Math.floor(Math.random() * 3) + 2)
+      for (let fi = 0; fi < fakeMsgCount; fi++) {
+        setTimeout(() => {
+          // Pick a random option weighted by counts
+          const total = counts.reduce((a, b) => a + b, 0)
+          let rnd = Math.random() * total
+          let chosenOpt = 0
+          for (let ci = 0; ci < counts.length; ci++) {
+            rnd -= counts[ci]
+            if (rnd <= 0) { chosenOpt = ci; break }
+          }
+          const label = String.fromCharCode(65 + chosenOpt)
+          const name = poolNames[Math.floor(Math.random() * poolNames.length)]
+          const texts = [`Marquei a ${label}! 🤔`, `Letra ${label} com certeza!`, `Acho que é ${label}`, `${label} pra mim!`, `Respondi ${label}`]
+          const text = texts[Math.floor(Math.random() * texts.length)]
+          setMessages(m => [...m, {
+            id: `quiz-voter-${p.question_id}-${fi}`,
+            author: name,
+            text,
+            timestamp: ev.timestamp_seconds,
+            isSimulated: true,
+          }])
+        }, 3000 + fi * (800 + Math.random() * 1200))
+      }
+    })
+
     engineRef.current = engine
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events])
@@ -1247,6 +1333,41 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     if (!popupPayload) return
     trackEvent('cta_clicked', Math.floor(videoRef.current?.currentTime || 0), { source: 'popup' })
     window.open(popupPayload.cta_url, '_blank')
+  }
+
+  // ---- Quiz vote handler ----
+  function handleQuizVote(questionId: string, optionIdx: number) {
+    if (quizAnswers[questionId] !== undefined) return // already voted
+    setQuizAnswers(prev => ({ ...prev, [questionId]: optionIdx }))
+
+    // Register user's vote in the vote counts
+    setQuizVoteCounts(prev => {
+      const curr = prev[questionId] || []
+      const updated = [...curr]
+      updated[optionIdx] = (updated[optionIdx] || 0) + 1
+      return { ...prev, [questionId]: updated }
+    })
+
+    // Save response to API (async, fire-and-forget)
+    const qData = quizQuestionsRef.current[questionId]
+    if (qData) {
+      const isCorrect = optionIdx === qData.correct_index
+      const score = isCorrect ? 100 : 0
+      const leadName = typeof window !== 'undefined' ? (localStorage.getItem(`webi_lead_name_${webinar.id}`) || '') : ''
+      const leadEmail = typeof window !== 'undefined' ? (localStorage.getItem(`webi_lead_email_${webinar.id}`) || '') : ''
+      fetch('/api/quiz', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          webinar_id: webinar.id,
+          lead_name: leadName,
+          lead_email: leadEmail,
+          answers: [optionIdx],
+          score,
+          total: 1,
+        }),
+      }).catch(() => {})
+    }
   }
 
   // ---- Q&A sender (called by ChatPanel.onSendQa) ----
@@ -1728,6 +1849,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         mobileChatOpen={mobileChatOpen}
         onSendMessage={sendChatMessage}
         onSendQa={sendQaMessage}
+        quizAnswers={quizAnswers}
+        quizVoteCounts={quizVoteCounts}
+        onQuizVote={handleQuizVote}
       />
       {/* Mobile landscape chat toggle button */}
       <button
