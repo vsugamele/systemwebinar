@@ -65,7 +65,8 @@ export default async function WebinarPage({
         name,
         brand_color,
         openrouter_api_key,
-        timezone
+        timezone,
+        imperio_project_id
       )
     `)
     .eq('slug', slug)
@@ -83,7 +84,7 @@ export default async function WebinarPage({
   const hasLeadCookie = cookieStore.get(`webi_lead_id_${webinar.id}`)
   
   // Flatten project fields onto webinar for convenience
-  const project = (webinar as Record<string, unknown> & { webi_projects?: { brand_color?: string | null; openrouter_api_key?: string | null; name?: string; timezone?: string | null } | null }).webi_projects || {}
+  const project = (webinar as Record<string, unknown> & { webi_projects?: { brand_color?: string | null; openrouter_api_key?: string | null; name?: string; timezone?: string | null; imperio_project_id?: string | null } | null }).webi_projects || {}
   const projectTimezone = (project as { timezone?: string | null }).timezone || 'America/Sao_Paulo'
 
   type WebinarRow = typeof webinar
@@ -218,6 +219,7 @@ export default async function WebinarPage({
     brand_color: project.brand_color || '#6366f1',
     openrouter_api_key: project.openrouter_api_key,
     project_name: project.name,
+    imperio_project_id: (project as { imperio_project_id?: string | null }).imperio_project_id || undefined,
   }
 
   if (!hasLeadCookie && !isTest) {

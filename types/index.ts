@@ -7,7 +7,7 @@ export interface ChatSegment {
   phrases?: 'elogios' | 'vaga' | 'engajamento' | 'todas' | null
 }
 export type EventType = 'chat_message' | 'offer_popup' | 'pitch_button' | 'hide_pitch_button' | 'email_auto' | 'poll' | 'quiz_question'
-export type SessionEventType = 'joined' | 'watch_second' | 'cta_clicked' | 'cta_dismissed' | 'popup_seen' | 'popup_dismissed' | 'left' | 'chat_sent'
+export type SessionEventType = 'joined' | 'watch_second' | 'watch_milestone_30min' | 'progress_50' | 'cta_clicked' | 'cta_dismissed' | 'popup_seen' | 'popup_dismissed' | 'left' | 'chat_sent'
 
 export interface Project {
   id: string

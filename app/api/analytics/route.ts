@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
+import { imperioSend } from '@/lib/imperio'
 
 export async function POST(req: NextRequest) {
   try {
@@ -14,6 +15,41 @@ export async function POST(req: NextRequest) {
       timestamp_video: body.timestamp_video,
       metadata: body.metadata || {},
     })
+
+    // Imperio HQ — dispatch on key events (fire-and-forget, never block response)
+    const imperioProjectId = body.metadata?.imperio_project_id as string | undefined
+    if (imperioProjectId) {
+      const leadEmail = body.metadata?.lead_email as string | undefined
+      const leadName = body.metadata?.lead_name as string | undefined
+      const leadPhone = body.metadata?.lead_phone as string | undefined
+
+      if (body.event_type === 'joined' && leadEmail) {
+        imperioSend({
+          project_id: imperioProjectId,
+          event_type: 'webinar_acessado',
+          email: leadEmail,
+          nome: leadName,
+          phone: leadPhone,
+          origem: `webinar-${body.webinar_id}`,
+          tags: ['webinar-viewer'],
+          metadata: { webinar_id: body.webinar_id, session_id: body.session_id },
+        })
+      }
+
+      // 30-minute milestone — only dispatch once (client marks it in metadata)
+      if (body.event_type === 'watch_milestone_30min' && leadEmail) {
+        imperioSend({
+          project_id: imperioProjectId,
+          event_type: 'webinar_assistido',
+          email: leadEmail,
+          nome: leadName,
+          phone: leadPhone,
+          origem: `webinar-${body.webinar_id}`,
+          tags: ['webinar-engajado'],
+          metadata: { webinar_id: body.webinar_id, tempo_assistido_min: 30 },
+        })
+      }
+    }
 
     return NextResponse.json({ ok: true })
   } catch (error) {

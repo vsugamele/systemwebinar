@@ -1350,9 +1350,8 @@ export default function ChatConfigPage() {
         }}>
           <span style={{ fontSize: 20 }}>⚡</span>
           <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-            <strong style={{ color: 'var(--text-primary)' }}>Broadcast de Vendas:</strong>{' '}
-            Quando um evento <strong>Pitch Button</strong> disparar, mensagens &quot;{'{nome}'} acabou de comprar!&quot; aparecerão
-            automaticamente usando os nomes cadastrados acima.
+            <strong style={{ color: 'var(--text-primary)' }}>Efeito de Manada (Provas Sociais) no Pitch:</strong>{' '}
+            Quando o botão de compra (Pitch) for disparado pela aba Monitoramento, o chat piscará uma enxurrada orgânica de &quot;<em>[Nome] acabou de garantir a vaga!</em>&quot;. Isso ativa a Urgência Extrema e o viés de escassez, forçando os leads passivos a passarem o cartão antes que &quot;acabem as vagas&quot;.
           </div>
         </div>
       </div>
@@ -1361,8 +1360,10 @@ export default function ChatConfigPage() {
       <div className="page-body" style={{ display: activeTab === 'ia' ? 'flex' : 'none', flexDirection: 'column', gap: 20 }}>
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div>
-            <div style={{ fontWeight: 700, marginBottom: 4 }}>Ativar IA no Chat</div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Muitas mensagens? A IA pode detectar perguntas e responder automaticamente no chat.</div>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>Ativar Assistente de IA Autônomo</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 640, lineHeight: 1.5 }}>
+              <span style={{ fontWeight: 600, color: 'var(--brand)' }}>O segredo dos Webinars Milionários:</span> Enquanto você faz o pitch no vídeo, centenas de pessoas mandarão dúvidas no chat. Em vez de depender de 5 humanos, a IA responde dúvidas de compra, parcelamento e garantia em segundos, quebrando objeções no ato e transformando céticos em novos alunos automaticamente.
+            </div>
           </div>
           <label style={{ cursor: 'pointer', position: 'relative', display: 'inline-block', width: 44, height: 24 }}>
             <input type="checkbox" checked={aiEnabled} onChange={e => setAiEnabled(e.target.checked)} style={{ opacity: 0, width: 0, height: 0 }} />
@@ -1387,9 +1388,11 @@ export default function ChatConfigPage() {
         </div>
 
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, opacity: aiEnabled ? 1 : 0.5, pointerEvents: aiEnabled ? 'auto' : 'none' }}>
-          <div style={{ fontWeight: 700, marginBottom: 4 }}>Base de Conhecimento</div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>O produto, preços, detalhes, FAQ. Use isso para balizar a resposta.</div>
-          <textarea className="form-input" rows={8} placeholder="Ex: PRODUTO: Curso X, PREÇO: R$ 500, ACESSO: Imediato..." value={aiKnowledgeBase} onChange={e => setAiKnowledgeBase(e.target.value)} style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: 13 }} />
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Base de Conhecimento (Guia de Objeções)</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
+             Crie o &quot;Cérebro Comercial&quot; da Inteligência Artificial. Forneça o que ela precisa para vender: Promessa Forte, Preços (Pix/Cartão), tempo de Garantia (7 ou 30 dias?), e as 5 perguntas que mais matam suas vendas. Quando o lead disser <em>&quot;Acesso é de um ano?&quot;</em>, a IA lerá esse guia e responderá cirurgicamente focada em conversão.
+          </div>
+          <textarea className="form-input" rows={8} placeholder="PRODUTO: Formação Y&#10;PREÇO: R$ 997,00 à vista no Pix, ou 12x de R$ 97 no Cartão&#10;DÚVIDA 1: Divide no boleto? Resposta: Infelizmente não! Apenas cartão 12x!..." value={aiKnowledgeBase} onChange={e => setAiKnowledgeBase(e.target.value)} style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: 13 }} />
         </div>
 
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, opacity: aiEnabled ? 1 : 0.5, pointerEvents: aiEnabled ? 'auto' : 'none' }}>

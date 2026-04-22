@@ -194,11 +194,22 @@ export default function WebinarOverviewPage() {
                 className="form-input"
                 style={{ width: '100%' }}
                 value={form.video_url}
-                onChange={e => setForm({ ...form, video_url: e.target.value })}
+                onChange={e => {
+                  let val = e.target.value
+                  // Auto-extract VTurb URL if it's a script tag
+                  if (val.includes('<script') && val.includes('converteai.net')) {
+                    const match = val.match(/s\.src\s*=\s*["']([^"']+)["']/) || val.match(/src=["']([^"']+)["']/)
+                    if (match?.[1]) {
+                      val = match[1]
+                      toast.success('Script detectado! URL extraída com sucesso.')
+                    }
+                  }
+                  setForm({ ...form, video_url: val })
+                }}
                 placeholder="Ex: https://vimeo.com/... ou script VTurb..."
               />
               <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
-                Insira o link do YouTube, Vimeo, VTurb ou .mp4 direto.
+                Insira o link do YouTube, Vimeo, VTurb ou .mp4 direto. Se colar o script do VTurb, extrairemos o link automaticamente.
               </div>
             </div>
           </div>
@@ -230,8 +241,8 @@ export default function WebinarOverviewPage() {
             </label>
           </div>
           
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: form.waiting_room_enabled ? 16 : 0 }}>
-            Retém os convidados em uma tela de timer antes de redirecionar para a sala do vídeo.
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: form.waiting_room_enabled ? 16 : 0, lineHeight: 1.5 }}>
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>💡 Estratégia de Retenção:</span> A sala de espera gera "hype" e antecipação. Em vez de abrir o vídeo imediatamente, os convidados são retidos em um lobby com timer, aumentando o nível de compromisso e a percepção de "evento ao vivo".
           </div>
 
           {form.waiting_room_enabled && (
@@ -253,8 +264,8 @@ export default function WebinarOverviewPage() {
           <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ color: 'var(--brand)' }}>3.</span> Pixel e Tracking
           </h2>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-            Insira scripts de rastreamento (Facebook Pixel, Google Analytics, etc.) para monitorar acessos e conversões no webinar.
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20, lineHeight: 1.5 }}>
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>💡 Rastreamento Perfeito:</span> Cole aqui seus códigos (FB Pixel, Tag Manager). Como o webinar engaja muito, marque este público para suas campanhas de remarketing ("assistiu ao webinar e não comprou") e reduza o custo de aquisição.
           </div>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
@@ -287,8 +298,8 @@ export default function WebinarOverviewPage() {
           <h2 style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ color: 'var(--brand)' }}>4.</span> Integrações (Webhook)
           </h2>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
-            Dispare ações externas assim que ocorrerem eventos de alta intenção, como clicar no botão do Pitch.
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20, lineHeight: 1.5 }}>
+            <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>🚀 Automação de Abandono de Carrinho:</span> O lead ficou horas no vídeo e clicou no botão "Comprar", mas desistiu? Envie esses dados instantaneamente para plataformas externas (Make, n8n) ou direto no WhatsApp para seu time comercial fechar a venda manual.
           </div>
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>

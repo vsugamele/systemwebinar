@@ -437,8 +437,8 @@ export default function EventsPage() {
             <Link href={`/admin/projects/${projectId}/webinars`} style={{ color: 'var(--brand-light)' }}>Webinars</Link> /{' '}
             {webinarName}
           </div>
-          <h1 className="page-title">⚡ Agendador de Eventos</h1>
-          <p className="page-subtitle">Configure os eventos que aparecem automaticamente durante o webinar</p>
+          <h1 className="page-title">⚡ Orquestrador de Vendas (Eventos)</h1>
+          <p className="page-subtitle">Programe os gatilhos exatos (Botões de Compra, Ofertas, Provas Sociais) no minuto estratégico do seu Roteiro.</p>
         </div>
 
         <div style={{ display: 'flex', gap: 8 }}>
@@ -630,9 +630,9 @@ export default function EventsPage() {
               {chatTab === 'ai' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                   <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 10, padding: 14 }}>
-                    <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>🧠 LIA - Preparar Chat Automaticamente</div>
+                    <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>🧠 LIA - Clonagem de Audiência (IA)</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
-                      Cole o <b>Roteiro ou Transcrição</b> do seu vídeo. A LIA (Inteligência Artificial) usará o motor configurado na aba "Chat & IA" do Webinar (através do OpenRouter) para analisar o conteúdo e gerar mensagens autênticas distribuídas em toda a duração do vídeo.
+                      Cole o <b>Roteiro ou Transcrição</b> do seu vídeo. A LIA analisará seu roteiro e criará uma audiência engajada de forma automatizada: pessoas concordando, se surpreendendo, e criando antecipação extrema para a venda. O motor de IA master deve estar configurado na aba &quot;Chat &amp; IA&quot;.
                     </div>
                     {aiError && <div style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', padding: 10, borderRadius: 8, fontSize: 13, marginBottom: 12 }}>{aiError}</div>}
                     

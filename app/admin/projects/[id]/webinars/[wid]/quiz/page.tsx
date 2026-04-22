@@ -177,10 +177,9 @@ export default function QuizAdminPage() {
               Webinars
             </Link>{' '}/ {webinarName}
           </div>
-          <h1 className="page-title">📝 Quiz do Webinar</h1>
+          <h1 className="page-title">📝 Quiz de Engajamento e Qualificação</h1>
           <p className="page-subtitle">
-            Configure perguntas de múltipla escolha que os participantes podem responder durante o webinar.
-            Aprovados (≥70%) recebem um certificado para download.
+            Prenda a atenção da audiência com perguntas gamificadas. Use o quiz não apenas para dar certificados, mas para reforçar a &quot;Dor&quot; do seu lead e alinhar com a &quot;Solução&quot; (seu produto) antes do momento de pitch. Aprovados (&ge;70%) ganham certificado e ancoram o valor.
           </p>
         </div>
         {activeTab === 'questions' && (
@@ -273,11 +272,9 @@ export default function QuizAdminPage() {
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
             <span style={{ fontSize: 24 }}>💡</span>
             <div>
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>Como funciona</div>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>Micro-Comprometimento e Reciprocidade</div>
               <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                O quiz aparece quando o participante clica no botão <strong>📝 Quiz</strong> no topo da sala.
-                Configure questões de múltipla escolha — marque a resposta correta de cada uma.
-                Participantes com nota ≥ 70% recebem um <strong>certificado de conclusão</strong> para download.
+                Cada resposta que o Lead fornece é um &quot;sim&quot; que ele dá para o seu conteúdo (Micro-Comprometimento). Quando ele passa no teste e recebe o <strong>Certificado</strong>, o Gatilho da Reciprocidade é ativado. Configure suas perguntas para destacar o problema que ele tem e por que as soluções que ele tentou antes falharam!
               </div>
             </div>
           </div>

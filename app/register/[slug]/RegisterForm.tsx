@@ -45,16 +45,31 @@ export default function RegisterForm({ webinar, slug }: Props) {
     setError('')
 
     try {
+      const sp = new URLSearchParams(window.location.search)
       const res = await fetch('/api/leads', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, webinar_id: webinar.id }),
+        body: JSON.stringify({
+          ...form,
+          webinar_id: webinar.id,
+          utm_source: sp.get('utm_source'),
+          utm_medium: sp.get('utm_medium'),
+          utm_campaign: sp.get('utm_campaign'),
+          page_url: window.location.href,
+        }),
       })
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}))
         throw new Error(data.error || 'Erro ao registrar')
       }
+
+      // Store lead data for Imperio HQ room tracking
+      try {
+        localStorage.setItem('webi_lead_email', form.email)
+        localStorage.setItem('webi_lead_name', form.name)
+        localStorage.setItem('webi_lead_phone', form.phone || '')
+      } catch {}
 
       // Redirect to live webinar room
       router.push(`/w/${slug}`)

@@ -27,14 +27,16 @@ export default function BrandingPage() {
   const [brandColor, setBrandColor] = useState('#6366f1')
   const [webhookUrl, setWebhookUrl] = useState('')
   const [timezone, setTimezone] = useState('America/Sao_Paulo')
+  const [imperioProjectId, setImperioProjectId] = useState('')
 
   useEffect(() => {
-    supabase.from('webi_projects').select('brand_color, webhook_url, timezone').eq('id', id).single()
+    supabase.from('webi_projects').select('brand_color, webhook_url, timezone, imperio_project_id').eq('id', id).single()
       .then(({ data }) => {
         if (data) {
           setBrandColor(data.brand_color || '#6366f1')
           setWebhookUrl(data.webhook_url || '')
           setTimezone(data.timezone || 'America/Sao_Paulo')
+          setImperioProjectId(data.imperio_project_id || '')
         }
         setLoading(false)
       })
@@ -43,7 +45,7 @@ export default function BrandingPage() {
   async function save(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
-    const { error } = await supabase.from('webi_projects').update({ brand_color: brandColor, webhook_url: webhookUrl, timezone }).eq('id', id)
+    const { error } = await supabase.from('webi_projects').update({ brand_color: brandColor, webhook_url: webhookUrl, timezone, imperio_project_id: imperioProjectId || null }).eq('id', id)
     setSaving(false)
     if (error) toast.error('Erro ao salvar.')
     else toast.success('Branding salvo!')
@@ -146,6 +148,33 @@ export default function BrandingPage() {
           />
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
             Payload enviado: <code style={{ color: 'var(--brand)' }}>{'{ name, email, webinar_id, webinar_name, timestamp }'}</code>
+          </div>
+        </div>
+
+        {/* Imperio HQ */}
+        <div style={{
+          background: 'var(--bg-card)', border: '1px solid var(--border)',
+          borderRadius: 16, padding: 24,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <span style={{ fontSize: 18 }}>👑</span>
+            <span style={{ fontWeight: 700 }}>Imperio HQ — Project ID</span>
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+            Integração nativa com o Imperio HQ CRM. Quando configurado, os leads deste projeto
+            serão enviados automaticamente ao cadastrar, ao entrar na sala e ao assistir por 30+ minutos.
+          </div>
+          <input
+            className="form-input"
+            placeholder="Ex: proj_abc123 (ID do projeto no Imperio HQ)"
+            value={imperioProjectId}
+            onChange={e => setImperioProjectId(e.target.value)}
+            style={{ fontFamily: 'monospace' }}
+          />
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
+            Eventos disparados: <code style={{ color: 'var(--brand)' }}>lead_cadastrado</code>,{' '}
+            <code style={{ color: 'var(--brand)' }}>webinar_acessado</code>,{' '}
+            <code style={{ color: 'var(--brand)' }}>webinar_assistido</code>
           </div>
         </div>
 

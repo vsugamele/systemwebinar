@@ -190,41 +190,15 @@ function getVimeoEmbedUrl(url: string): string | null {
   }
 }
 
-function isVturbUrl(url: string): boolean {
-  try {
-    const u = new URL(url)
-    return u.hostname === 'scripts.converteai.net' || u.hostname.includes('vturb')
-  } catch {
-    return false
-  }
+function isVturbUrl(url: string | null | undefined): boolean {
+  if (!url) return false
+  return url.includes('scripts.converteai.net') || url.includes('vturb')
 }
 
-function getVturbPlayerId(url: string): string | null {
-  const match = url.match(/\/players\/([^/]+)\/player\.js/)
-  return match?.[1] ?? null
-}
-
-function VturbPlayer({ scriptUrl, playerId }: { scriptUrl: string; playerId: string }) {
-  useEffect(() => {
-    if (document.getElementById(`scr_${playerId}`)) return
-
-    const script = document.createElement('script')
-    script.id = `scr_${playerId}`
-    script.src = scriptUrl
-    script.async = true
-    document.head.appendChild(script)
-
-    return () => {
-      document.getElementById(`scr_${playerId}`)?.remove()
-    }
-  }, [scriptUrl, playerId])
-
-  return (
-    <div
-      id={`vid_${playerId}`}
-      style={{ position: 'relative', width: '100%', height: '100%' }}
-    />
-  )
+function getVturbEmbedUrl(input: string): string {
+  const match = input.match(/https:\/\/[^"'\s<>]+/i)
+  const base = match ? match[0] : input
+  return base.replace(/\/v4\/player\.js/i, '/embed.html').replace(/\/player\.js/i, '/embed.html')
 }
 
 // ---- Chat segment helpers ----
@@ -449,16 +423,19 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // Using it directly eliminates the 0 → real-value flip that caused the flash.
   const [countdownToStart, setCountdownToStart] = useState<number>(initialCountdownSeconds)
 
-  // A session is active if it has formally started (has session_started_at or there's no future schedule at all) and it hasn't ended.
-  const hasStarted = !!webinar.session_started_at || !nextScheduledStart
+  // A session is active only if session_started_at is set (computed server-side)
+  const hasStarted = !!webinar.session_started_at
   const isSessionActive = hasStarted && elapsedSeconds >= 0 && !isSessionEnded
+
+  // Session is "offline" when countdown > 12h or there's no next schedule and no active session
+  const sessionIsOffline = !hasStarted && (!nextScheduledStart || countdownToStart > 43200)
 
   // Ref for use inside interval closures
   const hasStartedRef = useRef(hasStarted)
   useEffect(() => { hasStartedRef.current = hasStarted }, [hasStarted])
 
   // Show countdown ONLY if the session hasn't started yet OR if it ended and the next one is <= 12h away.
-  const sessionIsScheduledFuture = countdownToStart > 0 && !isSessionActive && (!isSessionEnded || countdownToStart <= 43200)
+  const sessionIsScheduledFuture = countdownToStart > 0 && !isSessionActive && !sessionIsOffline && (!isSessionEnded || countdownToStart <= 43200)
 
   // Chat state (managed here, passed down to ChatPanel)
   const defaultTab = webinar.chat_default_tab ?? 'chat'
@@ -665,6 +642,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       // Native videos use onTimeUpdate (every 10s) in the video setup effect
       if (!isNativeVideo && currentTick > 0 && currentTick % 30 === 0) {
         trackEvent('watch_second', currentTick)
+      }
+
+      // 30-minute milestone (fire once)
+      if (currentTick === 1800) {
+        trackEvent('watch_milestone_30min', currentTick)
       }
     }, 1000)
     
@@ -1227,6 +1209,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   async function trackEvent(type: string, timestampVideo: number, metadata: Record<string, unknown> = {}) {
     try {
+      // Enrich with Imperio HQ context if available in localStorage
+      const imperioProjectId = (webinar as Record<string, unknown>).imperio_project_id as string | undefined
+      const leadEmail = typeof window !== 'undefined' ? (localStorage.getItem('webi_lead_email') || '') : ''
+      const leadName = typeof window !== 'undefined' ? (localStorage.getItem('webi_lead_name') || '') : ''
+      const leadPhone = typeof window !== 'undefined' ? (localStorage.getItem('webi_lead_phone') || '') : ''
+
       await fetch('/api/analytics', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1236,7 +1224,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           project_id: webinar.project_id,
           event_type: type,
           timestamp_video: timestampVideo,
-          metadata,
+          metadata: {
+            ...metadata,
+            ...(imperioProjectId ? { imperio_project_id: imperioProjectId, lead_email: leadEmail, lead_name: leadName, lead_phone: leadPhone } : {}),
+          },
         }),
       })
     } catch {}
@@ -1437,6 +1428,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 <div className="live-dot" style={{ background: '#22c55e', animation: 'none', boxShadow: 'none' }} />
                 ENCERRADO
               </div>
+            ) : sessionIsOffline ? (
+              <div className="live-badge" style={{ background: 'rgba(107,114,128,0.12)', borderColor: 'rgba(107,114,128,0.3)', color: '#9ca3af' }}>
+                <div className="live-dot" style={{ background: '#4b5563', boxShadow: 'none', animation: 'none' }} />
+                OFFLINE
+              </div>
             ) : (
               <div className="live-badge" style={sessionIsScheduledFuture ? { background: 'rgba(156,163,175,0.15)', borderColor: 'rgba(156,163,175,0.3)' } : {}}>
                 <div className="live-dot" style={sessionIsScheduledFuture ? { background: '#9ca3af', boxShadow: 'none', animation: 'none' } : {}} />
@@ -1485,6 +1481,23 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         </div>
 
         <div className={`video-wrapper${(webinar.video_url && (isVimeoUrl(webinar.video_url) || isVturbUrl(webinar.video_url))) ? ' video-wrapper-cover' : ''}`} style={{ position: 'relative' }}>
+          {/* OFFLINE screen — no session in the next 12h */}
+          {sessionIsOffline && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 25, background: '#000',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: 12,
+            }}>
+              <div style={{ fontSize: 48 }}>📡</div>
+              <div style={{ fontSize: 22, fontWeight: 800, color: '#fff', letterSpacing: '0.04em', textAlign: 'center' }}>
+                Fora do Ar
+              </div>
+              <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.5)', textAlign: 'center', maxWidth: 320 }}>
+                Nenhuma transmissão programada nas próximas 12 horas. Volte em breve!
+              </div>
+            </div>
+          )}
+
           {/* Countdown overlay when session is scheduled for the future */}
           {sessionIsScheduledFuture && (
             <div style={{
@@ -1527,17 +1540,19 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             </div>
           )}
 
-          {/* Camada invisível para capturar qualquer clique/hover indevido */}
-          <div 
-            style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'transparent' }}
-            onClick={(e) => {
-              e.preventDefault();
-              if (videoRef.current && videoRef.current.paused) {
-                videoRef.current.play().catch(() => {});
-              }
-            }}
-            onContextMenu={e => e.preventDefault()}
-          />
+          {/* Camada invisível APENAS para vídeo nativo para capturar qualquer clique/hover indevido */}
+          {(!webinar.video_url || (!isYouTubeUrl(webinar.video_url) && !isVimeoUrl(webinar.video_url) && !isVturbUrl(webinar.video_url))) && (
+            <div 
+              style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'transparent' }}
+              onClick={(e) => {
+                e.preventDefault();
+                if (videoRef.current && videoRef.current.paused) {
+                  videoRef.current.play().catch(() => {});
+                }
+              }}
+              onContextMenu={e => e.preventDefault()}
+            />
+          )}
 
           {!sessionIsScheduledFuture && webinar.video_url ? (
             isYouTubeUrl(webinar.video_url) ? (
@@ -1624,16 +1639,14 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 title={webinar.name}
               />
             ) : isVturbUrl(webinar.video_url) ? (
-              (() => {
-                const pid = getVturbPlayerId(webinar.video_url)
-                return pid ? (
-                  <VturbPlayer scriptUrl={webinar.video_url} playerId={pid} />
-                ) : (
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--text-muted)' }}>
-                    URL do VTurb inválida
-                  </div>
-                )
-              })()
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000', overflow: 'hidden' }}>
+                <iframe
+                  src={getVturbEmbedUrl(webinar.video_url)}
+                  style={{ border: 'none', width: '100%', height: '100%', maxWidth: '100%', maxHeight: '100%', aspectRatio: '16/9' }}
+                  allow="autoplay; fullscreen; picture-in-picture"
+                  title={webinar.name}
+                />
+              </div>
             ) : (
               <video
                 ref={videoRef}

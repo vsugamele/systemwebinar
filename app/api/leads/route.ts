@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { imperioSend } from '@/lib/imperio'
 
 // Use anon client — leads public insert + webinars public read are allowed by RLS
 // No service role key required
@@ -12,13 +13,13 @@ function getAnonClient() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { webinar_id, email, name, phone, ...extraFields } = body
+    const { webinar_id, email, name, phone, utm_source, utm_medium, utm_campaign, page_url, ...extraFields } = body
     const supabase = getAnonClient()
 
     // Get webinar + project data (allowed by webi_webinars_public_read RLS)
     const { data: webinar, error: webinarError } = await supabase
       .from('webi_webinars')
-      .select('*, webi_projects(name, resend_from_email, accent_color, webhook_url)')
+      .select('*, webi_projects(name, resend_from_email, accent_color, webhook_url, imperio_project_id)')
       .eq('id', webinar_id)
       .single()
 
@@ -26,16 +27,16 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Webinar not found' }, { status: 404 })
     }
 
-    // Create lead (public insert allowed by RLS, upsert ignores duplicates)
+    // Create lead via SECURITY DEFINER function to bypass RLS select constraints on UPSERT
     const metadata = Object.keys(extraFields).length > 0 ? extraFields : undefined
-    const { data: lead, error: leadError } = await supabase
-      .from('webi_leads')
-      .upsert(
-        { webinar_id, project_id: webinar.project_id, email, name, phone, ...(metadata ? { metadata } : {}) },
-        { onConflict: 'email,webinar_id' }
-      )
-      .select()
-      .single()
+    const { data: lead, error: leadError } = await supabase.rpc('register_lead', {
+      p_webinar_id: webinar_id,
+      p_project_id: webinar.project_id,
+      p_email: email,
+      p_name: name || '',
+      p_phone: phone || null,
+      p_metadata: metadata || null,
+    })
 
     if (leadError) {
       console.error('Lead upsert error:', leadError)
@@ -58,6 +59,25 @@ export async function POST(req: NextRequest) {
           timestamp: new Date().toISOString(),
         }),
       }).catch(() => {}) // swallow errors — does not block lead registration
+    }
+
+    // Imperio HQ — dispatch lead_cadastrado
+    const imperioProjectId = webinar.webi_projects?.imperio_project_id
+    if (imperioProjectId) {
+      imperioSend({
+        project_id: imperioProjectId,
+        event_type: 'lead_cadastrado',
+        email,
+        nome: name,
+        phone: phone || undefined,
+        origem: `webinar-${webinar.slug || webinar.id}`,
+        tags: ['webinar-lead'],
+        metadata: { webinar_id, webinar_name: webinar.name },
+        utm_source: utm_source || undefined,
+        utm_medium: utm_medium || undefined,
+        utm_campaign: utm_campaign || undefined,
+        page_url: page_url || undefined,
+      })
     }
 
     // Send email via Resend if configured and API key is real
