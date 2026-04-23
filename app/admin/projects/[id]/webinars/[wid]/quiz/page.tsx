@@ -187,35 +187,51 @@ export default function QuizAdminPage() {
         )}
       </div>
 
-      {/* has_quiz toggle */}
-      <div style={{ margin: '0 24px 20px', background: 'var(--bg-card)', borderRadius: 12, padding: '16px 20px', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
-        <div>
-          <div style={{ fontWeight: 700, fontSize: 14, marginBottom: 3 }}>🎯 Quiz no Chat — Integração Ativa</div>
-          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.5 }}>
+      {/* has_quiz toggle — impactful card */}
+      <div style={{
+        margin: '0 24px 24px',
+        background: hasQuiz ? 'linear-gradient(135deg, rgba(99,102,241,0.1) 0%, rgba(168,85,247,0.1) 100%)' : 'var(--bg-card)',
+        borderRadius: 14, padding: '18px 22px',
+        border: `1.5px solid ${hasQuiz ? 'rgba(99,102,241,0.3)' : 'var(--border)'}`,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16,
+        transition: 'all 0.3s',
+      }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 4 }}>
+            <div style={{ fontWeight: 800, fontSize: 15 }}>🎯 Ativar Quiz no Chat</div>
+            {hasQuiz && <span style={{ fontSize: 11, background: 'rgba(34,197,94,0.15)', color: '#22c55e', padding: '2px 8px', borderRadius: 99, fontWeight: 700 }}>✓ Ativo</span>}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.6 }}>
             {hasQuiz
-              ? 'Quiz ativo! Questões aparecem no chat quando configuradas na '
-              : 'Ative para que as questões possam ser disparadas via '}
-            <Link href={`/admin/projects/${projectId}/webinars/${webinarId}/events`} style={{ color: 'var(--brand)' }}>⚡ Timeline</Link>.
+              ? <>
+                  Quiz ativado! Dispare as questões via{' '}
+                  <Link href={`/admin/projects/${projectId}/webinars/${webinarId}/events`} style={{ color: 'var(--brand)' }}>⚡ Timeline</Link>{' '}
+                  no minuto estratégico do vídeo.
+                </>
+              : <>
+                  Ative para que as questões sejam disparadas via{' '}
+                  <Link href={`/admin/projects/${projectId}/webinars/${webinarId}/events`} style={{ color: 'var(--brand)' }}>⚡ Timeline</Link>.
+                  {' '}Crie as questões abaixo primeiro.
+                </>}
           </div>
         </div>
-        <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
-          <div style={{
-            width: 48, height: 26, borderRadius: 13,
-            background: hasQuiz ? 'var(--brand)' : 'var(--border)',
-            position: 'relative', transition: 'background 0.2s',
+        <div
+          style={{
+            width: 54, height: 30, borderRadius: 15, cursor: togglingQuiz ? 'not-allowed' : 'pointer',
+            background: hasQuiz ? 'linear-gradient(135deg, #6366f1, #a855f7)' : 'var(--border)',
+            position: 'relative', transition: 'background 0.25s', flexShrink: 0,
             opacity: togglingQuiz ? 0.6 : 1,
-          }} onClick={() => !togglingQuiz && toggleHasQuiz(!hasQuiz)}>
-            <div style={{
-              position: 'absolute', top: 3, left: hasQuiz ? 24 : 3,
-              width: 20, height: 20, borderRadius: '50%',
-              background: '#fff', transition: 'left 0.2s',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
-            }} />
-          </div>
-          <span style={{ fontSize: 13, fontWeight: 600, color: hasQuiz ? 'var(--brand)' : 'var(--text-muted)' }}>
-            {hasQuiz ? 'Ativo' : 'Inativo'}
-          </span>
-        </label>
+            boxShadow: hasQuiz ? '0 0 12px rgba(99,102,241,0.4)' : 'none',
+          }}
+          onClick={() => !togglingQuiz && toggleHasQuiz(!hasQuiz)}
+        >
+          <div style={{
+            position: 'absolute', top: 4, left: hasQuiz ? 28 : 4,
+            width: 22, height: 22, borderRadius: '50%',
+            background: '#fff', transition: 'left 0.25s',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+          }} />
+        </div>
       </div>
 
       {/* Stats */}
@@ -267,28 +283,73 @@ export default function QuizAdminPage() {
       </div>
 
       <div className="page-body">
-        {/* Info card */}
-        <div className="card" style={{ background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', marginBottom: 20 }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-            <span style={{ fontSize: 24 }}>💡</span>
-            <div>
-              <div style={{ fontWeight: 700, marginBottom: 4 }}>Micro-Comprometimento e Reciprocidade</div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                Cada resposta que o Lead fornece é um &quot;sim&quot; que ele dá para o seu conteúdo (Micro-Comprometimento). Quando ele passa no teste e recebe o <strong>Certificado</strong>, o Gatilho da Reciprocidade é ativado. Configure suas perguntas para destacar o problema que ele tem e por que as soluções que ele tentou antes falharam!
-              </div>
+        {/* Strategy tip accordion */}
+        <details className="card" style={{ marginBottom: 20, padding: 0 }}>
+          <summary style={{
+            padding: '14px 18px', cursor: 'pointer', fontWeight: 700, fontSize: 13,
+            display: 'flex', alignItems: 'center', gap: 8, listStyle: 'none',
+            color: 'var(--text-secondary)',
+          }}>
+            <span style={{ fontSize: 18 }}>💡</span>
+            Como usar o Quiz para converter mais — Guia Estratégico
+            <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>clique para expandir</span>
+          </summary>
+          <div style={{ padding: '0 18px 18px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+              {([
+                { icon: '🎯', title: 'Micro-comprometimento', desc: 'Cada resposta é um &quot;sim&quot;. O lead ativa um comprometimento cognitivo com o seu conteúdo.' },
+                { icon: '💡', title: 'Reforçar a Dor', desc: 'Crie perguntas que revelam o problema do lead — e por que ele ainda não resolveu.' },
+                { icon: '🤝', title: 'Gatilho Reciprocidade', desc: 'O certificado cria obrigação de retribuir. O lead se sente devedor e mais inclinado a comprar.' },
+                { icon: '📌', title: 'Timing Ideal', desc: 'Dispare o quiz 5–10 min antes do pitch. Questões que ancoram a dor + certificado que dá valor.' },
+              ] as const).map((s, i) => (
+                <div key={i} style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '12px 14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 20 }}>{s.icon}</span>
+                    <span style={{ fontWeight: 700, fontSize: 12 }}>{s.title}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>{s.desc}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#d97706', lineHeight: 1.6 }}>
+              ⚠️ <strong>Dica de ouro:</strong> Use perguntas com resposta &quot;óbvia&quot; para leads qualificados. Quem não sabe responder percebe que &quot;precisa aprender mais&quot; — e fica mais receptivo ao produto.
             </div>
           </div>
-        </div>
+        </details>
 
         {/* QUESTIONS TAB */}
         {activeTab === 'questions' && (
           <>
             {questions.length === 0 ? (
-              <div className="empty-state">
-                <div className="empty-icon">📝</div>
-                <div className="empty-title">Nenhuma questão cadastrada</div>
-                <div className="empty-desc">Adicione perguntas de múltipla escolha para o quiz do webinar</div>
-                <button className="btn btn-primary" onClick={openCreate}>Adicionar Questão</button>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 20px', gap: 16 }}>
+                <div style={{ fontSize: 44 }}>📝</div>
+                <div style={{ fontWeight: 800, fontSize: 17 }}>Nenhuma questão ainda</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', maxWidth: 400, lineHeight: 1.7 }}>
+                  Crie perguntas de múltipla escolha. Leads que acertam ≥70% recebem certificado — ativando o gatilho da reciprocidade.
+                </div>
+                <div style={{ width: '100%', maxWidth: 560 }}>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 700, marginBottom: 10, textAlign: 'center' }}>💡 Usar um modelo de pergunta:</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {[
+                      'Qual é o maior obstáculo que você tem hoje para alcançar [resultado desejado]?',
+                      'Por que as soluções tradicionais para [dor] raramente funcionam?',
+                      'Qual destes elementos é essencial para [transformação do produto]?',
+                      'Você já tentou resolver [problema] antes? Qual foi o resultado?',
+                    ].map((tpl, i) => (
+                      <button
+                        key={i}
+                        type="button"
+                        className="btn btn-ghost"
+                        style={{ textAlign: 'left', fontSize: 12, justifyContent: 'flex-start', padding: '10px 14px' }}
+                        onClick={() => { setForm(f => ({ ...f, question: tpl })); setEditItem(null); setShowModal(true) }}
+                      >
+                        <span style={{ flexShrink: 0, marginRight: 8, color: 'var(--brand)' }}>📌</span>
+                        {tpl}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <button className="btn btn-primary" onClick={openCreate} style={{ marginTop: 4 }}>+ Criar Questão Personalizada</button>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

@@ -648,6 +648,12 @@ export default function ChatConfigPage() {
   const [saving, setSaving] = useState(false)
   const [loading, setLoading] = useState(true)
 
+  // Express Mode state
+  const [expressIntensity, setExpressIntensity] = useState(5)   // 1-10
+  const [expressFocus, setExpressFocus] = useState<'elogios' | 'engajamento' | 'vaga' | 'mix'>('mix')
+  const [expressVoices, setExpressVoices] = useState(20)         // 5-80 (names count)
+  const [expressApplied, setExpressApplied] = useState(false)
+
   // AI Generator specific state
   const [showAiModal, setShowAiModal] = useState(false)
   const [aiScriptText, setAiScriptText] = useState('')
@@ -1006,6 +1012,176 @@ export default function ChatConfigPage() {
               onClick={() => setBadWordsFilter(!badWordsFilter)}
             >
               {badWordsFilter ? '✅ Filtro Ativo' : 'Ativar Filtro'}
+            </button>
+          </div>
+        </div>
+
+        {/* ---- EXPRESS MODE CARD ---- */}
+        <div className="card" style={{
+          background: 'linear-gradient(135deg, rgba(99,102,241,0.05) 0%, rgba(168,85,247,0.05) 100%)',
+          border: '1.5px solid rgba(99,102,241,0.25)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 4 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 15, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ background: 'linear-gradient(135deg,#6366f1,#a855f7)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', fontWeight: 800 }}>⚡ Configuração Rápida</span>
+                {expressApplied && <span style={{ fontSize: 11, background: 'rgba(99,102,241,0.15)', color: '#818cf8', padding: '2px 8px', borderRadius: 99, fontWeight: 700 }}>✓ Aplicado</span>}
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+                Gera segmentos de chat automaticamente em 3 cliques. Perfeito para começar rápido.
+              </div>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginTop: 16 }}>
+
+            {/* Slider 1 — Intensidade */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <label style={{ fontSize: 13, fontWeight: 700 }}>🔥 Intensidade</label>
+                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--brand-light)' }}>
+                  {expressIntensity <= 3 ? '🐢 Suave' : expressIntensity <= 6 ? '🚶 Moderada' : expressIntensity <= 8 ? '⚡ Alta' : '🚀 Máxima'}
+                </span>
+              </div>
+              <input
+                type="range" min={1} max={10} step={1}
+                value={expressIntensity}
+                onChange={e => setExpressIntensity(+e.target.value)}
+                style={{ width: '100%', accentColor: '#6366f1' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                <span>Calmo</span><span>Frenético</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.4 }}>
+                💡 Alta intensidade no pitch cria senso de urgência nas vendas.
+              </div>
+            </div>
+
+            {/* Slider 2 — Foco das frases */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <label style={{ fontSize: 13, fontWeight: 700 }}>🎯 Foco do Chat</label>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {([
+                  { val: 'mix', icon: '✨', label: 'Mix Balanceado', hint: 'Um pouco de tudo' },
+                  { val: 'elogios', icon: '👏', label: 'Elogios & Aprovação', hint: 'Cria social proof' },
+                  { val: 'engajamento', icon: '🔥', label: 'Engajamento & Perguntas', hint: 'Mantém atenção' },
+                  { val: 'vaga', icon: '🎉', label: 'Garantia de Vaga', hint: 'Gera urgência nas compras' },
+                ] as const).map(opt => (
+                  <button
+                    key={opt.val}
+                    type="button"
+                    onClick={() => setExpressFocus(opt.val)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px',
+                      borderRadius: 8, border: `1.5px solid ${expressFocus === opt.val ? '#6366f1' : 'var(--border)'}`,
+                      background: expressFocus === opt.val ? 'rgba(99,102,241,0.1)' : 'transparent',
+                      cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s',
+                    }}
+                  >
+                    <span style={{ fontSize: 16 }}>{opt.icon}</span>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: expressFocus === opt.val ? '#818cf8' : 'var(--text-primary)' }}>{opt.label}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{opt.hint}</div>
+                    </div>
+                    {expressFocus === opt.val && <span style={{ marginLeft: 'auto', color: '#6366f1', fontSize: 14 }}>✓</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Slider 3 — Número de vozes */}
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                <label style={{ fontSize: 13, fontWeight: 700 }}>👥 Diversidade de Vozes</label>
+                <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--brand-light)' }}>{expressVoices} nomes</span>
+              </div>
+              <input
+                type="range" min={5} max={80} step={5}
+                value={expressVoices}
+                onChange={e => setExpressVoices(+e.target.value)}
+                style={{ width: '100%', accentColor: '#6366f1' }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+                <span>Poucos (+ íntimo)</span><span>Muitos (+ diverso)</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.4 }}>
+                💡 {'>'} 40 vozes diferentes → sensação de sala cheia e ativa.
+              </div>
+
+              {/* Preview do config resultante */}
+              <div style={{
+                marginTop: 16, background: 'var(--bg)', borderRadius: 10, padding: 12,
+                border: '1px solid var(--border)', fontSize: 12,
+              }}>
+                <div style={{ fontWeight: 700, marginBottom: 6, color: 'var(--text-secondary)' }}>📋 Resultado esperado:</div>
+                {(() => {
+                  const cpmBase = [2, 4, 6, 8, 10, 13, 18, 25, 35, 50][expressIntensity - 1]
+                  const cpmLow = Math.round(cpmBase * 0.5)
+                  const cpmHigh = Math.round(cpmBase * 1.8)
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, color: 'var(--text-muted)' }}>
+                      <span>• <strong style={{ color: 'var(--text-primary)' }}>3 segmentos</strong> automáticos gerados</span>
+                      <span>• Início: <strong style={{ color: 'var(--text-primary)' }}>{cpmLow} msg/min</strong></span>
+                      <span>• Pico: <strong style={{ color: 'var(--text-primary)' }}>{cpmHigh} msg/min</strong></span>
+                      <span>• Foco: <strong style={{ color: '#818cf8' }}>{expressFocus === 'mix' ? 'Mix Balanceado' : expressFocus === 'elogios' ? 'Elogios' : expressFocus === 'engajamento' ? 'Engajamento' : 'Garantia de Vaga'}</strong></span>
+                      <span>• {expressVoices} nomes únicos (gerados automaticamente)</span>
+                    </div>
+                  )
+                })()}
+              </div>
+            </div>
+          </div>
+
+          {/* Apply button */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20, gap: 10 }}>
+            {expressApplied && (
+              <button
+                type="button"
+                className="btn btn-ghost btn-sm"
+                style={{ color: 'var(--text-muted)', fontSize: 12 }}
+                onClick={() => {
+                  setUseSegments(false)
+                  setSegments([])
+                  setChatCpm(0)
+                  setExpressApplied(false)
+                  toast('Configuração rápida removida.', { icon: '🗑' })
+                }}
+              >
+                ✕ Desfazer
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ background: 'linear-gradient(135deg, #6366f1, #a855f7)', border: 'none' }}
+              onClick={() => {
+                // Generate segments from sliders
+                const cpmBase = [2, 4, 6, 8, 10, 13, 18, 25, 35, 50][expressIntensity - 1]
+                const dur = chatEndSeconds.trim() ? Number(chatEndSeconds) : 3600
+                const t1 = Math.round(dur * 0.33)
+                const t2 = Math.round(dur * 0.66)
+                const phr = expressFocus === 'mix' ? null : expressFocus
+                const newSegs: ChatSegment[] = [
+                  { from: 0,  to: t1,  cpm: Math.round(cpmBase * 0.5),  phrases: phr },
+                  { from: t1, to: t2,  cpm: cpmBase,                       phrases: phr },
+                  { from: t2, to: null, cpm: Math.round(cpmBase * 1.8),  phrases: phr },
+                ]
+                // Auto-generate N names from the default pool
+                const pool = DEFAULT_NAMES
+                const shuffled = [...pool].sort(() => Math.random() - 0.5)
+                const chosen = Array.from({ length: expressVoices }, (_, i) => shuffled[i % shuffled.length])
+                const uniqueChosen = [...new Set(chosen)]
+                setChatNamesRaw(uniqueChosen.join('\n'))
+                setSegments(newSegs)
+                setUseSegments(true)
+                setChatMode('cpm')
+                setExpressApplied(true)
+                toast.success(`⚡ Configuração aplicada! ${newSegs.length} segmentos gerados.`)
+              }}
+            >
+              ⚡ Aplicar Configuração Rápida
             </button>
           </div>
         </div>

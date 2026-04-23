@@ -158,6 +158,131 @@ interface GeneratedChatEvent {
   text: string
 }
 
+// Extended type for roteiro import (can include non-chat events)
+type ParsedEvent =
+  | { kind: 'chat'; timestamp_seconds: number; author: string; text: string }
+  | { kind: 'pitch'; timestamp_seconds: number; cta_text: string; cta_url: string; countdown_seconds: number }
+  | { kind: 'popup'; timestamp_seconds: number; title: string; cta_url: string; duration_seconds: number }
+  | { kind: 'hide_pitch'; timestamp_seconds: number }
+
+// ---- QuickPitch: simplified pitch creator ----
+function QuickPitchForm({ webinarId, duration, onCreated }: { webinarId: string; duration: number; onCreated: () => void }) {
+  const supabase = createClient()
+  const [url, setUrl] = useState('')
+  const [ctaText, setCtaText] = useState('Garantir Minha Vaga 🔒')
+  const [atSecs, setAtSecs] = useState(Math.round(duration * 0.6))
+  const [countdown, setCountdown] = useState(0)
+  const [scarcity, setScarcity] = useState(0)
+  const [saving, setSaving] = useState(false)
+
+  const mm = String(Math.floor(atSecs / 60)).padStart(2, '0')
+  const ss = String(atSecs % 60).padStart(2, '0')
+
+  async function handleSave() {
+    if (!url.trim()) { toast.error('Cole a URL do checkout primeiro.'); return }
+    setSaving(true)
+    await supabase.from('webi_events').insert({
+      webinar_id: webinarId,
+      type: 'pitch_button',
+      timestamp_seconds: atSecs,
+      payload: {
+        cta_text: ctaText.trim() || 'Garantir Minha Vaga',
+        cta_url: url.trim(),
+        image_url: '', text_above: '',
+        countdown_seconds: countdown,
+        scarcity_spots: scarcity,
+        broadcast_sales: false,
+        broadcast_names: '',
+      },
+    })
+    toast.success(`✅ Pitch adicionado para ${mm}:${ss}!`)
+    onCreated()
+    setSaving(false)
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* URL */}
+      <div>
+        <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, display: 'block' }}>🔗 URL do Checkout *</label>
+        <input
+          className="form-input"
+          type="url"
+          placeholder="https://pay.hotmart.com/..."
+          value={url}
+          onChange={e => setUrl(e.target.value)}
+          style={{ fontSize: 13 }}
+        />
+      </div>
+
+      {/* CTA text */}
+      <div>
+        <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, display: 'block' }}>💬 Texto do Botão</label>
+        <input
+          className="form-input"
+          placeholder="Garantir Minha Vaga 🔒"
+          value={ctaText}
+          onChange={e => setCtaText(e.target.value)}
+          style={{ fontSize: 13 }}
+        />
+      </div>
+
+      {/* Time slider */}
+      <div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>⏱ Aparecer no minuto</label>
+          <code style={{ fontSize: 12, color: 'var(--brand-light)', fontWeight: 700 }}>{mm}:{ss}</code>
+        </div>
+        <input
+          type="range" min={0} max={duration} step={30}
+          value={atSecs}
+          onChange={e => setAtSecs(+e.target.value)}
+          style={{ width: '100%', accentColor: '#6366f1' }}
+        />
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
+          <span>00:00</span><span>{String(Math.floor(duration / 60))}:00</span>
+        </div>
+      </div>
+
+      {/* Optional: countdown + scarcity side by side */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, display: 'block' }}>🔥 Countdown (seg)</label>
+          <input
+            type="number" min={0} max={3600}
+            className="form-input"
+            value={countdown}
+            onChange={e => setCountdown(+e.target.value)}
+            style={{ fontSize: 13 }}
+            placeholder="0 = sem contador"
+          />
+        </div>
+        <div>
+          <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4, display: 'block' }}>🪑 Vagas Limitadas</label>
+          <input
+            type="number" min={0} max={9999}
+            className="form-input"
+            value={scarcity}
+            onChange={e => setScarcity(+e.target.value)}
+            style={{ fontSize: 13 }}
+            placeholder="0 = ilimitado"
+          />
+        </div>
+      </div>
+
+      <button
+        type="button"
+        className="btn btn-primary"
+        style={{ background: 'linear-gradient(135deg, #6366f1, #a855f7)', border: 'none', marginTop: 4 }}
+        onClick={handleSave}
+        disabled={saving || !url.trim()}
+      >
+        {saving ? <span className="spinner" /> : '🛒 Criar Pitch Button'}
+      </button>
+    </div>
+  )
+}
+
 export default function EventsPage() {
   const { id: projectId, wid: webinarId } = useParams<{ id: string; wid: string }>()
   const [events, setEvents] = useState<WebinarEvent[]>([])
@@ -176,8 +301,20 @@ export default function EventsPage() {
   const [aiError, setAiError] = useState('')
   const [aiInserting, setAiInserting] = useState(false)
 
-  // Chat panel tabs: quick | bulk | ai
-  const [chatTab, setChatTab] = useState<'quick' | 'bulk' | 'ai'>('quick')
+  // Chat panel tabs: quick | paste | script | ai
+  const [chatTab, setChatTab] = useState<'quick' | 'paste' | 'script' | 'ai'>('quick')
+
+  // MODE: Direct paste (fake messages you write yourself)
+  const [pasteText, setPasteText] = useState('')
+  const [pasteParsed, setPasteParsed] = useState<GeneratedChatEvent[]>([])
+  const [pasteInserting, setPasteInserting] = useState(false)
+
+  // MODE: Script/Roteiro import (full roteiro with [PITCH]/[POPUP] markers)
+  const [scriptText, setScriptText] = useState('')
+  const [scriptParsed, setScriptParsed] = useState<ParsedEvent[]>([])
+  const [scriptInserting, setScriptInserting] = useState(false)
+
+  // legacy bulk (kept for compat)
   const [bulkText, setBulkText] = useState('')
   const [bulkParsed, setBulkParsed] = useState<GeneratedChatEvent[]>([])
   const [bulkInserting, setBulkInserting] = useState(false)
@@ -354,53 +491,151 @@ export default function EventsPage() {
     }
   }
 
-  function parseBulkText(text: string): GeneratedChatEvent[] {
+  // ── PARSER: Direct Paste (fake messages only, no events)
+  function parsePasteText(text: string): GeneratedChatEvent[] {
     if (!text.trim()) return []
     const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
     const parsed: GeneratedChatEvent[] = []
     for (const line of lines) {
-      // Formats accepted:
-      // 01:30 Maria: Nossa, incrível!
-      // 1:30 Maria Silva: Texto da mensagem
-      // 90 Maria: Mensagem (raw seconds)
-      const match = line.match(/^(\d{1,3}:\d{2})\s+(.+?):\s+(.+)$/)
-      if (match) {
-        const [, timeStr, author, text] = match
-        const [mm, ss] = timeStr.split(':').map(Number)
-        parsed.push({ timestamp_seconds: mm * 60 + ss, author: author.trim(), text: text.trim() })
+      // Skip comment lines and special markers
+      if (line.startsWith('#') || line.startsWith('[')) continue
+      // HH:MM:SS Nome: Texto
+      let m = line.match(/^(\d{1,2}):(\d{2}):(\d{2})\s+(.+?):\s+(.+)$/)
+      if (m) {
+        parsed.push({ timestamp_seconds: +m[1]*3600 + +m[2]*60 + +m[3], author: m[4].trim(), text: m[5].trim() })
         continue
       }
-      // Raw seconds format: 90 Maria: Mensagem
-      const match2 = line.match(/^(\d+)\s+(.+?):\s+(.+)$/)
-      if (match2) {
-        const [, secs, author, text] = match2
-        parsed.push({ timestamp_seconds: Number(secs), author: author.trim(), text: text.trim() })
+      // MM:SS Nome: Texto
+      m = line.match(/^(\d{1,3}):(\d{2})\s+(.+?):\s+(.+)$/)
+      if (m) {
+        parsed.push({ timestamp_seconds: +m[1]*60 + +m[2], author: m[3].trim(), text: m[4].trim() })
         continue
+      }
+      // Raw seconds: 90 Nome: Texto
+      m = line.match(/^(\d+)\s+(.+?):\s+(.+)$/)
+      if (m) {
+        parsed.push({ timestamp_seconds: +m[1], author: m[2].trim(), text: m[3].trim() })
       }
     }
     return parsed.sort((a, b) => a.timestamp_seconds - b.timestamp_seconds)
   }
 
-  async function insertBulkMessages() {
-    if (bulkParsed.length === 0) return
-    setBulkInserting(true)
+  async function insertPasteMessages() {
+    if (pasteParsed.length === 0) return
+    setPasteInserting(true)
     try {
-      const rows = bulkParsed.map(e => ({
-        webinar_id: webinarId,
-        type: 'chat_message' as const,
-        timestamp_seconds: e.timestamp_seconds,
-        payload: { author: e.author, text: e.text, avatar: '' },
-      }))
-      await supabase.from('webi_events').insert(rows)
-      toast.success(`${rows.length} mensagens importadas na timeline!`)
-      setBulkText('')
-      setBulkParsed([])
-      load()
-    } catch {
-      toast.error('Erro ao importar mensagens.')
-    } finally {
-      setBulkInserting(false)
+      await supabase.from('webi_events').insert(
+        pasteParsed.map(e => ({
+          webinar_id: webinarId, type: 'chat_message' as const,
+          timestamp_seconds: e.timestamp_seconds,
+          payload: { author: e.author, text: e.text, avatar: '' },
+        }))
+      )
+      toast.success(`${pasteParsed.length} mensagens adicionadas à timeline!`)
+      setPasteText(''); setPasteParsed([]); load()
+    } catch { toast.error('Erro ao inserir mensagens.') }
+    finally { setPasteInserting(false) }
+  }
+
+  // ── PARSER: Roteiro Completo (chat + [PITCH] + [POPUP] + [OCULTAR_PITCH])
+  function parseScriptText(text: string): ParsedEvent[] {
+    if (!text.trim()) return []
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+    const parsed: ParsedEvent[] = []
+
+    function parseTime(t: string): number {
+      const parts = t.split(':').map(Number)
+      if (parts.length === 3) return parts[0]*3600 + parts[1]*60 + parts[2]
+      if (parts.length === 2) return parts[0]*60 + parts[1]
+      return parts[0] // raw seconds
     }
+
+    for (const line of lines) {
+      if (line.startsWith('#')) continue
+
+      // HH:MM:SS or MM:SS prefix
+      const timeMatch = line.match(/^(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+)$/) ||
+                        line.match(/^(\d+)\s+(.+)$/) // raw secs
+      if (!timeMatch) continue
+
+      const secs = parseTime(timeMatch[1])
+      const rest = timeMatch[2].trim()
+
+      // [PITCH] Texto do botão | URL | countdown_secs (optional)
+      const pitchM = rest.match(/^\[PITCH\]\s*(.+?)(?:\s*\|\s*(.+?))?(?:\s*\|\s*(\d+))?$/i)
+      if (pitchM) {
+        parsed.push({ kind: 'pitch', timestamp_seconds: secs,
+          cta_text: pitchM[1]?.trim() || 'Garantir Minha Vaga',
+          cta_url: pitchM[2]?.trim() || '',
+          countdown_seconds: +(pitchM[3] || 0) })
+        continue
+      }
+
+      // [POPUP] Título | URL | duração_secs (optional)
+      const popupM = rest.match(/^\[POPUP\]\s*(.+?)(?:\s*\|\s*(.+?))?(?:\s*\|\s*(\d+))?$/i)
+      if (popupM) {
+        parsed.push({ kind: 'popup', timestamp_seconds: secs,
+          title: popupM[1]?.trim() || 'Oferta Especial',
+          cta_url: popupM[2]?.trim() || '',
+          duration_seconds: +(popupM[3] || 30) })
+        continue
+      }
+
+      // [OCULTAR_PITCH]
+      if (/^\[OCULTAR_PITCH\]/i.test(rest)) {
+        parsed.push({ kind: 'hide_pitch', timestamp_seconds: secs })
+        continue
+      }
+
+      // Regular chat: Nome: Texto
+      const chatM = rest.match(/^(.+?):\s+(.+)$/)
+      if (chatM) {
+        parsed.push({ kind: 'chat', timestamp_seconds: secs,
+          author: chatM[1].trim(), text: chatM[2].trim() })
+      }
+    }
+    return parsed.sort((a, b) => a.timestamp_seconds - b.timestamp_seconds)
+  }
+
+  async function insertScriptEvents() {
+    if (scriptParsed.length === 0) return
+    setScriptInserting(true)
+    try {
+      const rows = scriptParsed.map(ev => {
+        if (ev.kind === 'chat') return {
+          webinar_id: webinarId, type: 'chat_message' as const,
+          timestamp_seconds: ev.timestamp_seconds,
+          payload: { author: ev.author, text: ev.text, avatar: '' },
+        }
+        if (ev.kind === 'pitch') return {
+          webinar_id: webinarId, type: 'pitch_button' as const,
+          timestamp_seconds: ev.timestamp_seconds,
+          payload: { cta_text: ev.cta_text, cta_url: ev.cta_url, countdown_seconds: ev.countdown_seconds,
+            scarcity_spots: 0, broadcast_sales: false, broadcast_names: '', image_url: '', text_above: '' },
+        }
+        if (ev.kind === 'popup') return {
+          webinar_id: webinarId, type: 'offer_popup' as const,
+          timestamp_seconds: ev.timestamp_seconds,
+          payload: { title: ev.title, subtitle: '', image_url: '', cta_text: 'Quero Agora', cta_url: ev.cta_url, duration_seconds: ev.duration_seconds },
+        }
+        // hide_pitch
+        return {
+          webinar_id: webinarId, type: 'hide_pitch_button' as const,
+          timestamp_seconds: ev.timestamp_seconds, payload: {},
+        }
+      })
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await supabase.from('webi_events').insert(rows as any[])
+      const chats = scriptParsed.filter(e => e.kind === 'chat').length
+      const others = scriptParsed.length - chats
+      toast.success(`Importado! ${chats} msgs de chat + ${others} eventos de vendas.`)
+      setScriptText(''); setScriptParsed([]); load()
+    } catch { toast.error('Erro ao importar eventos.') }
+    finally { setScriptInserting(false) }
+  }
+
+  function parseBulkText(text: string): GeneratedChatEvent[] {
+    return parsePasteText(text)
   }
 
   async function deleteAllChatMessages() {
@@ -578,22 +813,24 @@ export default function EventsPage() {
                 )}
               </div>
 
-              {/* Tab switcher */}
-              <div style={{ display: 'flex', gap: 4, marginBottom: 14, background: 'var(--bg-elevated)', borderRadius: 10, padding: 3 }}>
-                {[
-                  { key: 'quick' as const, label: '➕ Ponto a Ponto', desc: 'Adicionar mensagem específica na timeline' },
-                  { key: 'ai' as const, label: '✨ LIA (Gerador IA)', desc: 'Gerar mensagens automáticas a partir do roteiro' },
-                ].map(tab => (
+              {/* Tab switcher — 4 modes */}
+              <div style={{ display: 'flex', gap: 3, marginBottom: 14, background: 'var(--bg-elevated)', borderRadius: 10, padding: 3 }}>
+                {([
+                  { key: 'quick' as const, label: '➕ 1 por 1', desc: 'Adicionar mensagem pontual' },
+                  { key: 'paste' as const, label: '📋 Colar Msgs', desc: 'Cole suas mensagens fake já prontas com timestamps' },
+                  { key: 'script' as const, label: '📄 Roteiro Full', desc: 'Cole o roteiro completo com [PITCH], [POPUP] e chat' },
+                  { key: 'ai' as const, label: '✨ LIA (IA)', desc: 'Gerar mensagens automáticas com IA' },
+                ] as const).map(tab => (
                   <button
                     key={tab.key}
                     onClick={() => { setChatTab(tab.key); setAiError('') }}
                     title={tab.desc}
                     style={{
-                      flex: 1, padding: '8px 10px', borderRadius: 8, border: 'none',
-                      cursor: 'pointer', fontSize: 12, fontWeight: chatTab === tab.key ? 700 : 500,
+                      flex: 1, padding: '7px 6px', borderRadius: 8, border: 'none',
+                      cursor: 'pointer', fontSize: 11, fontWeight: chatTab === tab.key ? 700 : 500,
                       background: chatTab === tab.key ? 'var(--brand)' : 'transparent',
                       color: chatTab === tab.key ? '#fff' : 'var(--text-secondary)',
-                      transition: 'all 0.15s',
+                      transition: 'all 0.15s', whiteSpace: 'nowrap',
                     }}
                   >
                     {tab.label}
@@ -626,9 +863,128 @@ export default function EventsPage() {
                 </div>
               )}
 
+              {/* TAB: Direct Paste — fake messages you write yourself */}
+              {chatTab === 'paste' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 10, padding: '12px 14px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                    <strong style={{ color: 'var(--text-primary)' }}>📋 Cole suas mensagens fake prontas.</strong>{' '}
+                    Escreva cada linha no formato abaixo. Aceita MM:SS, HH:MM:SS ou segundos puros:
+                    <div style={{ fontFamily: 'monospace', fontSize: 11, background: 'var(--bg)', borderRadius: 6, padding: '8px 10px', marginTop: 8, color: '#a5b4fc' }}>
+                      05:30 Maria Silva: Adorei a explicação!<br/>
+                      10:00 João Pedro: Método incrível, já estou aplicando<br/>
+                      45:00 Ana Beatriz: Quando abre o carrinho??<br/>
+                      1:02:30 Carlos: Melhor aula que já vi!<br/>
+                      3720 Fernanda: Estou dentro! 🔥
+                    </div>
+                  </div>
+
+                  <textarea
+                    className="form-input form-textarea"
+                    placeholder={`05:30 Maria: Adorei essa parte!\n10:00 João: Método incrível!\n45:00 Ana: Quando abre o carrinho??`}
+                    value={pasteText}
+                    onChange={e => {
+                      setPasteText(e.target.value)
+                      setPasteParsed(parsePasteText(e.target.value))
+                    }}
+                    style={{ minHeight: 160, fontFamily: 'monospace', fontSize: 13 }}
+                  />
+
+                  {pasteParsed.length > 0 && (
+                    <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--success)' }}>
+                          ✅ {pasteParsed.length} mensagens reconhecidas
+                        </span>
+                        <button className="btn btn-primary btn-sm" onClick={insertPasteMessages} disabled={pasteInserting}>
+                          {pasteInserting ? <span className="spinner" /> : `📥 Inserir ${pasteParsed.length} mensagens`}
+                        </button>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 200, overflowY: 'auto' }}>
+                        {pasteParsed.slice(0, 8).map((ev, i) => (
+                          <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, alignItems: 'center', background: 'var(--bg-elevated)', borderRadius: 6, padding: '4px 8px' }}>
+                            <code style={{ color: 'var(--brand-light)', flexShrink: 0 }}>{formatTime(ev.timestamp_seconds)}</code>
+                            <span style={{ fontWeight: 700, flexShrink: 0, color: 'var(--text-primary)' }}>{ev.author}:</span>
+                            <span style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.text}</span>
+                          </div>
+                        ))}
+                        {pasteParsed.length > 8 && (
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '4px 0' }}>…e mais {pasteParsed.length - 8} mensagens</div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TAB: Roteiro Full — parses chat + [PITCH] + [POPUP] + [OCULTAR_PITCH] */}
+              {chatTab === 'script' && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 10, padding: '12px 14px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                    <strong style={{ color: 'var(--text-primary)' }}>📄 Cole o roteiro COMPLETO com timestamps.</strong>{' '}
+                    Cria mensagens de chat <strong>E</strong> eventos de vendas (pitch, pop-up) de uma só vez:
+                    <div style={{ fontFamily: 'monospace', fontSize: 11, background: 'var(--bg)', borderRadius: 6, padding: '8px 10px', marginTop: 8, color: '#fcd34d' }}>
+                      05:30 Maria: Adorei a explicação!<br/>
+                      10:00 João: Isso é incrível!<br/>
+                      45:00 [PITCH] Garantir Minha Vaga | https://checkout.com/P123 | 600<br/>
+                      52:00 [POPUP] Última Chance! | https://checkout.com/P123 | 30<br/>
+                      75:00 [OCULTAR_PITCH]<br/>
+                      1:20:00 Ana: Tomei a decisão certa! ✅
+                    </div>
+                  </div>
+
+                  <textarea
+                    className="form-input form-textarea"
+                    placeholder={`05:30 Maria: Adorei!\n45:00 [PITCH] Garantir Vaga | https://checkout.com | 600\n52:00 [POPUP] Última Chance! | https://checkout.com | 30\n75:00 [OCULTAR_PITCH]`}
+                    value={scriptText}
+                    onChange={e => {
+                      setScriptText(e.target.value)
+                      setScriptParsed(parseScriptText(e.target.value))
+                    }}
+                    style={{ minHeight: 180, fontFamily: 'monospace', fontSize: 13 }}
+                  />
+
+                  {scriptParsed.length > 0 && (() => {
+                    const chatCount = scriptParsed.filter(e => e.kind === 'chat').length
+                    const pitchCount = scriptParsed.filter(e => e.kind === 'pitch').length
+                    const popupCount = scriptParsed.filter(e => e.kind === 'popup').length
+                    const hideCount = scriptParsed.filter(e => e.kind === 'hide_pitch').length
+                    return (
+                      <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+                          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                            {chatCount > 0 && <span style={{ fontSize: 12, background: 'rgba(99,102,241,0.15)', color: '#a5b4fc', padding: '2px 8px', borderRadius: 6 }}>💬 {chatCount} msgs</span>}
+                            {pitchCount > 0 && <span style={{ fontSize: 12, background: 'rgba(16,185,129,0.15)', color: '#34d399', padding: '2px 8px', borderRadius: 6 }}>🛒 {pitchCount} pitch</span>}
+                            {popupCount > 0 && <span style={{ fontSize: 12, background: 'rgba(239,68,68,0.15)', color: '#f87171', padding: '2px 8px', borderRadius: 6 }}>🎯 {popupCount} pop-up</span>}
+                            {hideCount > 0 && <span style={{ fontSize: 12, background: 'rgba(107,114,128,0.15)', color: '#9ca3af', padding: '2px 8px', borderRadius: 6 }}>🙈 {hideCount} ocultar</span>}
+                          </div>
+                          <button className="btn btn-primary btn-sm" onClick={insertScriptEvents} disabled={scriptInserting}>
+                            {scriptInserting ? <span className="spinner" /> : `📥 Importar ${scriptParsed.length} eventos`}
+                          </button>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 200, overflowY: 'auto' }}>
+                          {scriptParsed.slice(0, 10).map((ev, i) => (
+                            <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, alignItems: 'center', background: 'var(--bg-elevated)', borderRadius: 6, padding: '4px 8px' }}>
+                              <code style={{ color: 'var(--brand-light)', flexShrink: 0 }}>{formatTime(ev.timestamp_seconds)}</code>
+                              {ev.kind === 'chat' && <><span style={{ fontWeight: 700, flexShrink: 0 }}>{ev.author}:</span><span style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{ev.text}</span></>}
+                              {ev.kind === 'pitch' && <span style={{ color: '#34d399' }}>🛒 PITCH — {ev.cta_text}</span>}
+                              {ev.kind === 'popup' && <span style={{ color: '#f87171' }}>🎯 POPUP — {ev.title}</span>}
+                              {ev.kind === 'hide_pitch' && <span style={{ color: '#9ca3af' }}>🙈 Ocultar Pitch</span>}
+                            </div>
+                          ))}
+                          {scriptParsed.length > 10 && (
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '4px 0' }}>…e mais {scriptParsed.length - 10} eventos</div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })()}
+                </div>
+              )}
+
               {/* TAB: AI Generation */}
               {chatTab === 'ai' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
                   <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 10, padding: 14 }}>
                     <div style={{ fontWeight: 700, fontSize: 13, marginBottom: 4 }}>🧠 LIA - Clonagem de Audiência (IA)</div>
                     <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
@@ -725,11 +1081,31 @@ export default function EventsPage() {
           {/* RIGHT — Pitch + Popups + Other */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-            {/* PITCH */}
+            {/* ⚡ QUICK-PITCH */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(168,85,247,0.06) 100%)',
+              border: '1.5px solid rgba(99,102,241,0.3)',
+              borderRadius: 16, padding: '16px',
+            }}>
+              <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ background: 'linear-gradient(135deg,#6366f1,#a855f7)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>⚡ Criar Pitch em 1 Minuto</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 14, lineHeight: 1.5 }}>
+                💡 Configure o botão de compra em segundos — sem precisar usar o formulário avançado.
+              </div>
+
+              <QuickPitchForm
+                webinarId={webinarId}
+                duration={duration}
+                onCreated={load}
+              />
+            </div>
+
+            {/* PITCH list */}
             <div className="card" style={{ padding: '14px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <span style={{ fontWeight: 700, fontSize: 13 }}>🛒 Pitch Button</span>
-                <button className="btn btn-ghost btn-sm" onClick={() => openCreate('pitch_button')}>+ Novo</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => openCreate('pitch_button')}>+ Avançado</button>
               </div>
               {pitchEvents.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '12px 0', color: 'var(--text-muted)', fontSize: 12 }}>
@@ -773,6 +1149,7 @@ export default function EventsPage() {
             </div>
 
             {/* POPUPS */}
+
             <div className="card" style={{ padding: '14px 16px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                 <span style={{ fontWeight: 700, fontSize: 13 }}>🎯 Pop-ups</span>
