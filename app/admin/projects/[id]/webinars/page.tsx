@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
+import { toast } from 'react-hot-toast'
 import type { Webinar } from '@/types'
 
 function slugify(text: string) {
@@ -72,15 +73,26 @@ export default function WebinarsPage() {
     const payload = { ...form, project_id: projectId }
 
     if (editWebinar) {
-      await supabase.from('webi_webinars').update(payload).eq('id', editWebinar.id)
+      const { error } = await supabase.from('webi_webinars').update(payload).eq('id', editWebinar.id)
       setSaving(false)
+      if (error) {
+        console.error('Erro ao atualizar webinar:', error)
+        toast.error(`Erro ao salvar: ${error.message}`)
+        return
+      }
       setShowModal(false)
       load()
     } else {
-      const { data: created } = await supabase.from('webi_webinars').insert(payload).select().single()
+      const { data: created, error } = await supabase.from('webi_webinars').insert(payload).select().single()
       setSaving(false)
+      if (error) {
+        console.error('Erro ao criar webinar:', error)
+        toast.error(`Erro ao criar webinar: ${error.message}`)
+        return
+      }
       setShowModal(false)
       if (created) {
+        toast.success('Webinar criado com sucesso!')
         // Redireciona para o hub do webinar recém criado
         router.push(`/admin/projects/${projectId}/webinars/${created.id}`)
       } else {
