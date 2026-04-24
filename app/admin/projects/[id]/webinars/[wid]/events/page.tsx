@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { WebinarMobilePreview } from './components/WebinarMobilePreview'
+import { WebinarMobilePreview } from '../components/WebinarMobilePreview'
 import { toast } from 'react-hot-toast'
 import type { WebinarEvent, EventType } from '@/types'
 
@@ -1102,7 +1102,6 @@ export default function EventsPage() {
                   )}
                 </div>
               )}
-              )}
             </div>
 
             {/* TAB: CSV Import */}
@@ -1190,6 +1189,7 @@ export default function EventsPage() {
                 })}
               </div>
             )}
+          </div>
 
             {/* ⚡ QUICK-PITCH */}
             <div style={{

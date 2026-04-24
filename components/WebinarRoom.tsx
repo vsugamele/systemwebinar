@@ -1229,7 +1229,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   async function trackEvent(type: string, timestampVideo: number, metadata: Record<string, unknown> = {}) {
     try {
       // Enrich with Imperio HQ context if available in localStorage
-      const imperioProjectId = (webinar as Record<string, unknown>).imperio_project_id as string | undefined
+      const imperioProjectId = (webinar as unknown as Record<string, unknown>).imperio_project_id as string | undefined
       const leadEmail = typeof window !== 'undefined' ? (localStorage.getItem('webi_lead_email') || '') : ''
       const leadName = typeof window !== 'undefined' ? (localStorage.getItem('webi_lead_name') || '') : ''
       const leadPhone = typeof window !== 'undefined' ? (localStorage.getItem('webi_lead_phone') || '') : ''
