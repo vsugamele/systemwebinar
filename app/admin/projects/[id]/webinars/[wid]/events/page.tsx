@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
+import { WebinarMobilePreview } from './components/WebinarMobilePreview'
 import { toast } from 'react-hot-toast'
 import type { WebinarEvent, EventType } from '@/types'
 
@@ -301,8 +302,11 @@ export default function EventsPage() {
   const [aiError, setAiError] = useState('')
   const [aiInserting, setAiInserting] = useState(false)
 
-  // Chat panel tabs: quick | paste | script | ai
-  const [chatTab, setChatTab] = useState<'quick' | 'paste' | 'script' | 'ai'>('quick')
+  // Timeline preview state
+  const [previewSeconds, setPreviewSeconds] = useState(0)
+
+  // Chat panel tabs: quick | paste | script | ai | csv
+  const [chatTab, setChatTab] = useState<'quick' | 'paste' | 'script' | 'ai' | 'csv'>('quick')
 
   // MODE: Direct paste (fake messages you write yourself)
   const [pasteText, setPasteText] = useState('')
@@ -313,6 +317,10 @@ export default function EventsPage() {
   const [scriptText, setScriptText] = useState('')
   const [scriptParsed, setScriptParsed] = useState<ParsedEvent[]>([])
   const [scriptInserting, setScriptInserting] = useState(false)
+
+  // MODE: CSV Import
+  const [csvParsed, setCsvParsed] = useState<GeneratedChatEvent[]>([])
+  const [csvInserting, setCsvInserting] = useState(false)
 
   // legacy bulk (kept for compat)
   const [bulkText, setBulkText] = useState('')
@@ -601,38 +609,72 @@ export default function EventsPage() {
     if (scriptParsed.length === 0) return
     setScriptInserting(true)
     try {
-      const rows = scriptParsed.map(ev => {
-        if (ev.kind === 'chat') return {
-          webinar_id: webinarId, type: 'chat_message' as const,
-          timestamp_seconds: ev.timestamp_seconds,
-          payload: { author: ev.author, text: ev.text, avatar: '' },
-        }
-        if (ev.kind === 'pitch') return {
-          webinar_id: webinarId, type: 'pitch_button' as const,
-          timestamp_seconds: ev.timestamp_seconds,
-          payload: { cta_text: ev.cta_text, cta_url: ev.cta_url, countdown_seconds: ev.countdown_seconds,
-            scarcity_spots: 0, broadcast_sales: false, broadcast_names: '', image_url: '', text_above: '' },
-        }
-        if (ev.kind === 'popup') return {
-          webinar_id: webinarId, type: 'offer_popup' as const,
-          timestamp_seconds: ev.timestamp_seconds,
-          payload: { title: ev.title, subtitle: '', image_url: '', cta_text: 'Quero Agora', cta_url: ev.cta_url, duration_seconds: ev.duration_seconds },
-        }
-        // hide_pitch
-        return {
-          webinar_id: webinarId, type: 'hide_pitch_button' as const,
-          timestamp_seconds: ev.timestamp_seconds, payload: {},
-        }
-      })
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await supabase.from('webi_events').insert(rows as any[])
-      const chats = scriptParsed.filter(e => e.kind === 'chat').length
-      const others = scriptParsed.length - chats
-      toast.success(`Importado! ${chats} msgs de chat + ${others} eventos de vendas.`)
+      const inserts = scriptParsed.map(e => {
+        if (e.kind === 'chat') return { webinar_id: webinarId, type: 'chat_message', timestamp_seconds: e.timestamp_seconds, payload: { author: e.author, text: e.text, avatar: '' } }
+        if (e.kind === 'pitch') return { webinar_id: webinarId, type: 'pitch_button', timestamp_seconds: e.timestamp_seconds, payload: { cta_text: e.cta_text, cta_url: e.cta_url, countdown_seconds: e.countdown_seconds, image_url: '', text_above: '', scarcity_spots: 0, broadcast_sales: false, broadcast_names: '' } }
+        if (e.kind === 'popup') return { webinar_id: webinarId, type: 'offer_popup', timestamp_seconds: e.timestamp_seconds, payload: { title: e.title, subtitle: '', image_url: '', cta_text: 'Ver Oferta', cta_url: e.cta_url, duration_seconds: e.duration_seconds } }
+        if (e.kind === 'hide_pitch') return { webinar_id: webinarId, type: 'hide_pitch_button', timestamp_seconds: e.timestamp_seconds, payload: {} }
+        return null
+      }).filter(Boolean) as any[]
+      
+      await supabase.from('webi_events').insert(inserts)
+      toast.success(`${inserts.length} eventos adicionados à timeline!`)
       setScriptText(''); setScriptParsed([]); load()
-    } catch { toast.error('Erro ao importar eventos.') }
+    } catch { toast.error('Erro ao inserir eventos do roteiro.') }
     finally { setScriptInserting(false) }
   }
+
+  // ── PARSER: CSV Import
+  async function handleCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    
+    const text = await file.text()
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
+    
+    // Check header
+    if (lines[0].toLowerCase().includes('timestamp_segundos')) {
+      lines.shift()
+    }
+    
+    const parsed: GeneratedChatEvent[] = []
+    for (const line of lines) {
+      // Expected: timestamp_segundos,timestamp_formatado,usuario,mensagem
+      // Match first 3 columns, then capture the rest as message
+      const match = line.match(/^(\d+),([^,]+),([^,]+),(.*)$/)
+      if (match) {
+        let msg = match[4].trim()
+        if (msg.startsWith('"') && msg.endsWith('"')) {
+          msg = msg.substring(1, msg.length - 1).replace(/""/g, '"')
+        }
+        parsed.push({
+          timestamp_seconds: parseInt(match[1], 10),
+          author: match[3].trim(),
+          text: msg
+        })
+      }
+    }
+    setCsvParsed(parsed.sort((a, b) => a.timestamp_seconds - b.timestamp_seconds))
+    e.target.value = '' // reset input
+  }
+
+  async function insertCsvMessages() {
+    if (csvParsed.length === 0) return
+    setCsvInserting(true)
+    try {
+      await supabase.from('webi_events').insert(
+        csvParsed.map(e => ({
+          webinar_id: webinarId, type: 'chat_message' as const,
+          timestamp_seconds: e.timestamp_seconds,
+          payload: { author: e.author, text: e.text, avatar: '' },
+        }))
+      )
+      toast.success(`${csvParsed.length} mensagens importadas com sucesso!`)
+      setCsvParsed([]); load()
+    } catch { toast.error('Erro ao inserir mensagens importadas.') }
+    finally { setCsvInserting(false) }
+  }
+
 
   function parseBulkText(text: string): GeneratedChatEvent[] {
     return parsePasteText(text)
@@ -695,15 +737,36 @@ export default function EventsPage() {
 
         {/* VISUAL TIMELINE */}
         <div className="timeline-container" style={{ marginBottom: 24 }}>
-          <div className="timeline-header">
-            <span className="timeline-title">Timeline Visual</span>
-            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Duração: {formatTime(duration)}</span>
+          <div className="timeline-header" style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span className="timeline-title">Timeline Visual & Editor</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              Tempo: <strong style={{ color: 'var(--brand-light)' }}>{formatTime(previewSeconds)}</strong> / {formatTime(duration)}
+            </span>
           </div>
           <div
             className="timeline-track"
             id="timeline-track-root"
-            style={{ position: 'relative', userSelect: 'none' }}
+            style={{ position: 'relative', userSelect: 'none', paddingBottom: 10 }}
+            onClick={(e) => {
+              const rect = e.currentTarget.getBoundingClientRect()
+              const secs = Math.max(0, Math.min(duration, Math.round(((e.clientX - rect.left) / rect.width) * duration)))
+              setPreviewSeconds(secs)
+            }}
           >
+            {/* Playhead line */}
+            <div style={{
+               position: 'absolute', top: 0, bottom: 0, 
+               left: `${(previewSeconds / duration) * 100}%`,
+               width: 2, background: '#ef4444', zIndex: 5,
+               pointerEvents: 'none', transition: 'left 0.1s linear'
+            }}>
+               <div style={{
+                  position: 'absolute', top: -10, left: -6, width: 14, height: 14, 
+                  background: '#ef4444', borderRadius: '50%',
+                  boxShadow: '0 0 10px rgba(239,68,68,0.5)'
+               }} />
+            </div>
+
             {/* Ruler */}
             <div className="timeline-ruler" style={{ marginBottom: 12 }}>
               {Array.from({ length: Math.ceil(duration / 60) + 1 }).map((_, i) => {
@@ -794,10 +857,12 @@ export default function EventsPage() {
         </div>
 
         {/* 2-ZONE LAYOUT */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: 16, alignItems: 'start' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24, alignItems: 'start' }}>
 
-          {/* LEFT — Chat Messages */}
-          <div>
+          {/* LEFT — CONFIGURATION PANELS */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {/* Chat Messages */}
+            <div>
             <div className="card" style={{ marginBottom: 12, padding: '14px 16px' }}>
               {/* Header with tabs */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
@@ -820,6 +885,7 @@ export default function EventsPage() {
                   { key: 'paste' as const, label: '📋 Colar Msgs', desc: 'Cole suas mensagens fake já prontas com timestamps' },
                   { key: 'script' as const, label: '📄 Roteiro Full', desc: 'Cole o roteiro completo com [PITCH], [POPUP] e chat' },
                   { key: 'ai' as const, label: '✨ LIA (IA)', desc: 'Gerar mensagens automáticas com IA' },
+                  { key: 'csv' as const, label: '📁 Importar CSV', desc: 'Importar mensagens a partir de arquivo CSV' },
                 ] as const).map(tab => (
                   <button
                     key={tab.key}
@@ -1036,7 +1102,55 @@ export default function EventsPage() {
                   )}
                 </div>
               )}
+              )}
             </div>
+
+            {/* TAB: CSV Import */}
+            {chatTab === 'csv' && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 14 }}>
+                <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 10, padding: '12px 14px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>📁 Importar Arquivo CSV.</strong>{' '}
+                  Faça o upload de um arquivo contendo as mensagens. Formato esperado (separado por vírgula):
+                  <div style={{ fontFamily: 'monospace', fontSize: 11, background: 'var(--bg)', borderRadius: 6, padding: '8px 10px', marginTop: 8, color: '#34d399' }}>
+                    timestamp_segundos,timestamp_formatado,usuario,mensagem<br/>
+                    0,00:00,Rafael_Tattoo,&quot;boa noite a todos!! 🙌&quot;<br/>
+                    30,00:30,Lucas_SP,boa noite!!
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                  <label className="btn btn-primary" style={{ cursor: 'pointer', padding: '10px 16px', flex: 1, textAlign: 'center' }}>
+                    <span>📁 Selecionar Arquivo CSV</span>
+                    <input type="file" accept=".csv" onChange={handleCsvUpload} style={{ display: 'none' }} />
+                  </label>
+                  {csvParsed.length > 0 && (
+                    <button className="btn btn-success" onClick={insertCsvMessages} disabled={csvInserting} style={{ padding: '10px 16px', flex: 1 }}>
+                      {csvInserting ? <span className="spinner" /> : `📥 Inserir ${csvParsed.length} Mensagens`}
+                    </button>
+                  )}
+                </div>
+
+                {csvParsed.length > 0 && (
+                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: 12, marginTop: 8 }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--success)', marginBottom: 8 }}>
+                      ✅ Pré-visualização ({csvParsed.length} mensagens)
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 300, overflowY: 'auto' }}>
+                      {csvParsed.slice(0, 15).map((ev, i) => (
+                        <div key={i} style={{ display: 'flex', gap: 8, fontSize: 12, alignItems: 'center', background: 'var(--bg-elevated)', borderRadius: 6, padding: '6px 8px' }}>
+                          <code style={{ color: 'var(--brand-light)', flexShrink: 0 }}>{formatTime(ev.timestamp_seconds)}</code>
+                          <span style={{ fontWeight: 700, flexShrink: 0, color: 'var(--text-primary)' }}>{ev.author}:</span>
+                          <span style={{ color: 'var(--text-secondary)' }}>{ev.text}</span>
+                        </div>
+                      ))}
+                      {csvParsed.length > 15 && (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', textAlign: 'center', padding: '6px 0' }}>…e mais {csvParsed.length - 15} mensagens</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Chat list */}
             {chatEvents.length === 0 ? (
@@ -1076,10 +1190,6 @@ export default function EventsPage() {
                 })}
               </div>
             )}
-          </div>
-
-          {/* RIGHT — Pitch + Popups + Other */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
             {/* ⚡ QUICK-PITCH */}
             <div style={{
@@ -1194,6 +1304,16 @@ export default function EventsPage() {
                 })}
               </div>
             )}
+          </div>
+
+          {/* RIGHT — WEBINAR MOBILE PREVIEW */}
+          <div style={{ position: 'sticky', top: 20 }}>
+            <WebinarMobilePreview 
+              currentTime={previewSeconds} 
+              events={events} 
+              theme="dark" 
+              accentColor="#6366f1" 
+            />
           </div>
         </div>
       </div>
