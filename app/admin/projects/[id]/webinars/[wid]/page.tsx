@@ -129,7 +129,7 @@ export default function WebinarOverviewPage() {
   const [webinar, setWebinar] = useState<WebinarData | null>(null)
 
   // ── form fields per-section ─────────────────────────────────────────────
-  const [essentials, setEssentials] = useState({ name: '', video_url: '' })
+  const [essentials, setEssentials] = useState({ name: '', video_url: '', duration_seconds: 3600 })
   const [experience, setExperience] = useState({
     waiting_room_enabled: false,
     waiting_delay_seconds: 120,
@@ -157,7 +157,7 @@ export default function WebinarOverviewPage() {
       const { data: w } = await supabase.from('webi_webinars').select('*').eq('id', wid).single()
       if (w) {
         setWebinar(w as WebinarData)
-        setEssentials({ name: w.name || '', video_url: w.video_url || '' })
+        setEssentials({ name: w.name || '', video_url: w.video_url || '', duration_seconds: w.duration_seconds || 3600 })
         setExperience({
           waiting_room_enabled: w.waiting_room_enabled || false,
           waiting_delay_seconds: w.waiting_delay_seconds ?? 120,
@@ -186,6 +186,7 @@ export default function WebinarOverviewPage() {
     const { error } = await supabase.from('webi_webinars').update({
       name: essentials.name,
       video_url: essentials.video_url,
+      duration_seconds: essentials.duration_seconds,
     }).eq('id', wid)
     setSavingEss(false)
     if (error) toast.error('Erro ao salvar.')
@@ -334,6 +335,18 @@ export default function WebinarOverviewPage() {
                 {essentials.video_url && (
                   <div style={{ fontSize: 11, color: '#10b981', marginTop: 4 }}>✓ Vídeo configurado</div>
                 )}
+              </div>
+
+              <div>
+                <FieldLabel hint="Duração exata do vídeo em segundos. Essencial para que o sistema saiba quando a aula acaba (e o loop do Evergreen funcione). Ex: 3600 para 1h.">
+                  Duração do Vídeo (segundos)
+                </FieldLabel>
+                <input
+                  type="number" required className="form-input"
+                  style={{ width: 140 }}
+                  value={essentials.duration_seconds || 3600}
+                  onChange={e => setEssentials(f => ({ ...f, duration_seconds: parseInt(e.target.value) || 0 }))}
+                />
               </div>
 
             </div>

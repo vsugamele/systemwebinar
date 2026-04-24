@@ -46,8 +46,9 @@ export async function POST(req: NextRequest) {
     await supabase.removeChannel(channel)
 
     if (broadcastResponse !== 'ok') {
-      console.error('Chat Broadcast Error:', broadcastResponse)
-      return NextResponse.json({ error: `Broadcast failed with status: ${broadcastResponse}` }, { status: 500 })
+      // Broadcast is best-effort — the message was already saved to the DB.
+      // Other users will receive it via the postgres_changes realtime subscription.
+      console.warn('Chat Broadcast non-ok (message saved to DB):', broadcastResponse)
     }
 
     return NextResponse.json({ ok: true })

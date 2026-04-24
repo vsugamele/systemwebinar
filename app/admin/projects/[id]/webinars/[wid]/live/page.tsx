@@ -37,6 +37,8 @@ export default function LivePage() {
   const [scheduleDays, setScheduleDays] = useState<number[]>([])
   const [savingScheduled, setSavingScheduled] = useState(false)
   const [scheduleTimeUntil, setScheduleTimeUntil] = useState('')
+  const [projectTimezone, setProjectTimezone] = useState('America/Sao_Paulo')
+  const [showGuide, setShowGuide] = useState(false)
 
   // Panic Button states
   const [isPanicActive, setIsPanicActive] = useState(false)
@@ -52,7 +54,7 @@ export default function LivePage() {
   useEffect(() => {
     supabase
       .from('webi_webinars')
-      .select('name, slug, display_name, session_started_at, scheduled_start_at, schedule_recurrence, schedule_time, schedule_days, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct, is_panic_active, fallback_url')
+      .select('name, slug, display_name, session_started_at, scheduled_start_at, schedule_recurrence, schedule_time, schedule_days, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct, is_panic_active, fallback_url, webi_projects(timezone)')
       .eq('id', wid)
       .single()
       .then(({ data, error }) => {
@@ -80,6 +82,9 @@ export default function LivePage() {
             fake_viewers_end: data.fake_viewers_end ?? 150,
             fake_viewers_peak_at_pct: data.fake_viewers_peak_at_pct ?? 30,
           })
+          if (data.webi_projects && typeof data.webi_projects === 'object') {
+            setProjectTimezone((data.webi_projects as any).timezone || 'America/Sao_Paulo')
+          }
         }
         setLoading(false)
       })
@@ -321,9 +326,33 @@ export default function LivePage() {
 
         {/* SCHEDULING */}
         <div className="card">
-          <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>🗓 Agendamento</div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>🗓 Agendamento</div>
+            <button 
+              className="btn btn-ghost btn-sm" 
+              onClick={() => setShowGuide(!showGuide)}
+              style={{ fontSize: 12 }}
+            >
+              {showGuide ? 'Ocultar Guia' : 'Como funciona? 📖'}
+            </button>
+          </div>
+          
+          {showGuide && (
+            <div style={{ 
+              background: 'var(--bg-elevated)', padding: 14, borderRadius: 8, 
+              border: '1px solid var(--border)', marginBottom: 16, fontSize: 12, color: 'var(--text-secondary)' 
+            }}>
+              <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                <li><strong>Modo Manual (Uma vez):</strong> O vídeo só começa quando você clica em "Iniciar Sessão". Antes disso, os alunos veem a tela "Fora do Ar".</li>
+                <li><strong>Piloto Automático (Evergreen):</strong> O botão Iniciar some. O sistema calcula automaticamente o tempo de vídeo baseado no horário configurado.</li>
+                <li><strong>Sincronização Perfeita:</strong> Quem entra atrasado assiste o vídeo a partir do momento atual (ex: se entrar 10 min atrasado, o vídeo inicia aos 10 min). Os eventos de chat acompanham.</li>
+                <li><strong>Fuso Horário:</strong> Os horários são baseados no timezone do Projeto. Todos os alunos assistirão simultaneamente.</li>
+              </ul>
+            </div>
+          )}
+
           <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-            Configure quando a transmissão começa. Participantes verão um countdown até o horário agendado.
+            Configure quando a transmissão começa. Fuso atual: <strong style={{ color: 'var(--text-primary)' }}>{projectTimezone}</strong>.
           </div>
 
           {/* Recurrence mode tabs */}

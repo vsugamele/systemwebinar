@@ -205,6 +205,11 @@ export default async function WebinarPage({
   const nextScheduledStart = computeNextScheduledStart(webinar)
   const effectiveStart = computeEffectiveStart(webinar)
 
+  // Determine if the session is currently running (not ended)
+  const isSessionRunning = effectiveStart
+    ? (Date.now() - new Date(effectiveStart).getTime()) / 1000 < (webinar.duration_seconds || 3600)
+    : false
+
   // Compute countdown server-side so WebinarRoom gets the correct initial value
   // without needing Date.now() on the client (which causes SSR/hydration flash)
   const initialCountdownSeconds = nextScheduledStart
@@ -222,7 +227,8 @@ export default async function WebinarPage({
     imperio_project_id: (project as { imperio_project_id?: string | null }).imperio_project_id || undefined,
   }
 
-  if (!hasLeadCookie && !isTest) {
+  // If visitor has no cookie, is not in test mode, AND session is not running right now -> force registration
+  if (!hasLeadCookie && !isTest && !isSessionRunning) {
     return (
       <RegistrationGate
         webinarId={webinar.id}
@@ -234,12 +240,19 @@ export default async function WebinarPage({
     )
   }
 
+  const guestMode = !hasLeadCookie && !isTest && isSessionRunning
+
   return (
     <>
       {webinar.tracking_head_code && (
         <div dangerouslySetInnerHTML={{ __html: webinar.tracking_head_code }} />
       )}
-      <WebinarRoom webinar={enrichedWebinar} events={events || []} initialCountdownSeconds={initialCountdownSeconds} />
+      <WebinarRoom 
+        webinar={enrichedWebinar} 
+        events={events || []} 
+        initialCountdownSeconds={initialCountdownSeconds}
+        guestMode={guestMode}
+      />
       {webinar.tracking_body_code && (
         <div dangerouslySetInnerHTML={{ __html: webinar.tracking_body_code }} />
       )}

@@ -104,6 +104,8 @@ interface Props {
   events: WebinarEvent[]
   /** Pre-computed server-side countdown (seconds until next_scheduled_start). Prevents client flash. */
   initialCountdownSeconds?: number
+  /** If true, visitor bypassed registration (active live mode) */
+  guestMode?: boolean
 }
 
 // EMOJI_REACTIONS moved to ChatPanel.tsx
@@ -332,7 +334,7 @@ export const DEFAULT_NAMES = [
   'Floripes Correia', 'Godofredo Ramos', 'Preciliana Campos', 'Geraldo Ferreira', 'Geralda Farias',
 ]
 
-export default function WebinarRoom({ webinar, events, initialCountdownSeconds = 0 }: Props) {
+export default function WebinarRoom({ webinar, events, initialCountdownSeconds = 0, guestMode }: Props) {
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
   const engineRef = useRef<EventEngine | null>(null)
@@ -356,7 +358,24 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [mobileChatOpen, setMobileChatOpen] = useState(false)
-  const [userName] = useState('Você')
+  const [userName, setUserName] = useState('Você')
+
+  // Set User Name for chat from localStorage OR test mode OR guest mode
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const isTest = new URLSearchParams(window.location.search).get('test') === '1'
+      const leadName = localStorage.getItem(`webi_lead_name_${webinar.id}`) || ''
+      if (isTest) {
+        setUserName('Você')
+      } else if (guestMode) {
+        setUserName(`Visitante ${sessionId.current.slice(-4).toUpperCase()}`)
+      } else if (leadName) {
+        setUserName(leadName)
+      } else {
+        setUserName('Anônimo')
+      }
+    }
+  }, [webinar.id, guestMode])
   const [viewers, setViewers] = useState(() => {
     const vStart = webinar.fake_viewers_start ?? 30
     return Math.max(1, vStart)
