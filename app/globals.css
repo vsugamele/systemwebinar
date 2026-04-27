@@ -803,6 +803,7 @@ tbody tr:hover td { background: var(--bg-hover); }
   min-height: 100vh;
   background: #050508;
   overflow-y: auto;
+  overscroll-behavior-y: none; /* Previne pull-to-refresh nativo no mobile */
 }
 
 .webinar-room {
@@ -1475,18 +1476,25 @@ tbody tr:hover td { background: var(--bg-hover); }
   }
   .main-content { min-height: auto; margin-left: 0; }
 
+  .webinar-page-wrapper {
+    height: 100vh; /* fallback */
+    height: 100dvh;
+    overflow: hidden;
+  }
   .webinar-room {
     grid-template-columns: 1fr;
     grid-template-rows: auto 1fr;
-    height: auto;
-    min-height: 100vh;
+    height: 100vh; /* fallback */
+    height: 100dvh;
+    min-height: 0;
   }
   .video-wrapper {
     aspect-ratio: 16/9;
     height: auto;
   }
-  .webinar-page-wrapper {
-    overflow-y: auto;
+  /* Evita o auto-zoom maldito do iOS Safari quando foca no input */
+  .chat-input {
+    font-size: 16px !important;
   }
   /* Ensure the video header takes less space on mobile if needed */
   .video-header { padding: 10px 16px; }
