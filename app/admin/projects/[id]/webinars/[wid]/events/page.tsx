@@ -628,32 +628,102 @@ export default function EventsPage() {
   async function handleCsvUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    
-    const text = await file.text()
-    const lines = text.split('\n').map(l => l.trim()).filter(Boolean)
-    
-    // Check header
-    if (lines[0].toLowerCase().includes('timestamp_segundos')) {
-      lines.shift()
+
+    let text = await file.text()
+    // Remove BOM (byte order mark do Excel)
+    text = text.replace(/^\uFEFF/, '')
+
+    const rawLines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean)
+    if (rawLines.length === 0) {
+      toast.error('Arquivo CSV vazio.')
+      e.target.value = ''
+      return
     }
-    
-    const parsed: GeneratedChatEvent[] = []
-    for (const line of lines) {
-      // Expected: timestamp_segundos,timestamp_formatado,usuario,mensagem
-      // Match first 3 columns, then capture the rest as message
-      const match = line.match(/^(\d+),([^,]+),([^,]+),(.*)$/)
-      if (match) {
-        let msg = match[4].trim()
-        if (msg.startsWith('"') && msg.endsWith('"')) {
-          msg = msg.substring(1, msg.length - 1).replace(/""/g, '"')
+
+    // ── Detectar separador: ; (Excel BR) ou , (padrão)
+    const firstLine = rawLines[0]
+    const sep = firstLine.includes(';') ? ';' : ','
+
+    // ── Parser de linha CSV respeitando campos entre aspas
+    function parseCsvLine(line: string): string[] {
+      const cols: string[] = []
+      let cur = ''
+      let inQuotes = false
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i]
+        if (inQuotes) {
+          if (ch === '"') {
+            if (line[i + 1] === '"') { cur += '"'; i++ } // escaped quote
+            else inQuotes = false
+          } else {
+            cur += ch
+          }
+        } else {
+          if (ch === '"') {
+            inQuotes = true
+          } else if (ch === sep) {
+            cols.push(cur.trim()); cur = ''
+          } else {
+            cur += ch
+          }
         }
-        parsed.push({
-          timestamp_seconds: parseInt(match[1], 10),
-          author: match[3].trim(),
-          text: msg
-        })
+      }
+      cols.push(cur.trim())
+      return cols
+    }
+
+    // ── Detectar índices das colunas pelo cabeçalho (case-insensitive)
+    const headerLine = rawLines[0]
+    const isHeader = /timestamp|usuario|mensagem|author|message|text/i.test(headerLine)
+    let dataLines = rawLines
+    let tsIdx = 0, userIdx = 2, msgIdx = 3
+
+    if (isHeader) {
+      const headers = parseCsvLine(headerLine).map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''))
+      dataLines = rawLines.slice(1)
+
+      const findIdx = (...keys: string[]) => {
+        for (const k of keys) {
+          const i = headers.findIndex(h => h.includes(k))
+          if (i !== -1) return i
+        }
+        return -1
+      }
+      tsIdx  = findIdx('timestamp', 'segundos', 'time', 'segundo') ?? 0
+      userIdx = findIdx('usuario', 'author', 'user', 'nome', 'name') ?? 2
+      msgIdx  = findIdx('mensagem', 'message', 'text', 'msg') ?? 3
+    }
+
+    const parsed: GeneratedChatEvent[] = []
+    for (const line of dataLines) {
+      const cols = parseCsvLine(line)
+      if (cols.length < 2) continue
+
+      // Tentar pegar timestamp (aceita segundos inteiros ou MM:SS ou HH:MM:SS)
+      const tsRaw = cols[tsIdx] ?? ''
+      let secs = 0
+      if (/^\d+$/.test(tsRaw)) {
+        secs = parseInt(tsRaw, 10)
+      } else {
+        const parts = tsRaw.split(':').map(Number)
+        if (parts.length === 3) secs = parts[0]*3600 + parts[1]*60 + parts[2]
+        else if (parts.length === 2) secs = parts[0]*60 + parts[1]
+      }
+
+      const author = (cols[userIdx] ?? '').trim()
+      const msg    = (cols[msgIdx]  ?? '').trim()
+
+      if (author && msg) {
+        parsed.push({ timestamp_seconds: secs, author, text: msg })
       }
     }
+
+    if (parsed.length === 0) {
+      toast.error(`Nenhuma mensagem reconhecida. Separador detectado: "${sep}". Verifique o formato do arquivo. Colunas esperadas: timestamp_segundos, timestamp_formatado, usuario, mensagem`)
+    } else {
+      toast.success(`${parsed.length} mensagens reconhecidas! Revise e clique em Inserir.`)
+    }
+
     setCsvParsed(parsed.sort((a, b) => a.timestamp_seconds - b.timestamp_seconds))
     e.target.value = '' // reset input
   }
@@ -1109,11 +1179,14 @@ export default function EventsPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 14 }}>
                 <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', borderRadius: 10, padding: '12px 14px', fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
                   <strong style={{ color: 'var(--text-primary)' }}>📁 Importar Arquivo CSV.</strong>{' '}
-                  Faça o upload de um arquivo contendo as mensagens. Formato esperado (separado por vírgula):
+                  Aceita <strong>vírgula</strong> (,) ou <strong>ponto-e-vírgula</strong> (;) como separador — incluindo arquivos exportados pelo Excel. O cabeçalho é detectado automaticamente.
                   <div style={{ fontFamily: 'monospace', fontSize: 11, background: 'var(--bg)', borderRadius: 6, padding: '8px 10px', marginTop: 8, color: '#34d399' }}>
                     timestamp_segundos,timestamp_formatado,usuario,mensagem<br/>
                     0,00:00,Rafael_Tattoo,&quot;boa noite a todos!! 🙌&quot;<br/>
-                    30,00:30,Lucas_SP,boa noite!!
+                    30,00:30,Lucas_SP,boa noite!!<br/>
+                    <span style={{ color: 'var(--text-muted)' }}>{/* Excel BR: */}</span><br/>
+                    timestamp_segundos;timestamp_formatado;usuario;mensagem<br/>
+                    0;00:00;Maria Silva;Adorei!
                   </div>
                 </div>
 
