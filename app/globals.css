@@ -888,6 +888,20 @@ tbody tr:hover td { background: var(--bg-hover); }
   background: transparent !important;
 }
 
+/* YouTube iframe chrome cropping */
+.yt-iframe {
+  top: -9%;
+  height: 118%;
+}
+
+@media (max-width: 1024px) {
+  .yt-iframe {
+    top: -25%;
+    height: 150%;
+  }
+}
+
+
 /* ---- Chat section ---- */
 .chat-section {
   display: flex;

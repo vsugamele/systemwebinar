@@ -896,6 +896,56 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     }
   }, [webinar.id])
 
+  // ---- Fetch historical real messages for the current session ----
+  useEffect(() => {
+    if (!webinar.session_started_at) return
+    
+    async function fetchHistory() {
+      try {
+        const { data, error } = await supabaseRef.current
+          .from('webi_live_chat')
+          .select('*')
+          .eq('webinar_id', webinar.id)
+          .gte('created_at', webinar.session_started_at)
+          .order('created_at', { ascending: true })
+          .limit(100)
+          
+        if (error) throw error
+          
+        if (data && data.length > 0) {
+          setMessages(m => {
+            const newMessages = [...m]
+            let added = false
+            data.forEach(dbMsg => {
+              if (!newMessages.some(existing => existing.id === dbMsg.id)) {
+                newMessages.push({
+                  id: dbMsg.id,
+                  author: dbMsg.author,
+                  avatar: dbMsg.avatar,
+                  text: dbMsg.text,
+                  timestamp: dbMsg.timestamp_video,
+                  isSimulated: dbMsg.is_simulated || false,
+                  isBroadcast: dbMsg.is_broadcast || false,
+                })
+                added = true
+              }
+            })
+            
+            if (added) {
+              newMessages.sort((a, b) => a.timestamp - b.timestamp)
+              return newMessages
+            }
+            return m
+          })
+        }
+      } catch (err) {
+        console.warn('Failed to fetch chat history', err)
+      }
+    }
+    
+    fetchHistory()
+  }, [webinar.id, webinar.session_started_at])
+
 
   // ---- Countdown ticker ----
   function startCountdown(seconds: number) {
@@ -1259,9 +1309,23 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       finalText = filterBadWords(finalText)
     }
 
+    // Prompt for name if they are anonymous or a visitor
+    let currentName = userName
+    if (currentName === 'Anônimo' || currentName.startsWith('Visitante ')) {
+      const newName = window.prompt('Como você gostaria de ser chamado no chat?', '')
+      if (newName && newName.trim().length > 0) {
+        currentName = newName.trim()
+        setUserName(currentName)
+        localStorage.setItem(`webi_lead_name_${webinar.id}`, currentName)
+      } else {
+        // Se o usuário cancelar, interrompe o envio
+        return
+      }
+    }
+
     const msg: ChatMessage = {
       id: Math.random().toString(36),
-      author: userName,
+      author: currentName,
       text: finalText,
       timestamp: Math.floor(videoRef.current?.currentTime || elapsedRef.current),
       isSimulated: false,
@@ -1271,7 +1335,16 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     setMessages(m => [...m, msg])
     trackEvent('chat_sent', msg.timestamp)
 
-    // Proxy through secure API
+    // Broadcast directly to other connected clients for zero-latency
+    if (channelRef.current) {
+      channelRef.current.send({
+        type: 'broadcast',
+        event: 'chat-message',
+        payload: { ...msg, session_id: sessionId.current }
+      }).catch(err => console.warn('Failed to broadcast directly:', err))
+    }
+
+    // Proxy through secure API to save in database
     try {
       await fetch('/api/chat', {
         method: 'POST',
@@ -1582,13 +1655,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                   key={ytKey}
                   ref={ytIframeRef}
                   src={ytSrc}
+                  className="yt-iframe"
                   style={{
                     position: 'absolute',
-                    // Aumenta 18% para cortar o chrome do YouTube em cima e embaixo
-                    top: '-9%',
                     left: 0,
                     width: '100%',
-                    height: '118%',
                     border: 'none',
                     pointerEvents: 'none',
                   }}

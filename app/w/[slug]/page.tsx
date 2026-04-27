@@ -227,20 +227,7 @@ export default async function WebinarPage({
     imperio_project_id: (project as { imperio_project_id?: string | null }).imperio_project_id || undefined,
   }
 
-  // If visitor has no cookie, is not in test mode, AND session is not running right now -> force registration
-  if (!hasLeadCookie && !isTest && !isSessionRunning) {
-    return (
-      <RegistrationGate
-        webinarId={webinar.id}
-        webinarName={webinar.name}
-        description={webinar.description}
-        thumbnailUrl={webinar.thumbnail_url}
-        projectId={webinar.project_id}
-      />
-    )
-  }
-
-  const guestMode = !hasLeadCookie && !isTest && isSessionRunning
+  const guestMode = !hasLeadCookie && !isTest
 
   return (
     <>
