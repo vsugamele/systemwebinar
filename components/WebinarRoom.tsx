@@ -1536,19 +1536,26 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 )}
               </div>
             )}
-            <span style={{ fontSize: 14, fontWeight: 600 }}>{webinar.display_name || webinar.name}</span>
+            )}
+            <span style={{ 
+              fontSize: 14, fontWeight: 600, 
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', 
+              maxWidth: '30vw' 
+            }} title={webinar.display_name || webinar.name}>
+              {webinar.display_name || webinar.name}
+            </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             {!!(webinar as unknown as Record<string, unknown>).has_quiz && (
               <button
                 onClick={() => setQuizOpen(true)}
                 style={{
                   background: 'rgba(99,102,241,0.15)', border: '1px solid rgba(99,102,241,0.3)',
-                  borderRadius: 8, padding: '6px 12px', fontSize: 12, color: '#a5b4fc',
-                  cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6,
+                  borderRadius: 8, padding: '6px 10px', fontSize: 12, color: '#a5b4fc',
+                  cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4,
                 }}
               >
-                📝 Quiz
+                📝 <span className="hidden-mobile">Quiz</span>
               </button>
             )}
             <button
@@ -1564,9 +1571,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
               <span className="hidden-mobile" style={{ fontSize: 11 }}>Expandir</span>
             </button>
             {!isSessionEnded && (
-              <div className="viewer-count">
+              <div className="viewer-count" style={{ marginLeft: 4 }}>
                 <div className="viewer-dot" />
-                <span className={viewersPulse ? 'bump-anim' : ''}>{viewers.toLocaleString()}</span> assistindo
+                <span className={viewersPulse ? 'bump-anim' : ''}>{viewers.toLocaleString()}</span>
+                <span className="hidden-mobile" style={{ marginLeft: 4 }}>assistindo</span>
               </div>
             )}
           </div>
