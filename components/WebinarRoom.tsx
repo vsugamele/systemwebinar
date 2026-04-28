@@ -435,6 +435,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const [aiTyping, setAiTyping] = useState(false)
   const [saleToastActive, setSaleToastActive] = useState(false)
 
+  // Chat identity modal (name + email capture)
+  const [identityModalOpen, setIdentityModalOpen] = useState(false)
+  const [identityModalName, setIdentityModalName] = useState('')
+  const [identityModalEmail, setIdentityModalEmail] = useState('')
+  const identityResolveRef = useRef<((value: { name: string; email: string } | null) => void) | null>(null)
+
   // Quiz-in-chat state
   const [quizQuestions, setQuizQuestions] = useState<Record<string, { question: string; options: string[]; correct_index: number }>>({}) // keyed by question_id
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({}) // question_id → chosen option
@@ -1336,17 +1342,28 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       finalText = filterBadWords(finalText)
     }
 
-    // Prompt for name if they are anonymous or a visitor
+    // Show custom identity modal if name is unknown
     let currentName = userName
-    if (currentName === 'Anônimo' || currentName.startsWith('Visitante ')) {
-      const newName = window.prompt('Como você gostaria de ser chamado no chat?', '')
-      if (newName && newName.trim().length > 0) {
-        currentName = newName.trim()
-        setUserName(currentName)
-        localStorage.setItem(`webi_lead_name_${webinar.id}`, currentName)
-      } else {
-        // Se o usuário cancelar, interrompe o envio
-        return
+    const needsIdentity = currentName === 'Anônimo' || currentName.startsWith('Visitante ')
+    if (needsIdentity) {
+      // Pre-fill from localStorage if partial data exists
+      const savedName = localStorage.getItem(`webi_lead_name_${webinar.id}`) || ''
+      const savedEmail = localStorage.getItem(`webi_lead_email_${webinar.id}`) || ''
+      setIdentityModalName(savedName)
+      setIdentityModalEmail(savedEmail)
+      setIdentityModalOpen(true)
+
+      const identity = await new Promise<{ name: string; email: string } | null>(resolve => {
+        identityResolveRef.current = resolve
+      })
+
+      if (!identity) return // user cancelled
+
+      currentName = identity.name
+      setUserName(currentName)
+      localStorage.setItem(`webi_lead_name_${webinar.id}`, currentName)
+      if (identity.email) {
+        localStorage.setItem(`webi_lead_email_${webinar.id}`, identity.email)
       }
     }
 
@@ -1399,12 +1416,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             })
             const data = await res.json()
             if (data.answer) {
-              setMessages(m => [...m, {
+              appendMessages([{
                 id: `ai-${Date.now()}`,
                 author: aiName,
                 avatar: aiAvatar || undefined,
                 text: data.answer,
-                timestamp: Math.floor(elapsedRef.current),
+                timestamp: Math.floor(Date.now() / 1000),
                 isSimulated: true,
               }])
             }
@@ -1513,6 +1530,99 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   return (
     <>
+      {/* IDENTITY MODAL — captures name + email before first chat message */}
+      {identityModalOpen && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 99999,
+          background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: 24, animation: 'fadeIn 0.2s ease',
+        }}>
+          <div style={{
+            background: 'var(--bg-card)', border: '1px solid var(--border)',
+            borderRadius: 20, padding: '32px 28px', width: '100%', maxWidth: 400,
+            boxShadow: '0 24px 80px rgba(0,0,0,0.6)', animation: 'slideUp 0.25s ease',
+          }}>
+            <div style={{ textAlign: 'center', marginBottom: 24 }}>
+              <div style={{ fontSize: 40, marginBottom: 10 }}>💬</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 6 }}>
+                Como posso te chamar?
+              </div>
+              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                Preencha para participar do chat ao vivo
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <input
+                autoFocus
+                type="text"
+                placeholder="Seu nome *"
+                value={identityModalName}
+                onChange={e => setIdentityModalName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && identityModalName.trim()) {
+                    setIdentityModalOpen(false)
+                    identityResolveRef.current?.({ name: identityModalName.trim(), email: identityModalEmail.trim() })
+                  }
+                }}
+                style={{
+                  width: '100%', padding: '12px 14px', borderRadius: 10,
+                  border: '1px solid var(--border)', background: 'var(--bg-elevated)',
+                  color: 'var(--text-primary)', fontSize: 15, outline: 'none',
+                }}
+              />
+              <input
+                type="email"
+                placeholder="Seu e-mail (opcional)"
+                value={identityModalEmail}
+                onChange={e => setIdentityModalEmail(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && identityModalName.trim()) {
+                    setIdentityModalOpen(false)
+                    identityResolveRef.current?.({ name: identityModalName.trim(), email: identityModalEmail.trim() })
+                  }
+                }}
+                style={{
+                  width: '100%', padding: '12px 14px', borderRadius: 10,
+                  border: '1px solid var(--border)', background: 'var(--bg-elevated)',
+                  color: 'var(--text-primary)', fontSize: 15, outline: 'none',
+                }}
+              />
+              <button
+                disabled={!identityModalName.trim()}
+                onClick={() => {
+                  setIdentityModalOpen(false)
+                  identityResolveRef.current?.({ name: identityModalName.trim(), email: identityModalEmail.trim() })
+                }}
+                style={{
+                  width: '100%', padding: '13px', borderRadius: 10,
+                  background: identityModalName.trim() ? 'var(--brand)' : 'var(--bg-elevated)',
+                  color: identityModalName.trim() ? '#fff' : 'var(--text-muted)',
+                  border: 'none', fontSize: 15, fontWeight: 700,
+                  cursor: identityModalName.trim() ? 'pointer' : 'not-allowed',
+                  transition: 'all 0.2s',
+                  marginTop: 4,
+                }}
+              >
+                Entrar no Chat 🚀
+              </button>
+              <button
+                onClick={() => {
+                  setIdentityModalOpen(false)
+                  identityResolveRef.current?.(null)
+                }}
+                style={{
+                  background: 'none', border: 'none', color: 'var(--text-muted)',
+                  fontSize: 13, cursor: 'pointer', padding: '4px 0',
+                }}
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* WAITING ROOM — shown before entering if enabled */}
       {!waitingDone && (
         <WaitingRoom

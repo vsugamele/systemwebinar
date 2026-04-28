@@ -1495,21 +1495,40 @@ tbody tr:hover td { background: var(--bg-hover); }
   }
   .webinar-room {
     grid-template-columns: 1fr;
+    /* header is sticky; video auto; chat fills the rest */
     grid-template-rows: auto 1fr;
     height: 100vh; /* fallback */
     height: 100dvh;
     min-height: 0;
   }
+  /* Make the video-section a proper flex column so the header
+     is always rendered first and the video fills the remaining space */
+  .video-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: visible;
+  }
+  /* Stick the header to top of the video-section so 16/9 video never pushes it off */
+  .video-header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    flex-shrink: 0;
+  }
+  /* Video wrapper: constrained to 16:9 but NEVER overflows video-section */
   .video-wrapper {
+    width: 100%;
     aspect-ratio: 16/9;
+    /* Cap at viewport width to prevent overflow */
+    max-height: 56.25vw;
     height: auto;
+    flex-shrink: 0;
   }
   /* Evita o auto-zoom maldito do iOS Safari quando foca no input */
   .chat-input {
     font-size: 16px !important;
   }
-  /* Ensure the video header takes less space on mobile if needed */
-  .video-header { padding: 10px 16px; }
   .chat-header { padding: 12px 16px; min-height: 48px; }
 }
 
