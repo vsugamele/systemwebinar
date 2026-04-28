@@ -357,6 +357,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const channelRef = useRef<RealtimeChannel | null>(null)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
+
+  // Base time for converting relative video seconds into absolute UNIX timestamps for simulated messages.
+  const sessionBaseTime = useMemo(() => {
+    return webinar.session_started_at 
+      ? Math.floor(new Date(webinar.session_started_at).getTime() / 1000)
+      : Math.floor(Date.now() / 1000)
+  }, [webinar.session_started_at])
   
   // ---- O(1) Deduplication and Fast-Forward Buffering ----
   const messageMapRef = useRef(new Map<string, boolean>())
@@ -798,7 +805,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             const text = phrases[Math.floor(Math.random() * phrases.length)]
             setMessages(m => [...m, {
               id: Math.random().toString(36), author: name, text,
-              timestamp: Math.floor(fireTime), isSimulated: true,
+              timestamp: sessionBaseTime + Math.floor(fireTime), isSimulated: true,
             }])
           }
           tick()
@@ -845,7 +852,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             id: Math.random().toString(36),
             author: name,
             text,
-            timestamp: Math.floor(currentTime),
+            timestamp: sessionBaseTime + Math.floor(currentTime),
             isSimulated: true,
           }])
         }
@@ -992,7 +999,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         id: `broadcast-${idx}`,
         author: '🛒 Notificação',
         text: `${firstName} acabou de comprar! 🎉`,
-        timestamp: Math.floor(videoRef.current?.currentTime || 0),
+        timestamp: sessionBaseTime + Math.floor(videoRef.current?.currentTime || 0),
         isSimulated: true,
         isBroadcast: true,
       }])
@@ -1028,7 +1035,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         author: p.author,
         avatar: p.avatar,
         text: p.text,
-        timestamp: ev.timestamp_seconds,
+        timestamp: sessionBaseTime + ev.timestamp_seconds,
         isSimulated: true,
         image_url: p.image_url || undefined,
         link_url: p.link_url || undefined,
@@ -1141,7 +1148,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             id: `quiz-voter-${p.question_id}-${fi}`,
             author: name,
             text,
-            timestamp: ev.timestamp_seconds,
+            timestamp: sessionBaseTime + ev.timestamp_seconds,
             isSimulated: true,
           }])
         }, 3000 + fi * (800 + Math.random() * 1200))
