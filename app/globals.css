@@ -1493,28 +1493,32 @@ tbody tr:hover td { background: var(--bg-hover); }
     height: 100dvh;
     overflow: hidden;
   }
+  /*
+   * MOBILE WEBINAR ROOM — Flexbox layout (column stack)
+   * Using flex instead of grid because the base CSS .video-wrapper { flex: 1 }
+   * conflicted with our explicit height on the grid approach, causing the video
+   * to collapse to a thin strip. Flexbox + explicit flex sizes is bulletproof.
+   */
   .webinar-room {
-    grid-template-columns: 1fr;
-    /* 
-      Row 1: header (52px) + 16:9 video (56.25vw) — calculated explicitly
-      so the grid never guesses wrong and leaves dead space.
-      Row 2: everything else goes to the chat section.
-    */
-    grid-template-rows: calc(52px + 56.25vw) 1fr;
+    display: flex !important;
+    flex-direction: column !important;
     height: 100vh;
     height: 100dvh;
-    min-height: 0;
     overflow: hidden;
+    /* Reset grid properties so they don't interfere */
+    grid-template-columns: unset;
+    grid-template-rows: unset;
   }
-  /* video-section: flex column, content starts below the fixed header */
+  /* video-section: fixed size, does NOT grow or shrink */
   .video-section {
     display: flex;
     flex-direction: column;
+    flex: 0 0 auto;         /* never grow, never shrink */
     overflow: hidden;
-    /* 52px matches the fixed header height — keeps video from being clipped */
+    /* 52px gap for the fixed header above */
     padding-top: 52px;
-    /* video-section fills exactly row 1 of the grid */
-    min-height: 0;
+    /* Total height = header gap + 16:9 video */
+    height: calc(52px + 56.25vw);
   }
   /* FIXED header — always visible at top of screen on mobile.
      position:sticky doesn't work inside overflow:hidden parents. */
@@ -1534,21 +1538,24 @@ tbody tr:hover td { background: var(--bg-hover); }
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
   }
-  /* Light theme: override header background for mobile fixed header */
+  /* Light theme: fixed header background */
   .webinar-page-wrapper[data-theme="light"] .video-header {
     background: rgba(255, 255, 255, 0.97) !important;
   }
-  /* Video wrapper: exactly fills the remaining space in video-section (16:9) */
+  /*
+   * Video wrapper: explicit 16:9 size, overrides the base flex:1
+   * which was the root cause of the thin-strip bug.
+   */
   .video-wrapper {
-    width: 100%;
-    /* Exact 16:9 of viewport width — no auto, no ambiguity */
-    height: 56.25vw;
-    flex-shrink: 0;
+    width: 100% !important;
+    height: 56.25vw !important;
+    flex: 0 0 56.25vw !important;  /* don't grow, don't shrink, stay at 56.25vw */
     overflow: hidden;
+    position: relative;
   }
-  /* Chat section: must fill its entire grid row (1fr) — no dead space at bottom */
+  /* Chat section: takes ALL remaining vertical space */
   .chat-section {
-    height: 100%;
+    flex: 1 1 0;            /* grow to fill, shrink if needed */
     min-height: 0;
     display: flex;
     flex-direction: column;
