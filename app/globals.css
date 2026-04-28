@@ -1517,9 +1517,8 @@ tbody tr:hover td { background: var(--bg-hover); }
     flex-direction: column;
     flex: 0 0 auto;         /* never grow, never shrink */
     overflow: hidden;
-    /* 52px gap for the fixed header above */
-    padding-top: 52px;
-    /* Total height = header gap + 16:9 video */
+    /* No padding here — we use margin-top on video-wrapper instead
+       so the section height = pure video height + header gap */
     height: calc(52px + 56.25vw);
   }
   /* FIXED header — always visible at top of screen on mobile.
@@ -1545,13 +1544,15 @@ tbody tr:hover td { background: var(--bg-hover); }
     background: rgba(255, 255, 255, 0.97) !important;
   }
   /*
-   * Video wrapper: explicit 16:9 size, overrides the base flex:1
-   * which was the root cause of the thin-strip bug.
+   * Video wrapper: explicit 16:9 size.
+   * margin-top: 52px pushes it below the fixed header WITHOUT reducing its height.
+   * flex: 0 0 56.25vw overrides the base flex:1 that caused the thin-strip bug.
    */
   .video-wrapper {
     width: 100% !important;
     height: 56.25vw !important;
-    flex: 0 0 56.25vw !important;  /* don't grow, don't shrink, stay at 56.25vw */
+    flex: 0 0 56.25vw !important;
+    margin-top: 52px;
     overflow: hidden;
     position: relative;
   }
