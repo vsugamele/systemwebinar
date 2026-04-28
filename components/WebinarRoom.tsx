@@ -358,12 +358,19 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
 
+  // ---- Live session start tracking ----
+  // We keep session_started_at in state so the component re-renders when
+  // the admin starts the session (the initial prop is static / server-rendered).
+  const [liveSessionStartedAt, setLiveSessionStartedAt] = useState<string | null>(
+    webinar.session_started_at ?? null
+  )
+
   // Base time for converting relative video seconds into absolute UNIX timestamps for simulated messages.
   const sessionBaseTime = useMemo(() => {
-    return webinar.session_started_at 
-      ? Math.floor(new Date(webinar.session_started_at).getTime() / 1000)
+    return liveSessionStartedAt
+      ? Math.floor(new Date(liveSessionStartedAt).getTime() / 1000)
       : Math.floor(Date.now() / 1000)
-  }, [webinar.session_started_at])
+  }, [liveSessionStartedAt])
   
   // ---- O(1) Deduplication and Fast-Forward Buffering ----
   const messageMapRef = useRef(new Map<string, boolean>())
@@ -482,8 +489,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // Using it directly eliminates the 0 → real-value flip that caused the flash.
   const [countdownToStart, setCountdownToStart] = useState<number>(initialCountdownSeconds)
 
-  // A session is active only if session_started_at is set (computed server-side)
-  const hasStarted = !!webinar.session_started_at
+  // A session is active only if session_started_at is set
+  const hasStarted = !!liveSessionStartedAt
+  // Compute startOffset from liveSessionStartedAt so it stays current
+  const liveStartOffset = liveSessionStartedAt ? getStartOffset(liveSessionStartedAt) : 0
   const isSessionActive = hasStarted && elapsedSeconds >= 0 && !isSessionEnded
 
   // Session is "offline" when countdown > 12h or there's no next schedule and no active session
@@ -528,6 +537,32 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   useEffect(() => {
     setVisibleMaterials(materials.filter(m => m.show_at_seconds <= elapsedSeconds))
   }, [elapsedSeconds, materials])
+
+  // ---- Polling: detect when admin starts the session ----
+  // Runs every 10s when session hasn't started. When session_started_at appears,
+  // updates state so hasStarted/sessionBaseTime recalculate without a page reload.
+  useEffect(() => {
+    if (hasStarted) return // already live — nothing to poll
+    const supabase = supabaseRef.current
+    const pollInterval = setInterval(async () => {
+      const { data } = await supabase
+        .from('webi_webinars')
+        .select('session_started_at')
+        .eq('id', webinar.id)
+        .single()
+      if (data?.session_started_at && data.session_started_at !== liveSessionStartedAt) {
+        setLiveSessionStartedAt(data.session_started_at)
+        // Re-seed elapsedRef so CPM starts from the correct wall-clock offset
+        const newOffset = getStartOffset(data.session_started_at)
+        elapsedRef.current = newOffset
+        setElapsedSeconds(newOffset)
+        // Reset countdown to 0 so the UI switches from "EM BREVE" to "AO VIVO"
+        setCountdownToStart(0)
+        clearInterval(pollInterval)
+      }
+    }, 10000)
+    return () => clearInterval(pollInterval)
+  }, [hasStarted, webinar.id, liveSessionStartedAt])
 
   // ---- Scheduled start countdown ticker ----
   useEffect(() => {
@@ -688,8 +723,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         // Non-native videos (YouTube, Vimeo, VTurb, etc)
         // Only advance the clock if the session has actually started.
         // If session_started_at is null, keep elapsed frozen at 0 so CPM doesn't fire.
-        if (webinar.session_started_at) {
-          const wallClockTick = Math.floor((Date.now() - new Date(webinar.session_started_at).getTime()) / 1000)
+        if (liveSessionStartedAt) {
+          const wallClockTick = Math.floor((Date.now() - new Date(liveSessionStartedAt).getTime()) / 1000)
           currentTick = Math.max(elapsedRef.current, wallClockTick)
         }
         // else: no session_started_at → don't advance elapsed (stays at 0 / startOffset)
