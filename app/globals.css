@@ -1489,43 +1489,56 @@ tbody tr:hover td { background: var(--bg-hover); }
   .main-content { min-height: auto; margin-left: 0; }
 
   .webinar-page-wrapper {
-    height: 100vh; /* fallback */
+    height: 100vh;
     height: 100dvh;
     overflow: hidden;
   }
   .webinar-room {
     grid-template-columns: 1fr;
-    /* header is sticky; video auto; chat fills the rest */
+    /* Fixed header height (48px) + video (56.25vw) + chat fills rest */
     grid-template-rows: auto 1fr;
-    height: 100vh; /* fallback */
+    height: 100vh;
     height: 100dvh;
     min-height: 0;
   }
-  /* Make the video-section a proper flex column so the header
-     is always rendered first and the video fills the remaining space */
+  /* video-section: flex column, video directly below the fixed header */
   .video-section {
     display: flex;
     flex-direction: column;
     min-height: 0;
     overflow: visible;
+    /* Push content below the fixed header */
+    padding-top: 48px;
   }
-  /* Stick the header to top of the video-section so 16/9 video never pushes it off */
+  /* FIXED header — always visible at top of screen on mobile.
+     position:sticky doesn't work inside overflow:hidden parents,
+     so we go fully fixed and compensate with padding-top on video-section. */
   .video-header {
-    position: sticky;
+    position: fixed !important;
     top: 0;
-    z-index: 10;
-    flex-shrink: 0;
+    left: 0;
+    right: 0;
+    height: 48px;
+    z-index: 200;
+    padding: 0 16px;
+    background: rgba(5, 5, 8, 0.97) !important;
+    border-bottom: 1px solid var(--border) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
   }
-  /* Video wrapper: constrained to 16:9 but NEVER overflows video-section */
+  /* Light theme: override header background for mobile fixed header */
+  .webinar-page-wrapper[data-theme="light"] .video-header {
+    background: rgba(255, 255, 255, 0.97) !important;
+  }
+  /* Video wrapper: 16:9 ratio, contained to viewport width */
   .video-wrapper {
     width: 100%;
     aspect-ratio: 16/9;
-    /* Cap at viewport width to prevent overflow */
     max-height: 56.25vw;
     height: auto;
     flex-shrink: 0;
   }
-  /* Evita o auto-zoom maldito do iOS Safari quando foca no input */
+  /* iOS Safari: prevent auto-zoom on input focus */
   .chat-input {
     font-size: 16px !important;
   }
