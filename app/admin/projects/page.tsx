@@ -7,14 +7,26 @@ import Modal from '@/components/Modal'
 import { toast } from 'react-hot-toast'
 import type { Project } from '@/types'
 
+interface ProjectWithStats extends Project {
+  webinarCount?: number
+  activeCount?: number
+}
+
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>([])
+  const [projects, setProjects] = useState<ProjectWithStats[]>([])
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [editProject, setEditProject] = useState<Project | null>(null)
-  const [form, setForm] = useState({ name: '', accent_color: '#6366f1', resend_from_email: '', openrouter_api_key: '', timezone: 'America/Sao_Paulo' })
+  const [form, setForm] = useState({
+    name: '',
+    accent_color: '#6366f1',
+    resend_from_email: '',
+    openrouter_api_key: '',
+    timezone: 'America/Sao_Paulo',
+  })
   const [saving, setSaving] = useState(false)
   const [cloningProject, setCloningProject] = useState<string | null>(null)
+  const [expandedMenu, setExpandedMenu] = useState<string | null>(null)
   const supabase = createClient()
 
   const TIMEZONES = [
@@ -35,15 +47,35 @@ export default function ProjectsPage() {
   ]
 
   async function load() {
-    const { data } = await supabase.from('webi_projects').select('*').order('created_at', { ascending: false })
-    setProjects(data || [])
+    // Fetch projects + webinar counts in parallel
+    const { data: rawProjects } = await supabase
+      .from('webi_projects')
+      .select('*')
+      .order('created_at', { ascending: false })
+
+    if (!rawProjects) { setLoading(false); return }
+
+    // Get webinar counts per project
+    const { data: webinarRows } = await supabase
+      .from('webi_webinars')
+      .select('project_id, status')
+
+    const countMap: Record<string, { total: number; active: number }> = {}
+    for (const w of webinarRows || []) {
+      if (!countMap[w.project_id]) countMap[w.project_id] = { total: 0, active: 0 }
+      countMap[w.project_id].total++
+      if (w.status === 'active') countMap[w.project_id].active++
+    }
+
+    setProjects(rawProjects.map(p => ({
+      ...p,
+      webinarCount: countMap[p.id]?.total || 0,
+      activeCount: countMap[p.id]?.active || 0,
+    })))
     setLoading(false)
   }
 
-  useEffect(() => {
-    supabase.from('webi_projects').select('*').order('created_at', { ascending: false })
-      .then(({ data }) => { setProjects(data || []); setLoading(false) })
-  }, []) // keeping missing dep as is since it's common
+  useEffect(() => { load() }, [])
 
   function openCreate() {
     setEditProject(null)
@@ -53,20 +85,24 @@ export default function ProjectsPage() {
 
   function openEdit(p: Project) {
     setEditProject(p)
-    setForm({ name: p.name, accent_color: p.accent_color, resend_from_email: p.resend_from_email || '', openrouter_api_key: p.openrouter_api_key || '', timezone: p.timezone || 'America/Sao_Paulo' })
+    setForm({
+      name: p.name,
+      accent_color: p.accent_color,
+      resend_from_email: p.resend_from_email || '',
+      openrouter_api_key: p.openrouter_api_key || '',
+      timezone: (p as any).timezone || 'America/Sao_Paulo',
+    })
     setShowModal(true)
   }
 
   async function save() {
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
-
     if (editProject) {
       await supabase.from('webi_projects').update(form).eq('id', editProject.id)
     } else {
       await supabase.from('webi_projects').insert({ ...form, owner_id: user!.id })
     }
-
     setSaving(false)
     setShowModal(false)
     load()
@@ -165,49 +201,117 @@ export default function ProjectsPage() {
             <button className="btn btn-primary" onClick={openCreate}>Criar Primeiro Projeto</button>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20 }}>
             {projects.map(p => (
-              <div key={p.id} className="card" style={{ '--accent': p.accent_color } as React.CSSProperties}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-                  <div style={{
-                    width: 40, height: 40, borderRadius: 10,
-                    background: p.accent_color,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 18, fontWeight: 800, color: 'white'
-                  }}>
-                    {p.name[0].toUpperCase()}
+              <div
+                key={p.id}
+                style={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 18,
+                  overflow: 'hidden',
+                  transition: 'border-color 0.15s, box-shadow 0.15s',
+                  display: 'flex',
+                  flexDirection: 'column',
+                }}
+              >
+                {/* Color bar header */}
+                <div style={{
+                  height: 5,
+                  background: `linear-gradient(90deg, ${p.accent_color}, ${p.accent_color}80)`,
+                }} />
+
+                <div style={{ padding: '20px 20px 16px' }}>
+                  {/* Project identity */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+                    <div style={{
+                      width: 44, height: 44, borderRadius: 12,
+                      background: p.accent_color,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 20, fontWeight: 800, color: 'white',
+                      flexShrink: 0,
+                    }}>
+                      {p.name[0].toUpperCase()}
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{
+                        fontWeight: 700, color: 'var(--text-primary)',
+                        fontSize: 15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      }}>
+                        {p.name}
+                      </div>
+                      {p.resend_from_email && (
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 1 }}>
+                          {p.resend_from_email}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{p.name}</div>
-                    {p.resend_from_email && (
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.resend_from_email}</div>
+
+                  {/* Stats pills */}
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+                    <div style={{
+                      background: 'var(--bg-elevated)', borderRadius: 8,
+                      padding: '5px 10px', fontSize: 12, color: 'var(--text-secondary)',
+                      display: 'flex', alignItems: 'center', gap: 5,
+                    }}>
+                      🎬 <strong style={{ color: 'var(--text-primary)' }}>{p.webinarCount}</strong> webinar{p.webinarCount !== 1 ? 's' : ''}
+                    </div>
+                    {(p.activeCount ?? 0) > 0 && (
+                      <div style={{
+                        background: 'rgba(34,197,94,0.1)', borderRadius: 8,
+                        padding: '5px 10px', fontSize: 12, color: '#22c55e',
+                        display: 'flex', alignItems: 'center', gap: 5, fontWeight: 600,
+                      }}>
+                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e' }} />
+                        {p.activeCount} ativo{(p.activeCount ?? 0) > 1 ? 's' : ''}
+                      </div>
                     )}
                   </div>
-                </div>
 
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <Link href={`/admin/projects/${p.id}/webinars`} className="btn btn-primary btn-sm" style={{ flex: 1, textAlign: 'center' }}>
-                    Webinars
-                  </Link>
-                  <Link href={`/admin/projects/${p.id}/analytics`} className="btn btn-secondary btn-sm" title="Analytics">
-                    📊
-                  </Link>
-                  <Link href={`/admin/projects/${p.id}/crm`} className="btn btn-secondary btn-sm" title="CRM de Mensagens">
-                    💬
-                  </Link>
-                  <Link href={`/admin/projects/${p.id}/branding`} className="btn btn-secondary btn-sm" title="Branding">
-                    🎨
-                  </Link>
-                  <button className="btn btn-secondary btn-sm" onClick={() => openEdit(p)}>Editar</button>
-                  <button
-                    className="btn btn-secondary btn-sm"
-                    title="Duplicar projeto"
-                    onClick={() => cloneProject(p)}
-                    disabled={cloningProject === p.id}
+                  {/* Primary action */}
+                  <Link
+                    href={`/admin/projects/${p.id}/webinars`}
+                    className="btn btn-primary"
+                    style={{ width: '100%', justifyContent: 'center', marginBottom: 10 }}
                   >
-                    {cloningProject === p.id ? <span className="spinner" /> : '🔁'}
-                  </button>
-                  <button className="btn btn-danger btn-sm" onClick={() => deleteProject(p.id)}>🗑</button>
+                    Gerenciar Webinars →
+                  </Link>
+
+                  {/* Secondary actions row */}
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <Link
+                      href={`/admin/projects/${p.id}/analytics`}
+                      className="btn btn-secondary btn-sm"
+                      style={{ flex: 1, justifyContent: 'center' }}
+                      title="Ver analytics do projeto"
+                    >
+                      📊 Analytics
+                    </Link>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => openEdit(p)}
+                      style={{ flex: 1 }}
+                    >
+                      ✏️ Editar
+                    </button>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      title="Duplicar projeto"
+                      onClick={() => cloneProject(p)}
+                      disabled={cloningProject === p.id}
+                      style={{ padding: '6px 10px' }}
+                    >
+                      {cloningProject === p.id ? <span className="spinner" /> : '🔁'}
+                    </button>
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => deleteProject(p.id)}
+                      style={{ padding: '6px 10px' }}
+                    >
+                      🗑
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
