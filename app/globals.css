@@ -908,9 +908,11 @@ tbody tr:hover td { background: var(--bg-hover); }
 }
 
 @media (max-width: 1024px) {
+  /* On mobile, don't crop the YouTube iframe — show the full video frame.
+     YouTube controls auto-hide on mobile so the aggressive zoom isn't needed. */
   .yt-iframe {
-    top: -25%;
-    height: 150%;
+    top: 0 !important;
+    height: 100% !important;
   }
 }
 
