@@ -32,18 +32,34 @@ export async function POST(req: NextRequest) {
 
     // 3. Trigger Realtime Broadcast via REST
     const channel = supabase.channel(`webinar-${webinar_id}`)
-    const broadcastResponse = await channel.send({
-      type: 'broadcast',
-      event: 'chat-message',
-      payload: {
-        ...message,
-        session_id,
-        isSimulated: false,
-      }
-    })
+    
+    let broadcastResponse: any = 'error'
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('timeout')), 3000)
+        channel.subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            clearTimeout(timeout)
+            resolve()
+          }
+        })
+      })
 
-    // Cleanup the channel resource
-    await supabase.removeChannel(channel)
+      broadcastResponse = await channel.send({
+        type: 'broadcast',
+        event: 'chat-message',
+        payload: {
+          ...message,
+          session_id,
+          isSimulated: false,
+        }
+      })
+    } catch (err) {
+      console.warn('Failed to subscribe and broadcast chat message:', err)
+    } finally {
+      // Cleanup the channel resource
+      await supabase.removeChannel(channel)
+    }
 
     if (broadcastResponse !== 'ok') {
       // Broadcast is best-effort — the message was already saved to the DB.
