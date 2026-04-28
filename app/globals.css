@@ -812,7 +812,7 @@ tbody tr:hover td { background: var(--bg-hover); }
 .webinar-page-wrapper {
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  min-height: 100dvh;
   background: #050508;
   overflow-y: auto;
   overscroll-behavior-y: none; /* Previne pull-to-refresh nativo no mobile */
@@ -821,7 +821,7 @@ tbody tr:hover td { background: var(--bg-hover); }
 .webinar-room {
   display: grid;
   grid-template-columns: 1fr 360px;
-  height: 100vh;
+  height: 100dvh;
   background: #050508;
   overflow: hidden;
   flex-shrink: 0;
@@ -1598,10 +1598,8 @@ tbody tr:hover td { background: var(--bg-hover); }
     max-width: none;
   }
 
-  /* Smaller video area on portrait to keep chat visible */
-  .webinar-room {
-    grid-template-rows: auto 1fr;
-  }
+  /* Mobile flex layout is handled by the 1024px media query above.
+     Do NOT revert to grid here — that breaks the flex-based mobile layout. */
   
   .pitch-image {
     max-height: 90px; /* Reduced to avoid covering the whole screen */
