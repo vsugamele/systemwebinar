@@ -245,7 +245,7 @@ export default function ChatPanel({
               Seja o primeiro a comentar! 👋
             </div>
           )}
-          {messages.map((msg, i) => {
+          {messages.slice(-150).map((msg, i) => {
             // Quiz card message
             if (msg.quiz_card) {
               return (

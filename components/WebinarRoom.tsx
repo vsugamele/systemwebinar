@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { EventEngine } from '@/lib/event-engine'
 import { createClient } from '@/lib/supabase/client'
@@ -357,6 +357,40 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const channelRef = useRef<RealtimeChannel | null>(null)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  
+  // ---- O(1) Deduplication and Fast-Forward Buffering ----
+  const messageMapRef = useRef(new Map<string, boolean>())
+  const msgBufferRef = useRef<ChatMessage[]>([])
+  const flushTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+
+  const appendMessages = useCallback((newMsgs: ChatMessage[]) => {
+    const map = messageMapRef.current
+    const added: ChatMessage[] = []
+    
+    for (const msg of newMsgs) {
+      if (!map.has(msg.id)) {
+        map.set(msg.id, true)
+        added.push(msg)
+      }
+    }
+    
+    if (added.length > 0) {
+      msgBufferRef.current.push(...added)
+      
+      if (!flushTimeoutRef.current) {
+        flushTimeoutRef.current = setTimeout(() => {
+          setMessages(prev => {
+            const combined = [...prev, ...msgBufferRef.current]
+            combined.sort((a, b) => a.timestamp - b.timestamp)
+            return combined
+          })
+          msgBufferRef.current = []
+          flushTimeoutRef.current = null
+        }, 50)
+      }
+    }
+  }, [])
+
   const [mobileChatOpen, setMobileChatOpen] = useState(false)
   const [userName, setUserName] = useState('Você')
 
@@ -842,19 +876,15 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     }, (payload) => {
       const dbMsg = payload.new
       if (dbMsg.session_id !== sessionId.current) {
-        setMessages(m => {
-          // Prevent duplicates if fallback broadcast fired
-          if (m.some(msg => msg.id === dbMsg.id)) return m
-          return [...m, {
-            id: dbMsg.id,
-            author: dbMsg.author,
-            avatar: dbMsg.avatar,
-            text: dbMsg.text,
-            timestamp: dbMsg.timestamp_video,
-            isSimulated: dbMsg.is_simulated || false,
-            isBroadcast: dbMsg.is_broadcast || false,
-          }]
-        })
+        appendMessages([{
+          id: dbMsg.id,
+          author: dbMsg.author,
+          avatar: dbMsg.avatar,
+          text: dbMsg.text,
+          timestamp: dbMsg.timestamp_video,
+          isSimulated: dbMsg.is_simulated || false,
+          isBroadcast: dbMsg.is_broadcast || false,
+        }])
       }
     })
 
@@ -877,10 +907,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         if (payload.session_id !== sessionId.current) {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { session_id: _sid, ...msg } = payload as ChatMessage & { session_id: string }
-          setMessages(m => {
-            if (m.some(existing => existing.id === msg.id)) return m
-            return [...m, msg as ChatMessage]
-          })
+          appendMessages([msg as ChatMessage])
         }
       })
       .on('broadcast', { event: 'reaction' }, () => {
@@ -913,30 +940,16 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         if (error) throw error
           
         if (data && data.length > 0) {
-          setMessages(m => {
-            const newMessages = [...m]
-            let added = false
-            data.forEach(dbMsg => {
-              if (!newMessages.some(existing => existing.id === dbMsg.id)) {
-                newMessages.push({
-                  id: dbMsg.id,
-                  author: dbMsg.author,
-                  avatar: dbMsg.avatar,
-                  text: dbMsg.text,
-                  timestamp: dbMsg.timestamp_video,
-                  isSimulated: dbMsg.is_simulated || false,
-                  isBroadcast: dbMsg.is_broadcast || false,
-                })
-                added = true
-              }
-            })
-            
-            if (added) {
-              newMessages.sort((a, b) => a.timestamp - b.timestamp)
-              return newMessages
-            }
-            return m
-          })
+          const newMessages = data.map(dbMsg => ({
+            id: dbMsg.id,
+            author: dbMsg.author,
+            avatar: dbMsg.avatar,
+            text: dbMsg.text,
+            timestamp: dbMsg.timestamp_video,
+            isSimulated: dbMsg.is_simulated || false,
+            isBroadcast: dbMsg.is_broadcast || false,
+          }))
+          appendMessages(newMessages)
         }
       } catch (err) {
         console.warn('Failed to fetch chat history', err)
@@ -975,7 +988,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       if (idx >= poolNames.length) return
       const name = poolNames[idx++]
       const firstName = name.split(' ')[0]
-      setMessages(m => [...m, {
+      appendMessages([{
         id: `broadcast-${idx}`,
         author: '🛒 Notificação',
         text: `${firstName} acabou de comprar! 🎉`,
@@ -1010,7 +1023,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
     engine.on('chat_message', (ev) => {
       const p = ev.payload as ChatMessagePayload
-      setMessages(m => [...m, {
+      appendMessages([{
         id: ev.id,
         author: p.author,
         avatar: p.avatar,
@@ -1124,7 +1137,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           const name = poolNames[Math.floor(Math.random() * poolNames.length)]
           const texts = [`Marquei a ${label}! 🤔`, `Letra ${label} com certeza!`, `Acho que é ${label}`, `${label} pra mim!`, `Respondi ${label}`]
           const text = texts[Math.floor(Math.random() * texts.length)]
-          setMessages(m => [...m, {
+          appendMessages([{
             id: `quiz-voter-${p.question_id}-${fi}`,
             author: name,
             text,
@@ -1332,7 +1345,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     }
 
     // Optimistic local update
-    setMessages(m => [...m, msg])
+    appendMessages([msg])
     trackEvent('chat_sent', msg.timestamp)
 
     // Broadcast directly to other connected clients for zero-latency
