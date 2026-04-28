@@ -580,18 +580,21 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     return () => clearInterval(tick)
   }, [nextScheduledStart])
 
-  // ---- Fix mobile viewport height (dvh/svh are unreliable on Android Chrome) ----
-  // window.innerHeight is always the actual visible viewport height,
-  // unlike 100dvh which can leave a black bar at the bottom on Android.
+  // ---- Fix mobile viewport height ----
+  // visualViewport.height is the most accurate measure: it excludes the Android nav bar
+  // overlay, on-screen keyboard, and browser chrome. Falls back to innerHeight.
   useEffect(() => {
     if (typeof window === 'undefined') return
     const setAppHeight = () => {
-      document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`)
+      const h = window.visualViewport?.height ?? window.innerHeight
+      document.documentElement.style.setProperty('--app-height', `${h}px`)
     }
     setAppHeight()
     window.addEventListener('resize', setAppHeight)
+    window.visualViewport?.addEventListener('resize', setAppHeight)
     return () => {
       window.removeEventListener('resize', setAppHeight)
+      window.visualViewport?.removeEventListener('resize', setAppHeight)
       document.documentElement.style.removeProperty('--app-height')
     }
   }, [])
