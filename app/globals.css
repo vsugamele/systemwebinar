@@ -1495,54 +1495,76 @@ tbody tr:hover td { background: var(--bg-hover); }
   }
   .webinar-room {
     grid-template-columns: 1fr;
-    /* Fixed header height (48px) + video (56.25vw) + chat fills rest */
-    grid-template-rows: auto 1fr;
+    /* 
+      Row 1: header (52px) + 16:9 video (56.25vw) — calculated explicitly
+      so the grid never guesses wrong and leaves dead space.
+      Row 2: everything else goes to the chat section.
+    */
+    grid-template-rows: calc(52px + 56.25vw) 1fr;
     height: 100vh;
     height: 100dvh;
     min-height: 0;
+    overflow: hidden;
   }
-  /* video-section: flex column, video directly below the fixed header */
+  /* video-section: flex column, content starts below the fixed header */
   .video-section {
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+    /* 52px matches the fixed header height — keeps video from being clipped */
+    padding-top: 52px;
+    /* video-section fills exactly row 1 of the grid */
     min-height: 0;
-    overflow: visible;
-    /* Push content below the fixed header */
-    padding-top: 48px;
   }
   /* FIXED header — always visible at top of screen on mobile.
-     position:sticky doesn't work inside overflow:hidden parents,
-     so we go fully fixed and compensate with padding-top on video-section. */
+     position:sticky doesn't work inside overflow:hidden parents. */
   .video-header {
     position: fixed !important;
     top: 0;
     left: 0;
     right: 0;
-    height: 48px;
+    height: 52px;
     z-index: 200;
-    padding: 0 16px;
+    padding: 0 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     background: rgba(5, 5, 8, 0.97) !important;
     border-bottom: 1px solid var(--border) !important;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
   }
   /* Light theme: override header background for mobile fixed header */
   .webinar-page-wrapper[data-theme="light"] .video-header {
     background: rgba(255, 255, 255, 0.97) !important;
   }
-  /* Video wrapper: 16:9 ratio, contained to viewport width */
+  /* Video wrapper: exactly fills the remaining space in video-section (16:9) */
   .video-wrapper {
     width: 100%;
-    aspect-ratio: 16/9;
-    max-height: 56.25vw;
-    height: auto;
+    /* Exact 16:9 of viewport width — no auto, no ambiguity */
+    height: 56.25vw;
     flex-shrink: 0;
+    overflow: hidden;
+  }
+  /* Chat section: must fill its entire grid row (1fr) — no dead space at bottom */
+  .chat-section {
+    height: 100%;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  /* Chat messages: expand to fill all available height */
+  .chat-messages {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
   }
   /* iOS Safari: prevent auto-zoom on input focus */
   .chat-input {
     font-size: 16px !important;
   }
-  .chat-header { padding: 12px 16px; min-height: 48px; }
+  .chat-header { padding: 10px 16px; min-height: 44px; }
 }
 
 @media (max-width: 768px) {
