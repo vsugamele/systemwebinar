@@ -1491,30 +1491,31 @@ tbody tr:hover td { background: var(--bg-hover); }
   .main-content { min-height: auto; margin-left: 0; }
 
   .webinar-page-wrapper {
-    height: 100dvh;
+    /* Use JS-set --app-height (window.innerHeight) for accurate mobile viewport.
+       100dvh is unreliable on Android Chrome — leaves black bars at the bottom. */
+    height: var(--app-height, 100dvh);
+    min-height: 0 !important;
     overflow: hidden;
-    /* Prevent min-height:100vh from making it taller than viewport */
-    min-height: unset;
+    /* padding-top creates space for the fixed header inside the wrapper */
+    padding-top: 52px;
+    box-sizing: border-box;
   }
 
   /*
    * MOBILE WEBINAR ROOM
-   * Header is position:fixed at top (52px).
-   * Webinar-room starts 52px below via margin-top and
-   * takes exactly the remaining viewport height.
-   * No height math inside video-section — just aspect-ratio on the video.
+   * height:100% fills the wrapper's content area (var(--app-height) - 52px header)
+   * No explicit calc() needed — percentage does it cleanly.
    */
   .webinar-room {
     display: flex !important;
     flex-direction: column !important;
-    margin-top: 52px;
-    height: calc(100dvh - 52px);
+    height: 100%;
     overflow: hidden;
     grid-template-columns: unset;
     grid-template-rows: unset;
   }
 
-  /* video-section: sizes itself from content (video height only, no header compensation) */
+  /* video-section: sizes itself from content (video height only) */
   .video-section {
     display: flex;
     flex-direction: column;
@@ -1523,7 +1524,7 @@ tbody tr:hover td { background: var(--bg-hover); }
     position: relative;
   }
 
-  /* Fixed header: always on top, known to work reliably */
+  /* Fixed header: always on top */
   .video-header {
     position: fixed !important;
     top: 0;

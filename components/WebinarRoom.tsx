@@ -580,6 +580,22 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     return () => clearInterval(tick)
   }, [nextScheduledStart])
 
+  // ---- Fix mobile viewport height (dvh/svh are unreliable on Android Chrome) ----
+  // window.innerHeight is always the actual visible viewport height,
+  // unlike 100dvh which can leave a black bar at the bottom on Android.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const setAppHeight = () => {
+      document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`)
+    }
+    setAppHeight()
+    window.addEventListener('resize', setAppHeight)
+    return () => {
+      window.removeEventListener('resize', setAppHeight)
+      document.documentElement.style.removeProperty('--app-height')
+    }
+  }, [])
+
   // ---- Inject brand color as CSS variable ----
   useEffect(() => {
     document.documentElement.style.setProperty('--brand', brandColor)
