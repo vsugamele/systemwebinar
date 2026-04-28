@@ -687,11 +687,15 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         if (!videoEl.paused) currentTick = Math.floor(videoEl.currentTime)
       } else {
         // Non-native videos
-        if (isYouTubeUrl(webinar.video_url || '') && !ytPlayingRef.current) {
-          // Pause ticking until YouTube starts playing
-          return
+        // Since the session has formally started, track wall-clock elapsed time strictly.
+        // This ensures the timer (and chat) accompany the live event even if the
+        // iframe is paused or delayed by browser autoplay policies.
+        if (webinar.session_started_at) {
+          const wallClockTick = Math.floor((Date.now() - new Date(webinar.session_started_at).getTime()) / 1000)
+          currentTick = Math.max(elapsedRef.current, wallClockTick)
+        } else {
+          currentTick += 1
         }
-        currentTick += 1
       }
 
       elapsedRef.current = currentTick
