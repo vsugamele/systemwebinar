@@ -676,20 +676,19 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     )
 
     elapsedIntervalRef.current = setInterval(() => {
-      // Pause ticking if still in Waiting Room OR if the session hasn't formally started yet
+      // Pause ticking if still in Waiting Room
       if (!waitingDoneRef.current) return
-      if (!hasStartedRef.current) return
 
       const videoEl = videoRef.current
       let currentTick = elapsedRef.current
 
       if (videoEl) {
+        // Native video: sync with actual playback position
         if (!videoEl.paused) currentTick = Math.floor(videoEl.currentTime)
       } else {
-        // Non-native videos
-        // Since the session has formally started, track wall-clock elapsed time strictly.
-        // This ensures the timer (and chat) accompany the live event even if the
-        // iframe is paused or delayed by browser autoplay policies.
+        // Non-native videos (YouTube, Vimeo, VTurb, etc)
+        // Always track wall-clock time from session start so the chat advances
+        // even if the user hasn't clicked play yet (live sessions)
         if (webinar.session_started_at) {
           const wallClockTick = Math.floor((Date.now() - new Date(webinar.session_started_at).getTime()) / 1000)
           currentTick = Math.max(elapsedRef.current, wallClockTick)
@@ -778,12 +777,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       // ---- Segment-based mode ----
       const segs: ChatSegment[] = segments
       function tick() {
-        // Don't fire chat if session hasn't formally started
-        if (!hasStartedRef.current || !waitingDoneRef.current) {
+        // Don't fire chat if still in waiting room
+        if (!waitingDoneRef.current) {
           cpmTimerRef.current = setTimeout(tick, 2000)
           return
         }
-        const currentTime = videoRef.current?.currentTime ?? elapsedRef.current
+        // Use wall-clock elapsed time so chat works even without video play
+        const currentTime = elapsedRef.current
         // Stop firing chat messages after session ends
         if (currentTime >= (webinar.duration_seconds || 3600)) return
         const seg = findActiveSegment(segs, currentTime)
@@ -798,8 +798,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         const delay = intervalMs + (Math.random() * jitter * 2 - jitter)
 
         cpmTimerRef.current = setTimeout(() => {
-          if (!hasStartedRef.current || !waitingDoneRef.current) { tick(); return }
-          const fireTime = videoRef.current?.currentTime ?? elapsedRef.current
+          if (!waitingDoneRef.current) { tick(); return }
+          const fireTime = elapsedRef.current
           // Guard: stop when session ended
           if (fireTime >= (webinar.duration_seconds || 3600)) return
           const activeSeg = findActiveSegment(segs, fireTime)
@@ -807,7 +807,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             const phrases = getPhrasesForSegment(activeSeg)
             const name = poolNames[Math.floor(Math.random() * poolNames.length)]
             const text = phrases[Math.floor(Math.random() * phrases.length)]
-            setMessages(m => [...m, {
+            appendMessages([{
               id: Math.random().toString(36), author: name, text,
               timestamp: sessionBaseTime + Math.floor(fireTime), isSimulated: true,
             }])
@@ -841,18 +841,19 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     function scheduleNext() {
       const delay = intervalMs + (Math.random() * jitter * 2 - jitter)
       cpmTimerRef.current = setTimeout(() => {
-        // Guard: don't fire if session hasn't started or user is in waiting room
-        if (!hasStartedRef.current || !waitingDoneRef.current) {
+        // Guard: don't fire if user is in waiting room
+        if (!waitingDoneRef.current) {
           scheduleNext()
           return
         }
-        const currentTime = videoRef.current?.currentTime ?? elapsedRef.current
+        // Use wall-clock elapsed time so chat works even without video play
+        const currentTime = elapsedRef.current
         // Stop firing chat messages after session ends
         if (currentTime >= (webinar.duration_seconds || 3600)) return
         if (currentTime >= startSec && currentTime <= endSec) {
           const name = poolNames[Math.floor(Math.random() * poolNames.length)]
           const text = phrases[Math.floor(Math.random() * phrases.length)]
-          setMessages(m => [...m, {
+          appendMessages([{
             id: Math.random().toString(36),
             author: name,
             text,
@@ -887,12 +888,16 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     }, (payload) => {
       const dbMsg = payload.new
       if (dbMsg.session_id !== sessionId.current) {
+        // Use created_at (absolute Unix epoch) so real messages sort correctly with simulated ones
+        const ts = dbMsg.created_at
+          ? Math.floor(new Date(dbMsg.created_at).getTime() / 1000)
+          : Math.floor(Date.now() / 1000)
         appendMessages([{
           id: dbMsg.id,
           author: dbMsg.author,
           avatar: dbMsg.avatar,
           text: dbMsg.text,
-          timestamp: dbMsg.timestamp_video,
+          timestamp: ts,
           isSimulated: dbMsg.is_simulated || false,
           isBroadcast: dbMsg.is_broadcast || false,
         }])
@@ -918,7 +923,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         if (payload.session_id !== sessionId.current) {
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { session_id: _sid, ...msg } = payload as ChatMessage & { session_id: string }
-          appendMessages([msg as ChatMessage])
+          // Ensure the broadcast message also uses absolute Unix epoch timestamp
+          const tsNow = Math.floor(Date.now() / 1000)
+          appendMessages([{ ...msg, timestamp: (msg as ChatMessage).timestamp > 1_000_000_000 ? (msg as ChatMessage).timestamp : tsNow } as ChatMessage])
         }
       })
       .on('broadcast', { event: 'reaction' }, () => {
@@ -956,7 +963,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             author: dbMsg.author,
             avatar: dbMsg.avatar,
             text: dbMsg.text,
-            timestamp: dbMsg.timestamp_video,
+            // Use absolute timestamp (created_at) so history sorts correctly with simulated messages
+            timestamp: dbMsg.created_at
+              ? Math.floor(new Date(dbMsg.created_at).getTime() / 1000)
+              : Math.floor(Date.now() / 1000),
             isSimulated: dbMsg.is_simulated || false,
             isBroadcast: dbMsg.is_broadcast || false,
           }))
@@ -1351,7 +1361,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       id: Math.random().toString(36),
       author: currentName,
       text: finalText,
-      timestamp: Math.floor(videoRef.current?.currentTime || elapsedRef.current),
+      // Use absolute Unix epoch so this message sorts correctly with simulated messages
+      timestamp: Math.floor(Date.now() / 1000),
       isSimulated: false,
     }
 
