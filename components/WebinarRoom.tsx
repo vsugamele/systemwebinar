@@ -681,19 +681,18 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       const videoEl = videoRef.current
       let currentTick = elapsedRef.current
 
-      if (videoEl) {
+        if (videoEl) {
         // Native video: sync with actual playback position
         if (!videoEl.paused) currentTick = Math.floor(videoEl.currentTime)
       } else {
         // Non-native videos (YouTube, Vimeo, VTurb, etc)
-        // Always track wall-clock time from session start so the chat advances
-        // even if the user hasn't clicked play yet (live sessions)
+        // Only advance the clock if the session has actually started.
+        // If session_started_at is null, keep elapsed frozen at 0 so CPM doesn't fire.
         if (webinar.session_started_at) {
           const wallClockTick = Math.floor((Date.now() - new Date(webinar.session_started_at).getTime()) / 1000)
           currentTick = Math.max(elapsedRef.current, wallClockTick)
-        } else {
-          currentTick += 1
         }
+        // else: no session_started_at → don't advance elapsed (stays at 0 / startOffset)
       }
 
       elapsedRef.current = currentTick
@@ -776,8 +775,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       // ---- Segment-based mode ----
       const segs: ChatSegment[] = segments
       function tick() {
-        // Don't fire chat if still in waiting room
-        if (!waitingDoneRef.current) {
+        // Don't fire chat if still in waiting room OR if session hasn't started yet
+        if (!waitingDoneRef.current || !hasStartedRef.current) {
           cpmTimerRef.current = setTimeout(tick, 2000)
           return
         }
@@ -797,7 +796,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         const delay = intervalMs + (Math.random() * jitter * 2 - jitter)
 
         cpmTimerRef.current = setTimeout(() => {
-          if (!waitingDoneRef.current) { tick(); return }
+          if (!waitingDoneRef.current || !hasStartedRef.current) { tick(); return }
           const fireTime = elapsedRef.current
           // Guard: stop when session ended
           if (fireTime >= (webinar.duration_seconds || 3600)) return
@@ -840,8 +839,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     function scheduleNext() {
       const delay = intervalMs + (Math.random() * jitter * 2 - jitter)
       cpmTimerRef.current = setTimeout(() => {
-        // Guard: don't fire if user is in waiting room
-        if (!waitingDoneRef.current) {
+        // Guard: don't fire if waiting room active OR if live session hasn't started yet
+        if (!waitingDoneRef.current || !hasStartedRef.current) {
           scheduleNext()
           return
         }
