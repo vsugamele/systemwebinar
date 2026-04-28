@@ -696,6 +696,18 @@ tbody tr:hover td { background: var(--bg-hover); }
 .webinar-page-wrapper[data-theme="light"] .live-badge {
   background: rgba(239, 68, 68, 0.1);
 }
+/* Webinar title (event name) must be dark on the light header */
+.webinar-page-wrapper[data-theme="light"] .webinar-title-bar span {
+  color: #111118;
+}
+/* Chat author name: use a darker brand color so it's readable on white */
+.webinar-page-wrapper[data-theme="light"] .chat-msg-author {
+  color: var(--brand);
+}
+/* Light theme: ensure the chat-message text-muted placeholder is visible */
+.webinar-page-wrapper[data-theme="light"] .chat-messages > div:first-child {
+  color: #88889a;
+}
 
 /* --- YOUTUBE THEME --- */
 .webinar-page-wrapper[data-theme="youtube"] {

@@ -382,19 +382,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     }
     
     if (added.length > 0) {
-      msgBufferRef.current.push(...added)
-      
-      if (!flushTimeoutRef.current) {
-        flushTimeoutRef.current = setTimeout(() => {
-          setMessages(prev => {
-            const combined = [...prev, ...msgBufferRef.current]
-            combined.sort((a, b) => a.timestamp - b.timestamp)
-            return combined
-          })
-          msgBufferRef.current = []
-          flushTimeoutRef.current = null
-        }, 50)
-      }
+      setMessages(prev => {
+        const combined = [...prev, ...added]
+        combined.sort((a, b) => a.timestamp - b.timestamp)
+        // Keep only the last 200 to avoid memory bloat
+        return combined.length > 200 ? combined.slice(-200) : combined
+      })
     }
   }, [])
 
