@@ -908,12 +908,14 @@ tbody tr:hover td { background: var(--bg-hover); }
 }
 
 @media (max-width: 1024px) {
-  /* Gentle zoom to hide YouTube watermark/branding at bottom-right.
-     -5% top + 110% height = 5% cropped from top and 5% from bottom.
-     The video-wrapper overflow:hidden clips cleanly. */
+  /* Use transform scale to uniformly zoom the iframe by 15%, 
+     pushing the bottom-right watermark out of the overflow:hidden wrapper 
+     without distorting the video aspect ratio. */
   .yt-iframe {
-    top: -5% !important;
-    height: 110% !important;
+    top: 0 !important;
+    height: 100% !important;
+    transform: scale(1.15) !important;
+    transform-origin: center center !important;
   }
 }
 
