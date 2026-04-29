@@ -517,16 +517,15 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // Container where we inject the iframe via DOM on iOS tap (user-gesture context)
   const iosIframeContainerRef = useRef<HTMLDivElement>(null)
 
-  // iOS poster: stays visible for 3s AFTER ytPlaying becomes true.
+  // Branding mask: stays visible for 3s AFTER ytPlaying becomes true.
   // This gives YouTube enough time to fully fade out its native title bar,
-  // "Watch on YouTube" watermark, etc. The poster IS the video thumbnail,
-  // so visually the user just sees the video "come alive" with zero branding flash.
-  const [iosPosterVisible, setIosPosterVisible] = useState(true)
+  // "Watch on YouTube" watermark, etc. Works on ALL platforms.
+  const [ytBrandingVisible, setYtBrandingVisible] = useState(true)
   useEffect(() => {
-    if (!isIOS || !ytPlaying) return
-    const timer = setTimeout(() => setIosPosterVisible(false), 3000)
+    if (!ytPlaying) return
+    const timer = setTimeout(() => setYtBrandingVisible(false), 3000)
     return () => clearTimeout(timer)
-  }, [isIOS, ytPlaying])
+  }, [ytPlaying])
 
   const duration = webinar.duration_seconds || 3600
   const isSessionEnded = elapsedSeconds >= duration
@@ -1967,23 +1966,21 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       onLoad={() => setYtIframeLoaded(true)}
                     />
 
-                    {/* ── iOS Poster Overlay ──────────────────────────────────────
+                    {/* ── Poster Overlay (all platforms) ─────────────────────────
                          Covers 100% of the YouTube UI using the video's own thumbnail.
-                         pointer-events:none lets taps pass through to YouTube's play btn.
+                         pointer-events:none lets taps/clicks pass through.
                          
-                         KEY: stays visible for 3 FULL SECONDS after ytPlaying=true.
-                         YouTube takes ~2s to natively fade its title bar / watermark.
-                         Since our poster IS the video frame, the user just perceives
-                         a still image that smoothly "comes alive" — zero branding. ── */}
-                    {isIOS && iosPosterVisible && (
+                         Stays visible for 3 FULL SECONDS after ytPlaying=true so
+                         YouTube has time to natively fade its title bar / watermark.
+                         Since the poster IS the video frame, users just see a still
+                         image that smoothly "comes alive" — zero branding flash. ── */}
+                    {ytBrandingVisible && (
                       <div style={{
                         position: 'absolute', inset: 0, zIndex: 7,
                         backgroundImage: ytThumb ? `url(${ytThumb})` : undefined,
                         backgroundColor: '#000',
                         backgroundSize: 'cover', backgroundPosition: 'center',
                         pointerEvents: 'none',
-                        // Smooth fade-out when iosPosterVisible finally turns false
-                        // (handled by React unmount — the 3s timer gives YouTube time)
                       }}>
                         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)' }} />
                       </div>
@@ -2012,7 +2009,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     {/* ── Non-iOS: unmute button (shows after iframe loaded + muted) ── */}
                     {!isIOS && ytIframeLoaded && ytMuted && (
                       <div style={{
-                        position: 'absolute', inset: 0, zIndex: 6,
+                        position: 'absolute', inset: 0, zIndex: 8,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)',
                       }}>
