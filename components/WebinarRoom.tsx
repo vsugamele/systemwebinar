@@ -735,6 +735,25 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     return () => document.removeEventListener('visibilitychange', onVisibilityChange)
   }, [webinar.video_url])
 
+  // ---- YouTube postMessage: detect when video starts playing ----
+  // YouTube sends playerState=1 (playing) via postMessage when the user starts the video.
+  // This is how we dismiss the iOS "Toque no vídeo para iniciar" overlay automatically.
+  useEffect(() => {
+    if (!isYouTubeUrl(webinar.video_url || '')) return
+    const handler = (e: MessageEvent) => {
+      try {
+        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
+        // playerState 1 = playing, -1 = unstarted, 0 = ended, 2 = paused, 3 = buffering
+        if (data?.event === 'infoDelivery' && data?.info?.playerState === 1) {
+          setYtMuted(false)
+          setYtPlaying(true)
+        }
+      } catch { /* ignore non-JSON messages */ }
+    }
+    window.addEventListener('message', handler)
+    return () => window.removeEventListener('message', handler)
+  }, [webinar.video_url])
+
   // ---- Mobile tip: keep tab open for background audio (once per session) ----
   useEffect(() => {
     const isMobile = /Mobi|Android/i.test(navigator.userAgent)
