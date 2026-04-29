@@ -1937,25 +1937,29 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           {!sessionIsScheduledFuture && webinar.video_url ? (
             isYouTubeUrl(webinar.video_url) ? (
                   <>
-                    {/* ── Iframe area ─────────────────────────────────────────────
-                         iOS: don't render the iframe until the user taps (Lite Embed).
-                         Non-iOS: normal React-managed muted-autoplay iframe. ── */}
-                    {isIOS ? (
-                      // Container where the iOS iframe is injected via DOM
-                      <div ref={iosIframeContainerRef} style={{ position: 'absolute', inset: 0 }} />
-                    ) : (
-                      <iframe
-                        key={ytKey}
-                        ref={ytIframeRef}
-                        src={ytSrc}
-                        className="yt-iframe"
-                        style={{ position: 'absolute', left: 0, width: '100%', border: 'none', pointerEvents: 'none' }}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen={false}
-                        title={webinar.name}
-                        onLoad={() => setYtIframeLoaded(true)}
-                      />
-                    )}
+                    {/* ── Unified iframe (iOS + non-iOS) ───────────────────────────
+                         iOS CANNOT autoplay an iframe injected programmatically, even
+                         inside a user gesture. The ONLY reliable way to start a YouTube
+                         video on iOS is the user tapping directly on the iframe's own
+                         play button. So we keep the iframe in the DOM with
+                         pointer-events:auto on iOS and guide the user with an overlay
+                         label (pointer-events:none) that disappears on ytPlaying. ── */}
+                    <iframe
+                      key={ytKey}
+                      ref={ytIframeRef}
+                      src={ytSrc}
+                      className="yt-iframe"
+                      style={{
+                        position: 'absolute', left: 0, width: '100%', border: 'none',
+                        // iOS: pointer-events auto so the user's tap reaches the YT player
+                        // Non-iOS: none so our overlay buttons capture the interaction
+                        pointerEvents: isIOS ? 'auto' : 'none',
+                      }}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen={false}
+                      title={webinar.name}
+                      onLoad={() => setYtIframeLoaded(true)}
+                    />
 
                     {/* ── Universal gradient masks (always visible) ────────────────
                          Reliably hides YouTube title bar (top) and watermark (bottom)
@@ -2026,79 +2030,26 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       </div>
                     )}
 
-                    {/* ── iOS overlay: poster → loading → gone ────────────────────
-                         Single persistent overlay (zIndex 10) that covers ALL YouTube
-                         UI at every stage. Dismissed ONLY when ytPlaying becomes true
-                         (postMessage playerState=1) or after a 5s safety fallback.
-                         Using onClick (not onTouchStart) because iOS only grants media
-                         autoplay permission inside click/touchend handlers. ── */}
-                    {isIOS && !ytPlaying && (
-                      <div
-                        style={{
-                          position: 'absolute', inset: 0, zIndex: 10,
-                          // Before tap: show thumbnail (looks like stream is running)
-                          // After tap: solid black (hides YouTube loading UI)
-                          backgroundImage: !iosCaptureDone && ytThumb ? `url(${ytThumb})` : undefined,
-                          backgroundColor: '#000',
-                          backgroundSize: 'cover', backgroundPosition: 'center',
-                          cursor: 'pointer',
-                        }}
-                        onClick={() => {
-                          if (iosCaptureDone) return // already tapped, ignore
-                          if (!iosIframeContainerRef.current || !webinar.video_url) return
-                          const lsa = liveSessionStartedAtRef.current
-                          const offset = lsa
-                            ? Math.floor((Date.now() - new Date(lsa).getTime()) / 1000)
-                            : Math.floor(elapsedRef.current)
-                          // Inject iframe inside onClick — iOS grants autoplay permission here
-                          const el = document.createElement('iframe')
-                          el.src = getYouTubeEmbedUrl(webinar.video_url, offset) || ''
-                          el.className = 'yt-iframe'
-                          el.style.cssText = 'position:absolute;left:0;width:100%;border:none;pointer-events:none;'
-                          el.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture')
-                          el.allowFullscreen = false
-                          el.title = webinar.name
-                          iosIframeContainerRef.current.appendChild(el)
-                          setIosCaptureDone(true)
-                          // Safety fallback: if postMessage never fires, dismiss after 5s
-                          setTimeout(() => setIosLoading(false), 5000)
-                        }}
-                      >
-                        {/* Dark vignette over thumbnail */}
-                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)' }} />
-
+                    {/* ── iOS: instruction label ───────────────────────────────────
+                         pointer-events:none — taps pass through directly to the iframe.
+                         Dismissed automatically when YouTube sends playerState=1 via
+                         postMessage (ytPlaying). Gradient masks above cover the branding.
+                         The user taps the YouTube play button directly → video starts. ── */}
+                    {isIOS && !ytPlaying && ytIframeLoaded && (
+                      <div style={{
+                        position: 'absolute', bottom: '20%', left: 0, right: 0,
+                        zIndex: 8, display: 'flex', justifyContent: 'center',
+                        pointerEvents: 'none',
+                      }}>
                         <div style={{
-                          position: 'absolute', inset: 0, zIndex: 1,
-                          display: 'flex', flexDirection: 'column',
-                          alignItems: 'center', justifyContent: 'center', gap: 14,
+                          background: 'rgba(0,0,0,0.72)', borderRadius: 24,
+                          padding: '10px 22px', backdropFilter: 'blur(6px)',
+                          fontSize: 14, fontWeight: 600, letterSpacing: '0.02em',
+                          color: 'rgba(255,255,255,0.92)',
+                          display: 'flex', alignItems: 'center', gap: 8,
+                          boxShadow: '0 2px 16px rgba(0,0,0,0.4)',
                         }}>
-                          {!iosCaptureDone ? (
-                            // PRE-TAP: unmute button (same style as Android)
-                            <div style={{
-                              background: 'rgba(255,255,255,0.95)', color: '#111',
-                              borderRadius: 50, padding: '16px 32px',
-                              fontSize: 16, fontWeight: 700,
-                              display: 'flex', alignItems: 'center', gap: 10,
-                              boxShadow: '0 4px 32px rgba(0,0,0,0.5)',
-                              animation: 'pulse-btn 1.8s ease-in-out infinite',
-                              pointerEvents: 'none',
-                            }}>
-                              🔊 Toque para ativar o som
-                            </div>
-                          ) : (
-                            // POST-TAP: loading spinner while YouTube buffers
-                            <>
-                              <div style={{
-                                width: 40, height: 40, borderRadius: '50%',
-                                border: '3px solid rgba(255,255,255,0.12)',
-                                borderTopColor: 'rgba(255,255,255,0.7)',
-                                animation: 'spin 0.8s linear infinite',
-                              }} />
-                              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.04em' }}>
-                                Iniciando transmissão...
-                              </span>
-                            </>
-                          )}
+                          ▶ Toque no vídeo para iniciar
                         </div>
                       </div>
                     )}
