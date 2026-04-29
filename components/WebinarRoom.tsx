@@ -595,12 +595,23 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       setCountdownToStart(remaining)
       if (remaining === 0) {
         clearInterval(tick)
-        // Refresh server data so session_started_at is recomputed (no full page flash)
-        router.refresh()
+        
+        // Optimistically start the session locally for an instant, seamless transition.
+        // This prevents the UI from relying solely on the server response which might
+        // suffer from slight clock skew.
+        setLiveSessionStartedAt(nextScheduledStart)
+        setElapsedSeconds(0)
+        elapsedRef.current = 0
+
+        // Delay the server refresh slightly to guarantee the server's clock has safely
+        // crossed the threshold, avoiding the edge case where it returns tomorrow's schedule.
+        setTimeout(() => {
+          router.refresh()
+        }, 3000)
       }
     }, 1000)
     return () => clearInterval(tick)
-  }, [nextScheduledStart])
+  }, [nextScheduledStart, router])
 
   // ---- Fix mobile viewport height ----
   // visualViewport.height is the most accurate measure: it excludes the Android nav bar
