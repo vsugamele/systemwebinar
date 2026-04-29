@@ -501,6 +501,16 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const [ytIframeLoaded, setYtIframeLoaded] = useState(false)
   const sessionOnBgRef = useRef(false)
 
+  // Detect iOS — Safari requires user to click INSIDE the iframe to start video
+  const [isIOS, setIsIOS] = useState(false)
+  useEffect(() => {
+    setIsIOS(
+      typeof navigator !== 'undefined' &&
+      /iPad|iPhone|iPod/.test(navigator.userAgent) &&
+      !(window as any).MSStream
+    )
+  }, [])
+
   const duration = webinar.duration_seconds || 3600
   const isSessionEnded = elapsedSeconds >= duration
 
@@ -1880,8 +1890,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           {!sessionIsScheduledFuture && webinar.video_url ? (
             isYouTubeUrl(webinar.video_url) ? (
               <>
-                {/* iframe escalado além do container para cortar a chrome do YouTube (topo/base)
-                    O container tem overflow:hidden — o excesso some, dando visual limpo sem barras */}
+                {/* iframe do YouTube.
+                    Desktop: escalado via CSS .yt-iframe (top:-9% height:118%) para ocultar o chrome.
+                    iOS: pointer-events liberado para o usuário clicar no play nativo do YouTube. */}
                 <iframe
                   key={ytKey}
                   ref={ytIframeRef}
@@ -1892,13 +1903,39 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     left: 0,
                     width: '100%',
                     border: 'none',
-                    pointerEvents: 'none',
+                    // On iOS, user MUST tap inside the iframe to trigger play.
+                    // On other platforms, keep pointer-events none so our overlay buttons work.
+                    pointerEvents: (isIOS && ytMuted) ? 'auto' : 'none',
                   }}
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen={false}
                   title={webinar.name}
                   onLoad={() => setYtIframeLoaded(true)}
                 />
+
+                {/* Black bar on top — covers YouTube title/channel name branding.
+                    pointer-events:none so clicks pass through to the iframe on iOS. */}
+                {ytIframeLoaded && (
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0,
+                    height: '14%',
+                    background: '#000',
+                    zIndex: 7,
+                    pointerEvents: 'none',
+                  }} />
+                )}
+
+                {/* Black bar on bottom — covers "Assista no YouTube" + logo branding.
+                    pointer-events:none so clicks pass through to the iframe on iOS. */}
+                {ytIframeLoaded && (
+                  <div style={{
+                    position: 'absolute', bottom: 0, left: 0, right: 0,
+                    height: '12%',
+                    background: '#000',
+                    zIndex: 7,
+                    pointerEvents: 'none',
+                  }} />
+                )}
 
                 {/* Spinner enquanto o iframe não carregou */}
                 {!ytIframeLoaded && (
@@ -1920,8 +1957,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                   </div>
                 )}
 
-                {/* Botão de ativar som */}
-                {ytIframeLoaded && ytMuted && (
+                {/* Botão de ativar som — somente em não-iOS.
+                    No iOS o usuário já clica direto no play do YouTube dentro do iframe. */}
+                {ytIframeLoaded && ytMuted && !isIOS && (
                   <div style={{
                     position: 'absolute', inset: 0, zIndex: 6,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1947,6 +1985,28 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     >
                       🔊 Clique para ativar o som
                     </button>
+                  </div>
+                )}
+
+                {/* iOS: toque para iniciar overlay (instrução sutil) */}
+                {ytIframeLoaded && ytMuted && isIOS && (
+                  <div style={{
+                    position: 'absolute', bottom: '16%', left: 0, right: 0,
+                    zIndex: 8,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    pointerEvents: 'none',
+                  }}>
+                    <div style={{
+                      background: 'rgba(0,0,0,0.65)',
+                      backdropFilter: 'blur(4px)',
+                      borderRadius: 24,
+                      padding: '10px 20px',
+                      fontSize: 14, fontWeight: 600,
+                      color: 'rgba(255,255,255,0.9)',
+                      display: 'flex', alignItems: 'center', gap: 8,
+                    }}>
+                      ▶ Toque no vídeo para iniciar
+                    </div>
                   </div>
                 )}
               </>
