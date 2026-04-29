@@ -908,11 +908,12 @@ tbody tr:hover td { background: var(--bg-hover); }
 }
 
 @media (max-width: 1024px) {
-  /* On mobile, don't crop the YouTube iframe — show the full video frame.
-     YouTube controls auto-hide on mobile so the aggressive zoom isn't needed. */
+  /* Gentle zoom to hide YouTube watermark/branding at bottom-right.
+     -5% top + 110% height = 5% cropped from top and 5% from bottom.
+     The video-wrapper overflow:hidden clips cleanly. */
   .yt-iframe {
-    top: 0 !important;
-    height: 100% !important;
+    top: -5% !important;
+    height: 110% !important;
   }
 }
 
