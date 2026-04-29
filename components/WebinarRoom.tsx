@@ -1937,13 +1937,6 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           {!sessionIsScheduledFuture && webinar.video_url ? (
             isYouTubeUrl(webinar.video_url) ? (
                   <>
-                    {/* ── Unified iframe (iOS + non-iOS) ───────────────────────────
-                         iOS CANNOT autoplay an iframe injected programmatically, even
-                         inside a user gesture. The ONLY reliable way to start a YouTube
-                         video on iOS is the user tapping directly on the iframe's own
-                         play button. So we keep the iframe in the DOM with
-                         pointer-events:auto on iOS and guide the user with an overlay
-                         label (pointer-events:none) that disappears on ytPlaying. ── */}
                     <iframe
                       key={ytKey}
                       ref={ytIframeRef}
@@ -1951,9 +1944,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       className="yt-iframe"
                       style={{
                         position: 'absolute', left: 0, width: '100%', border: 'none',
-                        // iOS: pointer-events auto so the user's tap reaches the YT player
-                        // Non-iOS: none so our overlay buttons capture the interaction
-                        pointerEvents: isIOS ? 'auto' : 'none',
+                        // iOS: auto ONLY before play so user can tap YouTube's play button.
+                        // After ytPlaying=true (video running), lock to none so tapping
+                        // the video area CANNOT navigate to YouTube.
+                        // Non-iOS: always none — our overlay buttons handle interaction.
+                        pointerEvents: (isIOS && !ytPlaying) ? 'auto' : 'none',
                       }}
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       allowFullScreen={false}
@@ -1961,19 +1956,23 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       onLoad={() => setYtIframeLoaded(true)}
                     />
 
-                    {/* ── Universal gradient masks (always visible) ────────────────
-                         Reliably hides YouTube title bar (top) and watermark (bottom)
-                         on every browser. CSS overflow:hidden doesn't clip GPU-composited
-                         iframe layers. pointer-events:none so taps reach the iframe. ── */}
+                    {/* ── Branding masks — solid then fade ────────────────────────
+                         Gradient-only masks weren't opaque enough to fully hide the
+                         YouTube title bar ("Protocolo Zero Ronco") and the "Assista no
+                         YouTube" watermark. Using a solid segment (65% of the bar) then
+                         a short fade provides guaranteed coverage. pointer-events:none
+                         so taps pass through to the iframe on iOS. ── */}
                     <>
+                      {/* Top: hides YouTube title bar */}
                       <div style={{
-                        position: 'absolute', top: 0, left: 0, right: 0, height: '18%',
-                        background: 'linear-gradient(to bottom, rgba(0,0,0,0.97) 0%, rgba(0,0,0,0.7) 55%, transparent 100%)',
+                        position: 'absolute', top: 0, left: 0, right: 0, height: '22%',
+                        background: 'linear-gradient(to bottom, #000 0%, #000 65%, rgba(0,0,0,0) 100%)',
                         zIndex: 7, pointerEvents: 'none',
                       }} />
+                      {/* Bottom: hides "Assista no YouTube" watermark */}
                       <div style={{
-                        position: 'absolute', bottom: 0, left: 0, right: 0, height: '16%',
-                        background: 'linear-gradient(to top, rgba(0,0,0,0.97) 0%, rgba(0,0,0,0.7) 50%, transparent 100%)',
+                        position: 'absolute', bottom: 0, left: 0, right: 0, height: '18%',
+                        background: 'linear-gradient(to top, #000 0%, #000 65%, rgba(0,0,0,0) 100%)',
                         zIndex: 7, pointerEvents: 'none',
                       }} />
                     </>
@@ -2030,15 +2029,15 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       </div>
                     )}
 
-                    {/* ── iOS: instruction label ───────────────────────────────────
-                         pointer-events:none — taps pass through directly to the iframe.
-                         Dismissed automatically when YouTube sends playerState=1 via
-                         postMessage (ytPlaying). Gradient masks above cover the branding.
-                         The user taps the YouTube play button directly → video starts. ── */}
+                    {/* ── iOS: instruction label (centered, pointer-events:none) ────
+                         The user taps YouTube's own play button directly (the only
+                         reliable way to start video on iOS Safari). This label is purely
+                         informational — it cannot block taps. Disappears on ytPlaying. ── */}
                     {isIOS && !ytPlaying && ytIframeLoaded && (
                       <div style={{
-                        position: 'absolute', bottom: '20%', left: 0, right: 0,
-                        zIndex: 8, display: 'flex', justifyContent: 'center',
+                        position: 'absolute', inset: 0,
+                        zIndex: 8, display: 'flex',
+                        alignItems: 'center', justifyContent: 'center',
                         pointerEvents: 'none',
                       }}>
                         <div style={{
@@ -2048,6 +2047,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                           color: 'rgba(255,255,255,0.92)',
                           display: 'flex', alignItems: 'center', gap: 8,
                           boxShadow: '0 2px 16px rgba(0,0,0,0.4)',
+                          marginTop: '30%', // push below the black top bar so it sits near the play button
                         }}>
                           ▶ Toque no vídeo para iniciar
                         </div>
