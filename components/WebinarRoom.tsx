@@ -1957,12 +1957,16 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     />
 
                     {/* ── Branding masks — solid then fade ────────────────────────
-                         Gradient-only masks weren't opaque enough to fully hide the
-                         YouTube title bar ("Protocolo Zero Ronco") and the "Assista no
-                         YouTube" watermark. Using a solid segment (65% of the bar) then
-                         a short fade provides guaranteed coverage. pointer-events:none
-                         so taps pass through to the iframe on iOS. ── */}
-                    <>
+                         Only visible before the video officially starts playing.
+                         Once it plays, YouTube natively hides its own UI (title, logo).
+                         Since we lock pointer-events to none during playback, the user
+                         can't hover/tap to bring the UI back. So we fade these masks
+                         out to reveal 100% of the expert's video without cropping. ── */}
+                    <div style={{
+                      opacity: (!ytPlaying || ytMuted) ? 1 : 0,
+                      transition: 'opacity 0.5s ease',
+                      pointerEvents: 'none',
+                    }}>
                       {/* Top: hides YouTube title bar */}
                       <div style={{
                         position: 'absolute', top: 0, left: 0, right: 0, height: '22%',
@@ -1975,7 +1979,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                         background: 'linear-gradient(to top, #000 0%, #000 65%, rgba(0,0,0,0) 100%)',
                         zIndex: 7, pointerEvents: 'none',
                       }} />
-                    </>
+                    </div>
 
                     {/* ── Non-iOS: spinner while iframe loads ─────────────────── */}
                     {!isIOS && !ytIframeLoaded && (
