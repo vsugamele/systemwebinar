@@ -517,6 +517,17 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // Container where we inject the iframe via DOM on iOS tap (user-gesture context)
   const iosIframeContainerRef = useRef<HTMLDivElement>(null)
 
+  // iOS poster: stays visible for 3s AFTER ytPlaying becomes true.
+  // This gives YouTube enough time to fully fade out its native title bar,
+  // "Watch on YouTube" watermark, etc. The poster IS the video thumbnail,
+  // so visually the user just sees the video "come alive" with zero branding flash.
+  const [iosPosterVisible, setIosPosterVisible] = useState(true)
+  useEffect(() => {
+    if (!isIOS || !ytPlaying) return
+    const timer = setTimeout(() => setIosPosterVisible(false), 3000)
+    return () => clearTimeout(timer)
+  }, [isIOS, ytPlaying])
+
   const duration = webinar.duration_seconds || 3600
   const isSessionEnded = elapsedSeconds >= duration
 
@@ -1956,47 +1967,25 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       onLoad={() => setYtIframeLoaded(true)}
                     />
 
-                    {/* ── iOS Branding Delayed Masks ──────────────────────────────
-                         YouTube natively takes ~2 seconds to fade out its title bar
-                         AFTER playback starts. This layer keeps black bars over the
-                         top and bottom for an extra 1.8s after ytPlaying becomes true.
-                         This prevents the "1 second flash" of YouTube data. ── */}
-                    {isIOS && (
-                      <div style={{
-                        position: 'absolute', inset: 0, zIndex: 6,
-                        opacity: !ytPlaying ? 1 : 0,
-                        transition: 'opacity 0.8s ease',
-                        transitionDelay: !ytPlaying ? '0s' : '1.8s',
-                        pointerEvents: 'none',
-                      }}>
-                        <div style={{
-                          position: 'absolute', top: 0, left: 0, right: 0, height: '22%',
-                          background: 'linear-gradient(to bottom, #000 0%, #000 65%, rgba(0,0,0,0) 100%)',
-                        }} />
-                        <div style={{
-                          position: 'absolute', bottom: 0, left: 0, right: 0, height: '18%',
-                          background: 'linear-gradient(to top, #000 0%, #000 65%, rgba(0,0,0,0) 100%)',
-                        }} />
-                      </div>
-                    )}
-
                     {/* ── iOS Poster Overlay ──────────────────────────────────────
-                         Replaces the ugly black bars. Covers the entire YouTube UI before
-                         play using the video's own thumbnail.
-                         pointer-events:none allows the user's tap to pass right through
-                         and hit the YouTube iframe's native play button underneath!
-                         Once the video starts (ytPlaying=true), this poster fades out,
-                         revealing 100% of the expert's video with zero cropping. ── */}
-                    {isIOS && (
+                         Covers 100% of the YouTube UI using the video's own thumbnail.
+                         pointer-events:none lets taps pass through to YouTube's play btn.
+                         
+                         KEY: stays visible for 3 FULL SECONDS after ytPlaying=true.
+                         YouTube takes ~2s to natively fade its title bar / watermark.
+                         Since our poster IS the video frame, the user just perceives
+                         a still image that smoothly "comes alive" — zero branding. ── */}
+                    {isIOS && iosPosterVisible && (
                       <div style={{
                         position: 'absolute', inset: 0, zIndex: 7,
                         backgroundImage: ytThumb ? `url(${ytThumb})` : undefined,
+                        backgroundColor: '#000',
                         backgroundSize: 'cover', backgroundPosition: 'center',
-                        opacity: !ytPlaying ? 1 : 0,
-                        transition: 'opacity 0.4s ease',
                         pointerEvents: 'none',
+                        // Smooth fade-out when iosPosterVisible finally turns false
+                        // (handled by React unmount — the 3s timer gives YouTube time)
                       }}>
-                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.2)' }} />
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)' }} />
                       </div>
                     )}
 
