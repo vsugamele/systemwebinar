@@ -514,18 +514,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // iOS state machine: poster → loading → playing
   const [iosCaptureDone, setIosCaptureDone] = useState(false) // user tapped
   const [iosLoading, setIosLoading]         = useState(false) // iframe injected, waiting for play
-  // Container where we inject the iframe via DOM on iOS tap (user-gesture context)
-  const iosIframeContainerRef = useRef<HTMLDivElement>(null)
-
-  // Branding mask: stays visible for 3s AFTER ytPlaying becomes true.
-  // This gives YouTube enough time to fully fade out its native title bar,
-  // "Watch on YouTube" watermark, etc. Works on ALL platforms.
-  const [ytBrandingVisible, setYtBrandingVisible] = useState(true)
-  useEffect(() => {
-    if (!ytPlaying) return
-    const timer = setTimeout(() => setYtBrandingVisible(false), 3000)
-    return () => clearTimeout(timer)
-  }, [ytPlaying])
+  // Removed ytBrandingVisible state — we now rely entirely on CSS zoom & crop
+  // to permanently hide the YouTube title bar and watermark without any delay.
 
   const duration = webinar.duration_seconds || 3600
   const isSessionEnded = elapsedSeconds >= duration
@@ -1966,25 +1956,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       onLoad={() => setYtIframeLoaded(true)}
                     />
 
-                    {/* ── Poster Overlay (all platforms) ─────────────────────────
-                         Covers 100% of the YouTube UI using the video's own thumbnail.
-                         pointer-events:none lets taps/clicks pass through.
-                         
-                         Stays visible for 3 FULL SECONDS after ytPlaying=true so
-                         YouTube has time to natively fade its title bar / watermark.
-                         Since the poster IS the video frame, users just see a still
-                         image that smoothly "comes alive" — zero branding flash. ── */}
-                    {ytBrandingVisible && (
-                      <div style={{
-                        position: 'absolute', inset: 0, zIndex: 7,
-                        backgroundImage: ytThumb ? `url(${ytThumb})` : undefined,
-                        backgroundColor: '#000',
-                        backgroundSize: 'cover', backgroundPosition: 'center',
-                        pointerEvents: 'none',
-                      }}>
-                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)' }} />
-                      </div>
-                    )}
+                    {/* ── Poster Overlay Removed ──────────────────────────────────
+                         We now rely 100% on the CSS Zoom & Crop (.yt-iframe) to hide
+                         YouTube branding. This eliminates the 3s "frozen thumbnail"
+                         delay while still maintaining a clean, unbranded player. ── */}
 
                     {/* ── Non-iOS: spinner while iframe loads ─────────────────── */}
                     {!isIOS && !ytIframeLoaded && (
