@@ -1956,6 +1956,30 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       onLoad={() => setYtIframeLoaded(true)}
                     />
 
+                    {/* ── iOS Branding Delayed Masks ──────────────────────────────
+                         YouTube natively takes ~2 seconds to fade out its title bar
+                         AFTER playback starts. This layer keeps black bars over the
+                         top and bottom for an extra 1.8s after ytPlaying becomes true.
+                         This prevents the "1 second flash" of YouTube data. ── */}
+                    {isIOS && (
+                      <div style={{
+                        position: 'absolute', inset: 0, zIndex: 6,
+                        opacity: !ytPlaying ? 1 : 0,
+                        transition: 'opacity 0.8s ease',
+                        transitionDelay: !ytPlaying ? '0s' : '1.8s',
+                        pointerEvents: 'none',
+                      }}>
+                        <div style={{
+                          position: 'absolute', top: 0, left: 0, right: 0, height: '22%',
+                          background: 'linear-gradient(to bottom, #000 0%, #000 65%, rgba(0,0,0,0) 100%)',
+                        }} />
+                        <div style={{
+                          position: 'absolute', bottom: 0, left: 0, right: 0, height: '18%',
+                          background: 'linear-gradient(to top, #000 0%, #000 65%, rgba(0,0,0,0) 100%)',
+                        }} />
+                      </div>
+                    )}
+
                     {/* ── iOS Poster Overlay ──────────────────────────────────────
                          Replaces the ugly black bars. Covers the entire YouTube UI before
                          play using the video's own thumbnail.
