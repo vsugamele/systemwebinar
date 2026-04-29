@@ -71,6 +71,22 @@ export default function RegisterForm({ webinar, slug }: Props) {
         localStorage.setItem('webi_lead_phone', form.phone || '')
       } catch {}
 
+      // Fire-and-forget webhook
+      import('@/lib/imperio').then(({ enviarParaImperio }) => {
+        enviarParaImperio('membro_cadastrado', webinar.project_id!, {
+          email: form.email,
+          nome: form.name,
+          phone: form.phone
+        }, {
+          origem: 'register-form-webinar',
+          tags: ['lead-webinar'],
+          metadata: { ...form },
+          utm_source: sp.get('utm_source'),
+          utm_medium: sp.get('utm_medium'),
+          utm_campaign: sp.get('utm_campaign'),
+        })
+      })
+
       // Redirect to live webinar room
       router.push(`/w/${slug}`)
     } catch (err: unknown) {

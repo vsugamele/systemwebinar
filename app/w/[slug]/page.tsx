@@ -47,7 +47,7 @@ export default async function WebinarPage({
   searchParams,
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ test?: string }>
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const { slug } = await params
   const sp = await searchParams
@@ -81,8 +81,17 @@ export default async function WebinarPage({
 
   // Squeeze Page Logic
   const cookieStore = await cookies()
-  const hasLeadCookie = cookieStore.get(`webi_lead_id_${webinar.id}`)
+  const leadId = cookieStore.get(`webi_lead_id_${webinar.id}`)?.value
   
+  let leadData = null
+  if (leadId) {
+    const { data } = await supabase.from('webi_leads').select('name, email, phone').eq('id', leadId).single()
+    if (data) {
+      // Normalize name to be compatible with both 'name' and 'nome'
+      leadData = { ...data, nome: data.name }
+    }
+  }
+
   // Flatten project fields onto webinar for convenience
   const project = (webinar as Record<string, unknown> & { webi_projects?: { brand_color?: string | null; openrouter_api_key?: string | null; name?: string; timezone?: string | null; imperio_project_id?: string | null } | null }).webi_projects || {}
   const projectTimezone = (project as { timezone?: string | null }).timezone || 'America/Sao_Paulo'
@@ -227,7 +236,7 @@ export default async function WebinarPage({
     imperio_project_id: (project as { imperio_project_id?: string | null }).imperio_project_id || undefined,
   }
 
-  const guestMode = !hasLeadCookie && !isTest
+  const guestMode = !leadId && !isTest
 
   return (
     <>
@@ -239,6 +248,7 @@ export default async function WebinarPage({
         events={events || []} 
         initialCountdownSeconds={initialCountdownSeconds}
         guestMode={guestMode}
+        leadData={leadData}
       />
       {webinar.tracking_body_code && (
         <div dangerouslySetInnerHTML={{ __html: webinar.tracking_body_code }} />

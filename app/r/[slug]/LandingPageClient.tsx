@@ -75,6 +75,22 @@ export default function LandingPageClient({
         throw new Error(err.message || 'Erro ao processar inscrição.')
       }
 
+      // Fire-and-forget webhook
+      import('@/lib/imperio').then(({ enviarParaImperio }) => {
+        enviarParaImperio('membro_cadastrado', projectId, {
+          email: form.email,
+          nome: form.name,
+          phone: form.phone
+        }, {
+          origem: 'landing-page-webinar',
+          tags: ['lead-webinar'],
+          metadata,
+          utm_source: Array.isArray(metadata.utm_source) ? metadata.utm_source[0] : (metadata.utm_source || null),
+          utm_medium: Array.isArray(metadata.utm_medium) ? metadata.utm_medium[0] : (metadata.utm_medium || null),
+          utm_campaign: Array.isArray(metadata.utm_campaign) ? metadata.utm_campaign[0] : (metadata.utm_campaign || null),
+        })
+      })
+
       // Instead of waiting or showing thank you, redirect immediately to room 
       // where room logic dictates if it's counting down or live.
       router.push(`/w/${slug}`)

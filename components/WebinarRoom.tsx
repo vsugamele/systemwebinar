@@ -100,12 +100,13 @@ function getTargetViewers(
 }
 
 interface Props {
-  webinar: Webinar & WebinarConfig
+  webinar: Webinar & WebinarConfig & { project_id?: string }
   events: WebinarEvent[]
   /** Pre-computed server-side countdown (seconds until next_scheduled_start). Prevents client flash. */
   initialCountdownSeconds?: number
   /** If true, visitor bypassed registration (active live mode) */
   guestMode?: boolean
+  leadData?: { email?: string; nome?: string; phone?: string } | null
 }
 
 // EMOJI_REACTIONS moved to ChatPanel.tsx
@@ -334,7 +335,7 @@ export const DEFAULT_NAMES = [
   'Floripes Correia', 'Godofredo Ramos', 'Preciliana Campos', 'Geraldo Ferreira', 'Geralda Farias',
 ]
 
-export default function WebinarRoom({ webinar, events, initialCountdownSeconds = 0, guestMode }: Props) {
+export default function WebinarRoom({ webinar, events, initialCountdownSeconds = 0, guestMode, leadData }: Props) {
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
   const engineRef = useRef<EventEngine | null>(null)
@@ -405,7 +406,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const isTest = new URLSearchParams(window.location.search).get('test') === '1'
-      const leadName = localStorage.getItem(`webi_lead_name_${webinar.id}`) || ''
+      const leadName = leadData?.nome || localStorage.getItem(`webi_lead_name_${webinar.id}`) || ''
       if (isTest) {
         setUserName('Você')
       } else if (guestMode) {
@@ -416,7 +417,28 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         setUserName('Anônimo')
       }
     }
-  }, [webinar.id, guestMode])
+  }, [webinar.id, guestMode, leadData])
+
+  // ---- Webhook: webinar_assistido ----
+  // Fired when the webinar starts playing (liveSessionStartedAt is set, or if fake live hasStarted is true eventually)
+  // We will trigger it when liveSessionStartedAt is valid OR if there's no countdown
+  useEffect(() => {
+    // Determine if the webinar is currently playing for the user
+    const isPlaying = !!liveSessionStartedAt || initialCountdownSeconds === 0
+    
+    if (isPlaying && leadData && webinar.project_id) {
+      const firedKey = `webhook_assistido_${webinar.id}`
+      if (!sessionStorage.getItem(firedKey)) {
+        sessionStorage.setItem(firedKey, 'true')
+        import('@/lib/imperio').then(({ enviarParaImperio }) => {
+          enviarParaImperio('webinar_assistido', webinar.project_id!, leadData, {
+            origem: 'webinar-live',
+          })
+        })
+      }
+    }
+  }, [liveSessionStartedAt, initialCountdownSeconds, leadData, webinar.id, webinar.project_id])
+
   const [viewers, setViewers] = useState(() => {
     const vStart = webinar.fake_viewers_start ?? 30
     return Math.max(1, vStart)
