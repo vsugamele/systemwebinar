@@ -144,12 +144,11 @@ function getYouTubeEmbedUrl(url: string, startSeconds = 0): string | null {
 
     if (!videoId) return null
     const start = startSeconds > 0 ? `&start=${startSeconds}` : ''
-    // NOTE: mute=1 intentionally REMOVED — we silence via postMessage setVolume(0) instead.
-    // mute=1 in the URL makes the player ignore unMute() commands, which breaks our sound button.
-    // origin= is required for enablejsapi=1 postMessage events to work across origins.
+    // mute=1 is required for iOS Safari to allow autoplay. 
+    // We will unmute it later via postMessage when the user clicks our custom unmute button.
     const origin = typeof window !== 'undefined' ? encodeURIComponent(window.location.origin) : ''
     const originParam = origin ? `&origin=${origin}` : ''
-    return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&controls=0&modestbranding=1&rel=0&disablekb=1&iv_load_policy=3&playsinline=1&fs=0&showinfo=0&enablejsapi=1${originParam}${start}`
+    return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&modestbranding=1&rel=0&disablekb=1&iv_load_policy=3&playsinline=1&fs=0&showinfo=0&enablejsapi=1${originParam}${start}`
   } catch {
     return null
   }
@@ -489,8 +488,6 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // YouTube overlay state
   const ytIframeRef = useRef<HTMLIFrameElement>(null)
   const [ytPlaying, setYtPlaying] = useState(false)
-  // Tracks if user tapped and YouTube is buffering (playerState 3), for instant UI feedback
-  const [ytInteractionStarted, setYtInteractionStarted] = useState(false)
   // ytMuted tracks whether user has explicitly clicked to unmute
   const [ytMuted, setYtMuted] = useState(true)
   // ytKey: incrementing forces the iframe to remount (used when unmuting)
@@ -1344,13 +1341,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         // Handle both infoDelivery (polling) and onStateChange (event-driven)
         if (data?.event === 'infoDelivery' && typeof data?.info?.playerState === 'number') {
           if (data.info.playerState === 1) setYtPlaying(true)
-          if (data.info.playerState === 2) { setYtPlaying(false); setYtInteractionStarted(false) }
-          if (data.info.playerState === 1 || data.info.playerState === 3) setYtInteractionStarted(true)
+          if (data.info.playerState === 2) setYtPlaying(false)
         } else if (data?.event === 'onStateChange' && typeof data?.info === 'number') {
           // playerState 1 = playing, 2 = paused, 3 = buffering
           if (data.info === 1) setYtPlaying(true)
-          if (data.info === 2) { setYtPlaying(false); setYtInteractionStarted(false) }
-          if (data.info === 1 || data.info === 3) setYtInteractionStarted(true)
+          if (data.info === 2) setYtPlaying(false)
         }
       } catch { /* ignore */ }
     }
@@ -1960,11 +1955,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       className="yt-iframe"
                       style={{
                         position: 'absolute', left: 0, width: '100%', border: 'none',
-                        // iOS: auto ONLY before play so user can tap YouTube's play button.
-                        // After ytPlaying=true (video running), lock to none so tapping
-                        // the video area CANNOT navigate to YouTube.
-                        // Non-iOS: always none — our overlay buttons handle interaction.
-                        pointerEvents: (isIOS && !ytPlaying) ? 'auto' : 'none',
+                        // Always none — our overlay buttons handle interaction.
+                        pointerEvents: 'none',
                       }}
                       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                       allowFullScreen={false}
@@ -2011,8 +2003,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)' }} />
                     </div>
 
-                    {/* ── Non-iOS: spinner while iframe loads ─────────────────── */}
-                    {!isIOS && !ytIframeLoaded && (
+                    {/* ── Spinner while iframe loads (All platforms) ─────────────────── */}
+                    {!ytIframeLoaded && (
                       <div style={{
                         position: 'absolute', inset: 0, zIndex: 4,
                         background: '#000',
@@ -2031,8 +2023,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       </div>
                     )}
 
-                    {/* ── Non-iOS: unmute button (shows after iframe loaded + muted) ── */}
-                    {!isIOS && ytIframeLoaded && ytMuted && (
+                    {/* ── Unmute button (shows after iframe loaded + muted) ── */}
+                    {ytIframeLoaded && ytMuted && (
                       <div style={{
                         position: 'absolute', inset: 0, zIndex: 8,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -2063,47 +2055,6 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       </div>
                     )}
 
-                    {/* ── iOS: instruction label (centered, pointer-events:none) ────
-                         Disappears IMMEDIATELY on ytInteractionStarted (buffering or playing)
-                         to eliminate any perceived "delay" or unresponsiveness. ── */}
-                    {isIOS && !ytInteractionStarted && ytIframeLoaded && (
-                      <div style={{
-                        position: 'absolute', inset: 0,
-                        zIndex: 8, display: 'flex',
-                        alignItems: 'center', justifyContent: 'center',
-                        pointerEvents: 'none',
-                      }}>
-                        <div style={{
-                          background: 'rgba(0,0,0,0.72)', borderRadius: 24,
-                          padding: '10px 22px', backdropFilter: 'blur(6px)',
-                          fontSize: 14, fontWeight: 600, letterSpacing: '0.02em',
-                          color: 'rgba(255,255,255,0.92)',
-                          display: 'flex', alignItems: 'center', gap: 8,
-                          boxShadow: '0 2px 16px rgba(0,0,0,0.4)',
-                        }}>
-                          ▶ Toque no vídeo para iniciar
-                        </div>
-                      </div>
-                    )}
-
-                    {/* ── iOS: Buffering Spinner ──────────────────────────────────
-                         Shows only while the video is buffering (tapped but not yet playing).
-                         Gives the user instant visual feedback that their tap worked. ── */}
-                    {isIOS && ytInteractionStarted && !ytPlaying && ytIframeLoaded && (
-                      <div style={{
-                        position: 'absolute', inset: 0,
-                        zIndex: 8, display: 'flex',
-                        alignItems: 'center', justifyContent: 'center',
-                        pointerEvents: 'none',
-                      }}>
-                        <div style={{
-                          width: 40, height: 40, borderRadius: '50%',
-                          border: '3px solid rgba(255,255,255,0.12)',
-                          borderTopColor: 'rgba(255,255,255,0.7)',
-                          animation: 'spin 0.8s linear infinite',
-                        }} />
-                      </div>
-                    )}
               </>
             ) : isVimeoUrl(webinar.video_url) ? (
               <iframe
