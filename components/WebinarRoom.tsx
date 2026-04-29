@@ -773,6 +773,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // Sync state to refs for interval closures
   const waitingDoneRef = useRef(waitingDone)
   useEffect(() => { waitingDoneRef.current = waitingDone }, [waitingDone])
+
+  // IMPORTANT: liveSessionStartedAt is used inside a setInterval closure that is created
+  // once at mount (deps=[]). Using state directly would produce a stale closure — the
+  // interval would always see the initial null value even after the countdown ends and we
+  // optimistically set liveSessionStartedAt. A ref solves this.
+  const liveSessionStartedAtRef = useRef(liveSessionStartedAt)
+  useEffect(() => { liveSessionStartedAtRef.current = liveSessionStartedAt }, [liveSessionStartedAt])
   
   const ytPlayingRef = useRef(ytPlaying)
   useEffect(() => { ytPlayingRef.current = ytPlaying }, [ytPlaying])
@@ -806,12 +813,15 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       } else {
         // Non-native videos (YouTube, Vimeo, VTurb, etc)
         // Only advance the clock if the session has actually started.
-        // If session_started_at is null, keep elapsed frozen at 0 so CPM doesn't fire.
-        if (liveSessionStartedAt) {
-          const wallClockTick = Math.floor((Date.now() - new Date(liveSessionStartedAt).getTime()) / 1000)
+        // Use liveSessionStartedAtRef (not the state value) to avoid stale closure:
+        // this setInterval was created at mount with deps=[], so direct state access
+        // would freeze on the initial null value even after an optimistic update.
+        const lsa = liveSessionStartedAtRef.current
+        if (lsa) {
+          const wallClockTick = Math.floor((Date.now() - new Date(lsa).getTime()) / 1000)
           currentTick = Math.max(elapsedRef.current, wallClockTick)
         }
-        // else: no session_started_at → don't advance elapsed (stays at 0 / startOffset)
+        // else: no session started yet → keep elapsed frozen at 0
       }
 
       elapsedRef.current = currentTick
