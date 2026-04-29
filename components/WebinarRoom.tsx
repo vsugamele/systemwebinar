@@ -1956,30 +1956,25 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       onLoad={() => setYtIframeLoaded(true)}
                     />
 
-                    {/* ── Branding masks — solid then fade ────────────────────────
-                         Only visible before the video officially starts playing.
-                         Once it plays, YouTube natively hides its own UI (title, logo).
-                         Since we lock pointer-events to none during playback, the user
-                         can't hover/tap to bring the UI back. So we fade these masks
-                         out to reveal 100% of the expert's video without cropping. ── */}
-                    <div style={{
-                      opacity: (!ytPlaying || ytMuted) ? 1 : 0,
-                      transition: 'opacity 0.5s ease',
-                      pointerEvents: 'none',
-                    }}>
-                      {/* Top: hides YouTube title bar */}
+                    {/* ── iOS Poster Overlay ──────────────────────────────────────
+                         Replaces the ugly black bars. Covers the entire YouTube UI before
+                         play using the video's own thumbnail.
+                         pointer-events:none allows the user's tap to pass right through
+                         and hit the YouTube iframe's native play button underneath!
+                         Once the video starts (ytPlaying=true), this poster fades out,
+                         revealing 100% of the expert's video with zero cropping. ── */}
+                    {isIOS && (
                       <div style={{
-                        position: 'absolute', top: 0, left: 0, right: 0, height: '22%',
-                        background: 'linear-gradient(to bottom, #000 0%, #000 65%, rgba(0,0,0,0) 100%)',
-                        zIndex: 7, pointerEvents: 'none',
-                      }} />
-                      {/* Bottom: hides "Assista no YouTube" watermark */}
-                      <div style={{
-                        position: 'absolute', bottom: 0, left: 0, right: 0, height: '18%',
-                        background: 'linear-gradient(to top, #000 0%, #000 65%, rgba(0,0,0,0) 100%)',
-                        zIndex: 7, pointerEvents: 'none',
-                      }} />
-                    </div>
+                        position: 'absolute', inset: 0, zIndex: 7,
+                        backgroundImage: ytThumb ? `url(${ytThumb})` : undefined,
+                        backgroundSize: 'cover', backgroundPosition: 'center',
+                        opacity: !ytPlaying ? 1 : 0,
+                        transition: 'opacity 0.4s ease',
+                        pointerEvents: 'none',
+                      }}>
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.2)' }} />
+                      </div>
+                    )}
 
                     {/* ── Non-iOS: spinner while iframe loads ─────────────────── */}
                     {!isIOS && !ytIframeLoaded && (
@@ -2051,7 +2046,6 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                           color: 'rgba(255,255,255,0.92)',
                           display: 'flex', alignItems: 'center', gap: 8,
                           boxShadow: '0 2px 16px rgba(0,0,0,0.4)',
-                          marginTop: '30%', // push below the black top bar so it sits near the play button
                         }}>
                           ▶ Toque no vídeo para iniciar
                         </div>
