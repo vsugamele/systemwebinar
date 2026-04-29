@@ -488,6 +488,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // YouTube overlay state
   const ytIframeRef = useRef<HTMLIFrameElement>(null)
   const [ytPlaying, setYtPlaying] = useState(false)
+  const [ytBuffering, setYtBuffering] = useState(false)
   // ytMuted tracks whether user has explicitly clicked to unmute
   const [ytMuted, setYtMuted] = useState(true)
   // ytKey: incrementing forces the iframe to remount (used when unmuting)
@@ -1340,12 +1341,14 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
         // Handle both infoDelivery (polling) and onStateChange (event-driven)
         if (data?.event === 'infoDelivery' && typeof data?.info?.playerState === 'number') {
-          if (data.info.playerState === 1) setYtPlaying(true)
-          if (data.info.playerState === 2) setYtPlaying(false)
+          if (data.info.playerState === 1) { setYtPlaying(true); setYtBuffering(false) }
+          if (data.info.playerState === 2) { setYtPlaying(false); setYtBuffering(false) }
+          if (data.info.playerState === 3) setYtBuffering(true)
         } else if (data?.event === 'onStateChange' && typeof data?.info === 'number') {
           // playerState 1 = playing, 2 = paused, 3 = buffering
-          if (data.info === 1) setYtPlaying(true)
-          if (data.info === 2) setYtPlaying(false)
+          if (data.info === 1) { setYtPlaying(true); setYtBuffering(false) }
+          if (data.info === 2) { setYtPlaying(false); setYtBuffering(false) }
+          if (data.info === 3) setYtBuffering(true)
         }
       } catch { /* ignore */ }
     }
@@ -2003,11 +2006,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)' }} />
                     </div>
 
-                    {/* ── Spinner while iframe loads (All platforms) ─────────────────── */}
-                    {!ytIframeLoaded && (
+                    {/* ── Spinner while iframe loads or buffers (All platforms) ── */}
+                    {(!ytIframeLoaded || ytBuffering) && (
                       <div style={{
                         position: 'absolute', inset: 0, zIndex: 4,
-                        background: '#000',
+                        background: ytBuffering ? 'rgba(0,0,0,0.4)' : '#000',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         flexDirection: 'column', gap: 14, pointerEvents: 'none',
                       }}>
@@ -2017,9 +2020,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                           borderTopColor: 'rgba(255,255,255,0.7)',
                           animation: 'spin 0.8s linear infinite',
                         }} />
-                        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.04em' }}>
-                          Carregando transmissão...
-                        </span>
+                        {!ytBuffering && (
+                          <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.04em' }}>
+                            Carregando transmissão...
+                          </span>
+                        )}
                       </div>
                     )}
 
@@ -2034,6 +2039,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                           onClick={() => {
                             ytUnmutedRef.current = true
                             if (ytIframeRef.current?.contentWindow) {
+                              // If autoplay was blocked, we must also send playVideo
+                              ytIframeRef.current.contentWindow.postMessage('{"event":"command","func":"playVideo","args":[]}', '*')
                               ytIframeRef.current.contentWindow.postMessage('{"event":"command","func":"unMute","args":[]}', '*')
                               ytIframeRef.current.contentWindow.postMessage('{"event":"command","func":"setVolume","args":[100]}', '*')
                             }
