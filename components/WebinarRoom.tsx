@@ -2026,29 +2026,33 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       </div>
                     )}
 
-                    {/* ── iOS poster: looks like the stream is already running ──────
-                         Shows the YouTube thumbnail as "video preview" with a dark overlay
-                         and the familiar unmute button. One tap → injects iframe via DOM
-                         in user-gesture context → iOS allows autoplay with audio.
-                         A black loading overlay stays until postMessage confirms playing. ── */}
-                    {isIOS && !iosCaptureDone && (
+                    {/* ── iOS overlay: poster → loading → gone ────────────────────
+                         Single persistent overlay (zIndex 10) that covers ALL YouTube
+                         UI at every stage. Dismissed ONLY when ytPlaying becomes true
+                         (postMessage playerState=1) or after a 5s safety fallback.
+                         Using onClick (not onTouchStart) because iOS only grants media
+                         autoplay permission inside click/touchend handlers. ── */}
+                    {isIOS && !ytPlaying && (
                       <div
                         style={{
                           position: 'absolute', inset: 0, zIndex: 10,
-                          backgroundImage: ytThumb ? `url(${ytThumb})` : undefined,
+                          // Before tap: show thumbnail (looks like stream is running)
+                          // After tap: solid black (hides YouTube loading UI)
+                          backgroundImage: !iosCaptureDone && ytThumb ? `url(${ytThumb})` : undefined,
                           backgroundColor: '#000',
                           backgroundSize: 'cover', backgroundPosition: 'center',
+                          cursor: 'pointer',
                         }}
-                        onTouchStart={() => {
+                        onClick={() => {
+                          if (iosCaptureDone) return // already tapped, ignore
                           if (!iosIframeContainerRef.current || !webinar.video_url) return
                           const lsa = liveSessionStartedAtRef.current
                           const offset = lsa
                             ? Math.floor((Date.now() - new Date(lsa).getTime()) / 1000)
                             : Math.floor(elapsedRef.current)
-                          const src = getYouTubeEmbedUrl(webinar.video_url, offset) || ''
-                          // Inject iframe inside touchstart — iOS grants autoplay permission
+                          // Inject iframe inside onClick — iOS grants autoplay permission here
                           const el = document.createElement('iframe')
-                          el.src = src
+                          el.src = getYouTubeEmbedUrl(webinar.video_url, offset) || ''
                           el.className = 'yt-iframe'
                           el.style.cssText = 'position:absolute;left:0;width:100%;border:none;pointer-events:none;'
                           el.setAttribute('allow', 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture')
@@ -2056,53 +2060,46 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                           el.title = webinar.name
                           iosIframeContainerRef.current.appendChild(el)
                           setIosCaptureDone(true)
-                          setIosLoading(true)
-                          // Fallback: dismiss loading after 4s even if postMessage never arrives
-                          setTimeout(() => setIosLoading(false), 4000)
+                          // Safety fallback: if postMessage never fires, dismiss after 5s
+                          setTimeout(() => setIosLoading(false), 5000)
                         }}
                       >
-                        {/* Dark overlay to simulate live look */}
-                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)' }} />
-                        {/* Same unmute button style as Android for consistent UX */}
+                        {/* Dark vignette over thumbnail */}
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)' }} />
+
                         <div style={{
                           position: 'absolute', inset: 0, zIndex: 1,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          display: 'flex', flexDirection: 'column',
+                          alignItems: 'center', justifyContent: 'center', gap: 14,
                         }}>
-                          <div style={{
-                            background: 'rgba(255,255,255,0.95)', color: '#111',
-                            borderRadius: 50, padding: '16px 32px',
-                            fontSize: 16, fontWeight: 700,
-                            display: 'flex', alignItems: 'center', gap: 10,
-                            boxShadow: '0 4px 32px rgba(0,0,0,0.5)',
-                            animation: 'pulse-btn 1.8s ease-in-out infinite',
-                            pointerEvents: 'none',
-                          }}>
-                            🔊 Toque para ativar o som
-                          </div>
+                          {!iosCaptureDone ? (
+                            // PRE-TAP: unmute button (same style as Android)
+                            <div style={{
+                              background: 'rgba(255,255,255,0.95)', color: '#111',
+                              borderRadius: 50, padding: '16px 32px',
+                              fontSize: 16, fontWeight: 700,
+                              display: 'flex', alignItems: 'center', gap: 10,
+                              boxShadow: '0 4px 32px rgba(0,0,0,0.5)',
+                              animation: 'pulse-btn 1.8s ease-in-out infinite',
+                              pointerEvents: 'none',
+                            }}>
+                              🔊 Toque para ativar o som
+                            </div>
+                          ) : (
+                            // POST-TAP: loading spinner while YouTube buffers
+                            <>
+                              <div style={{
+                                width: 40, height: 40, borderRadius: '50%',
+                                border: '3px solid rgba(255,255,255,0.12)',
+                                borderTopColor: 'rgba(255,255,255,0.7)',
+                                animation: 'spin 0.8s linear infinite',
+                              }} />
+                              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.04em' }}>
+                                Iniciando transmissão...
+                              </span>
+                            </>
+                          )}
                         </div>
-                      </div>
-                    )}
-
-                    {/* ── iOS loading overlay: black screen between tap and play ───
-                         Hides YouTube's loading/buffering UI. Dismissed when
-                         postMessage playerState=1 arrives (or 4s fallback). ── */}
-                    {isIOS && iosCaptureDone && iosLoading && (
-                      <div style={{
-                        position: 'absolute', inset: 0, zIndex: 10,
-                        background: '#000',
-                        display: 'flex', flexDirection: 'column',
-                        alignItems: 'center', justifyContent: 'center', gap: 14,
-                        pointerEvents: 'none',
-                      }}>
-                        <div style={{
-                          width: 40, height: 40, borderRadius: '50%',
-                          border: '3px solid rgba(255,255,255,0.12)',
-                          borderTopColor: 'rgba(255,255,255,0.7)',
-                          animation: 'spin 0.8s linear infinite',
-                        }} />
-                        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)', letterSpacing: '0.04em' }}>
-                          Iniciando transmissão...
-                        </span>
                       </div>
                     )}
               </>
