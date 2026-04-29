@@ -511,6 +511,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     )
   }, [])
 
+  // Track whether iOS user has tapped the video area (first tap captured by our overlay)
+  const [iosCaptureDone, setIosCaptureDone] = useState(false)
+
   const duration = webinar.duration_seconds || 3600
   const isSessionEnded = elapsedSeconds >= duration
 
@@ -2007,8 +2010,28 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                   </div>
                 )}
 
-                {/* iOS: toque para iniciar overlay (instrução sutil) */}
-                {ytIframeLoaded && ytMuted && isIOS && (
+                {/* iOS: transparent intercept overlay — captures the FIRST tap.
+                    On tap: removes itself (so next tap reaches the iframe) and schedules overlay dismiss.
+                    This is reliable because postMessage infoDelivery is not guaranteed without the YT JS SDK. */}
+                {isIOS && ytIframeLoaded && !iosCaptureDone && (
+                  <div
+                    style={{
+                      position: 'absolute', inset: 0,
+                      zIndex: 9,
+                      background: 'transparent',
+                      pointerEvents: 'auto',
+                    }}
+                    onTouchStart={() => {
+                      // Remove ourselves so subsequent touches hit the iframe
+                      setIosCaptureDone(true)
+                      // Dismiss the instructions label after YouTube has had time to start
+                      setTimeout(() => setYtMuted(false), 2000)
+                    }}
+                  />
+                )}
+
+                {/* iOS: instruction label (shown until iosCaptureDone) */}
+                {ytIframeLoaded && !iosCaptureDone && isIOS && (
                   <div style={{
                     position: 'absolute', bottom: '16%', left: 0, right: 0,
                     zIndex: 8,
