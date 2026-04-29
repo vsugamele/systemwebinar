@@ -1344,10 +1344,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         // Handle both infoDelivery (polling) and onStateChange (event-driven)
         if (data?.event === 'infoDelivery' && typeof data?.info?.playerState === 'number') {
           if (data.info.playerState === 1) setYtPlaying(true)
+          if (data.info.playerState === 2) { setYtPlaying(false); setYtInteractionStarted(false) }
           if (data.info.playerState === 1 || data.info.playerState === 3) setYtInteractionStarted(true)
         } else if (data?.event === 'onStateChange' && typeof data?.info === 'number') {
-          // playerState 1 = playing, 3 = buffering
+          // playerState 1 = playing, 2 = paused, 3 = buffering
           if (data.info === 1) setYtPlaying(true)
+          if (data.info === 2) { setYtPlaying(false); setYtInteractionStarted(false) }
           if (data.info === 1 || data.info === 3) setYtInteractionStarted(true)
         }
       } catch { /* ignore */ }
@@ -2039,13 +2041,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                         <button
                           onClick={() => {
                             ytUnmutedRef.current = true
-                            const lsa = liveSessionStartedAtRef.current
-                            const offset = lsa
-                              ? Math.floor((Date.now() - new Date(lsa).getTime()) / 1000)
-                              : Math.floor(elapsedRef.current)
-                            setYtSrc(getYouTubeEmbedUrl(webinar.video_url!, offset) || '')
+                            if (ytIframeRef.current?.contentWindow) {
+                              ytIframeRef.current.contentWindow.postMessage('{"event":"command","func":"unMute","args":[]}', '*')
+                              ytIframeRef.current.contentWindow.postMessage('{"event":"command","func":"setVolume","args":[100]}', '*')
+                            }
                             setYtMuted(false)
-                            setYtKey(k => k + 1)
+                            // NO LONGER reloading the iframe (setYtKey) — this allows the
+                            // silent video to seamlessly continue without a black screen!
                           }}
                           style={{
                             background: 'rgba(255,255,255,0.95)', color: '#111',
