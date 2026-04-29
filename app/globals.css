@@ -909,8 +909,8 @@ tbody tr:hover td { background: var(--bg-hover); }
    Extends 9% beyond each edge so YouTube title bar (top) and watermark (bottom) are hidden.
    The parent .video-wrapper clips with overflow:hidden + clip-path:inset(0px). */
 .yt-iframe {
-  top: -7%;
-  height: 114%;
+  top: -9%;
+  height: 118%;
 }
 
 @media (max-width: 1024px) {
@@ -919,8 +919,8 @@ tbody tr:hover td { background: var(--bg-hover); }
      because WebKit creates a separate compositing layer that ignores the parent clip.
      Using top/height+overflow:hidden (enforced by clip-path on parent) is the correct approach. */
   .yt-iframe {
-    top: -7% !important;
-    height: 114% !important;
+    top: -9% !important;
+    height: 118% !important;
     transform: none !important;
   }
 }
