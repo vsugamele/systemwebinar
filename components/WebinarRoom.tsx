@@ -172,21 +172,31 @@ function isVimeoUrl(url: string): boolean {
   }
 }
 
-function getVimeoEmbedUrl(url: string): string | null {
+function getVimeoEmbedUrl(url: string, startSeconds = 0): string | null {
   try {
     const u = new URL(url)
     let videoId: string | null = null
+    let hashParam = ''
 
     if (u.hostname === 'player.vimeo.com') {
       videoId = u.pathname.split('/video/')[1]?.split('/')[0] ?? null
+      hashParam = u.searchParams.get('h') ? `&h=${u.searchParams.get('h')}` : ''
     } else {
       const parts = u.pathname.split('/').filter(Boolean)
       const last = parts[parts.length - 1] ?? null
       videoId = last && /^\d+$/.test(last) ? last : null
+      // handle hash-based unlisted videos: vimeo.com/123456/abcdef
+      if (parts.length >= 2 && /^[a-f0-9]+$/.test(parts[parts.length - 1] ?? '')) {
+        videoId = parts[parts.length - 2] ?? null
+        hashParam = `&h=${parts[parts.length - 1]}`
+      }
     }
 
     if (!videoId) return null
-    return `https://player.vimeo.com/video/${videoId}?autoplay=1&muted=1&controls=0&title=0&byline=0&portrait=0&loop=0&playsinline=1&background=1`
+    const startParam = startSeconds > 0 ? `#t=${startSeconds}s` : ''
+    // muted=1, background=0 (background mode disables all API events)
+    // api=1 enables postMessage events for play/pause/mute control
+    return `https://player.vimeo.com/video/${videoId}?autoplay=1&muted=1&controls=0&title=0&byline=0&portrait=0&loop=0&playsinline=1&transparent=0&api=1${hashParam}${startParam}`
   } catch {
     return null
   }
@@ -499,6 +509,14 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const [ytSrc, setYtSrc] = useState('')
   // ytIframeLoaded: true once the iframe onLoad fires — reveals the video background
   const [ytIframeLoaded, setYtIframeLoaded] = useState(false)
+
+  // ---- Vimeo state ----
+  const vimeoIframeRef = useRef<HTMLIFrameElement>(null)
+  const [vimeoMuted, setVimeoMuted] = useState(true)
+  const [vimeoPlaying, setVimeoPlaying] = useState(false)
+  const [vimeoBuffering, setVimeoBuffering] = useState(false)
+  const [vimeoIframeLoaded, setVimeoIframeLoaded] = useState(false)
+  const [vimeoSrc, setVimeoSrc] = useState('')
   const sessionOnBgRef = useRef(false)
 
   // Detect iOS — Safari requires user to click INSIDE the iframe to start video
@@ -1404,6 +1422,66 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [webinar.video_url, ytKey])
 
+  // ---- Vimeo: compute iframe src only on client (avoid SSR hydration mismatch) ----
+  useEffect(() => {
+    if (!isVimeoUrl(webinar.video_url || '')) return
+    const offset = startOffset > 0 ? startOffset : (webinar.evergreen_offset_seconds || 0)
+    setVimeoSrc(getVimeoEmbedUrl(webinar.video_url!, offset) || '')
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [webinar.video_url])
+
+  // ---- Vimeo: postMessage listener → drives vimeoPlaying / vimeoBuffering state ----
+  useEffect(() => {
+    if (!isVimeoUrl(webinar.video_url || '')) return
+    function onMessage(e: MessageEvent) {
+      try {
+        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
+        if (data?.player_id || data?.event) {
+          // Vimeo Player API sends events like: { event: 'play' | 'pause' | 'bufferstart' | 'bufferend' }
+          if (data.event === 'play') { setVimeoPlaying(true); setVimeoBuffering(false) }
+          if (data.event === 'pause') setVimeoPlaying(false)
+          if (data.event === 'bufferstart') setVimeoBuffering(true)
+          if (data.event === 'bufferend') { setVimeoBuffering(false) }
+          if (data.event === 'playProgress' || data.event === 'timeupdate') {
+            setVimeoPlaying(true); setVimeoBuffering(false)
+          }
+        }
+      } catch { /* ignore */ }
+    }
+    window.addEventListener('message', onMessage)
+
+    // After iframe loads, send Vimeo API listener registration
+    const register = setTimeout(() => {
+      vimeoIframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ method: 'addEventListener', value: 'play' }), '*'
+      )
+      vimeoIframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ method: 'addEventListener', value: 'pause' }), '*'
+      )
+      vimeoIframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ method: 'addEventListener', value: 'bufferstart' }), '*'
+      )
+      vimeoIframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ method: 'addEventListener', value: 'bufferend' }), '*'
+      )
+      vimeoIframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ method: 'addEventListener', value: 'timeupdate' }), '*'
+      )
+    }, 1000)
+
+    // Fallback: if Vimeo never reports playing after 10s, consider it playing
+    const fallback = setTimeout(() => {
+      setVimeoPlaying(prev => { if (!prev) return true; return prev })
+    }, 10000)
+
+    return () => {
+      window.removeEventListener('message', onMessage)
+      clearTimeout(register)
+      clearTimeout(fallback)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [webinar.video_url, vimeoIframeLoaded])
+
   // ---- Video setup (evergreen offset + block controls) ----
   useEffect(() => {
     const video = videoRef.current
@@ -2064,14 +2142,97 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
               </>
             ) : isVimeoUrl(webinar.video_url) ? (
-              <iframe
-                src={getVimeoEmbedUrl(webinar.video_url) || ''}
-                className="iframe-cover"
-                style={{ border: 'none', pointerEvents: 'none' }}
-                allow="autoplay; fullscreen; picture-in-picture"
-                allowFullScreen={false}
-                title={webinar.name}
-              />
+              <>
+                <iframe
+                  ref={vimeoIframeRef}
+                  src={vimeoSrc}
+                  className="yt-iframe"
+                  style={{ position: 'absolute', left: 0, width: '100%', border: 'none', pointerEvents: 'none' }}
+                  allow="autoplay; fullscreen; picture-in-picture"
+                  allowFullScreen={false}
+                  title={webinar.name}
+                  onLoad={() => setVimeoIframeLoaded(true)}
+                />
+
+                {/* ── Vimeo: Branding Masks (top + bottom fade) ────────── */}
+                <div style={{
+                  position: 'absolute', inset: 0, zIndex: 6,
+                  opacity: vimeoPlaying ? 0 : 1,
+                  transition: 'opacity 1s ease',
+                  pointerEvents: 'none',
+                }}>
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, height: '18%',
+                    background: 'linear-gradient(to bottom, #000 0%, #000 60%, rgba(0,0,0,0) 100%)',
+                  }} />
+                  <div style={{
+                    position: 'absolute', bottom: 0, left: 0, right: 0, height: '18%',
+                    background: 'linear-gradient(to top, #000 0%, #000 60%, rgba(0,0,0,0) 100%)',
+                  }} />
+                </div>
+
+                {/* ── Vimeo: Poster overlay — fades out when video plays ── */}
+                <div style={{
+                  position: 'absolute', inset: 0, zIndex: 7,
+                  backgroundColor: '#000',
+                  opacity: vimeoPlaying ? 0 : 1,
+                  transition: 'opacity 0.5s ease',
+                  pointerEvents: 'none',
+                }} />
+
+                {/* ── Vimeo: Spinner while loading or buffering ──────────── */}
+                {(!vimeoIframeLoaded || vimeoBuffering) && (
+                  <div style={{
+                    position: 'absolute', inset: 0, zIndex: 8,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    pointerEvents: 'none',
+                  }}>
+                    <div style={{
+                      width: 40, height: 40, borderRadius: '50%',
+                      border: '3px solid rgba(255,255,255,0.12)',
+                      borderTopColor: 'rgba(255,255,255,0.7)',
+                      animation: 'spin 0.8s linear infinite',
+                    }} />
+                  </div>
+                )}
+
+                {/* ── Vimeo: Unmute button ───────────────────────────────── */}
+                {vimeoIframeLoaded && vimeoMuted && (
+                  <div style={{
+                    position: 'absolute', inset: 0, zIndex: 9,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)',
+                  }}>
+                    <button
+                      onClick={() => {
+                        if (vimeoIframeRef.current?.contentWindow) {
+                          vimeoIframeRef.current.contentWindow.postMessage(
+                            JSON.stringify({ method: 'setVolume', value: 1 }), '*'
+                          )
+                          vimeoIframeRef.current.contentWindow.postMessage(
+                            JSON.stringify({ method: 'setMuted', value: false }), '*'
+                          )
+                          vimeoIframeRef.current.contentWindow.postMessage(
+                            JSON.stringify({ method: 'play' }), '*'
+                          )
+                        }
+                        setVimeoMuted(false)
+                      }}
+                      style={{
+                        background: 'rgba(255,255,255,0.95)', color: '#111',
+                        border: 'none', borderRadius: 50, padding: '16px 32px',
+                        fontSize: 16, fontWeight: 700, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        boxShadow: '0 4px 32px rgba(0,0,0,0.5)',
+                        animation: 'pulse-btn 1.8s ease-in-out infinite',
+                      }}
+                    >
+                      🔊 Clique para ativar o som
+                    </button>
+                  </div>
+                )}
+              </>
+
             ) : isVturbUrl(webinar.video_url) ? (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000', overflow: 'hidden' }}>
                 <iframe
