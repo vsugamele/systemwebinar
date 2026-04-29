@@ -489,6 +489,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // YouTube overlay state
   const ytIframeRef = useRef<HTMLIFrameElement>(null)
   const [ytPlaying, setYtPlaying] = useState(false)
+  // Tracks if the user has tapped the video and it has started buffering (playerState 3)
+  const [ytInteractionStarted, setYtInteractionStarted] = useState(false)
   // ytMuted tracks whether user has explicitly clicked to unmute
   const [ytMuted, setYtMuted] = useState(true)
   // ytKey: incrementing forces the iframe to remount (used when unmuting)
@@ -1331,10 +1333,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
         // Handle both infoDelivery (polling) and onStateChange (event-driven)
         if (data?.event === 'infoDelivery' && typeof data?.info?.playerState === 'number') {
-          setYtPlaying(data.info.playerState === 1)
+          if (data.info.playerState === 1) setYtPlaying(true)
+          if (data.info.playerState === 1 || data.info.playerState === 3) setYtInteractionStarted(true)
         } else if (data?.event === 'onStateChange' && typeof data?.info === 'number') {
-          // playerState 1 = playing
-          setYtPlaying(data.info === 1)
+          // playerState 1 = playing, 3 = buffering
+          if (data.info === 1) setYtPlaying(true)
+          if (data.info === 1 || data.info === 3) setYtInteractionStarted(true)
         }
       } catch { /* ignore */ }
     }
@@ -2014,10 +2018,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     )}
 
                     {/* ── iOS: instruction label (centered, pointer-events:none) ────
-                         The user taps YouTube's own play button directly (the only
-                         reliable way to start video on iOS Safari). This label is purely
-                         informational — it cannot block taps. Disappears on ytPlaying. ── */}
-                    {isIOS && !ytPlaying && ytIframeLoaded && (
+                         The user taps YouTube's own play button directly.
+                         Disappears IMMEDIATELY on ytInteractionStarted (buffering or playing)
+                         to eliminate any perceived "delay" or unresponsiveness. ── */}
+                    {isIOS && !ytInteractionStarted && ytIframeLoaded && (
                       <div style={{
                         position: 'absolute', inset: 0,
                         zIndex: 8, display: 'flex',
@@ -2034,6 +2038,25 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                         }}>
                           ▶ Toque no vídeo para iniciar
                         </div>
+                      </div>
+                    )}
+
+                    {/* ── iOS: Buffering Spinner ──────────────────────────────────
+                         Shows only while the video is buffering (tapped but not yet playing).
+                         Gives the user instant visual feedback that their tap worked. ── */}
+                    {isIOS && ytInteractionStarted && !ytPlaying && ytIframeLoaded && (
+                      <div style={{
+                        position: 'absolute', inset: 0,
+                        zIndex: 8, display: 'flex',
+                        alignItems: 'center', justifyContent: 'center',
+                        pointerEvents: 'none',
+                      }}>
+                        <div style={{
+                          width: 40, height: 40, borderRadius: '50%',
+                          border: '3px solid rgba(255,255,255,0.12)',
+                          borderTopColor: 'rgba(255,255,255,0.7)',
+                          animation: 'spin 0.8s linear infinite',
+                        }} />
                       </div>
                     )}
               </>
