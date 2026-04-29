@@ -1946,31 +1946,28 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 />
 
                 {/* ── Universal gradient masks ─────────────────────────────────────
-                     CSS overflow:hidden doesn't reliably clip iframe GPU layers on
-                     Android Chrome or iOS Safari. Instead we overlay CSS gradients
-                     that fade from opaque-black to transparent, covering the YouTube
-                     title bar (top) and watermark/logo (bottom) on every browser.
-                     pointer-events:none → clicks pass through to the iframe on iOS. ── */}
-                {ytIframeLoaded && (
-                  <>
-                    {/* Top gradient — hides title bar & channel branding */}
-                    <div style={{
-                      position: 'absolute', top: 0, left: 0, right: 0,
-                      height: '18%',
-                      background: 'linear-gradient(to bottom, rgba(0,0,0,0.97) 0%, rgba(0,0,0,0.7) 55%, transparent 100%)',
-                      zIndex: 7,
-                      pointerEvents: 'none',
-                    }} />
-                    {/* Bottom gradient — hides YouTube logo / "Assista no YouTube" */}
-                    <div style={{
-                      position: 'absolute', bottom: 0, left: 0, right: 0,
-                      height: '16%',
-                      background: 'linear-gradient(to top, rgba(0,0,0,0.97) 0%, rgba(0,0,0,0.7) 50%, transparent 100%)',
-                      zIndex: 7,
-                      pointerEvents: 'none',
-                    }} />
-                  </>
-                )}
+                     Shown ALWAYS (even before iframe loads) so YouTube branding is
+                     never visible. CSS overflow:hidden doesn't clip iframe GPU layers
+                     on Android/iOS; gradients are the only reliable cross-browser fix.
+                     pointer-events:none → clicks pass through to the iframe on iOS. —— */}
+                <>
+                  {/* Top gradient — hides title bar & channel branding */}
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0,
+                    height: '18%',
+                    background: 'linear-gradient(to bottom, rgba(0,0,0,0.97) 0%, rgba(0,0,0,0.7) 55%, transparent 100%)',
+                    zIndex: 7,
+                    pointerEvents: 'none',
+                  }} />
+                  {/* Bottom gradient — hides YouTube logo / "Assista no YouTube" */}
+                  <div style={{
+                    position: 'absolute', bottom: 0, left: 0, right: 0,
+                    height: '16%',
+                    background: 'linear-gradient(to top, rgba(0,0,0,0.97) 0%, rgba(0,0,0,0.7) 50%, transparent 100%)',
+                    zIndex: 7,
+                    pointerEvents: 'none',
+                  }} />
+                </>
 
                 {/* Spinner enquanto o iframe não carregou */}
                 {!ytIframeLoaded && (
@@ -2004,7 +2001,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     <button
                       onClick={() => {
                         ytUnmutedRef.current = true
-                        const offset = Math.floor(elapsedRef.current)
+                        // Prefer wall-clock elapsed (most accurate "live" position).
+                        // Falls back to elapsedRef if liveSessionStartedAt isn't set yet.
+                        const lsa = liveSessionStartedAtRef.current
+                        const offset = lsa
+                          ? Math.floor((Date.now() - new Date(lsa).getTime()) / 1000)
+                          : Math.floor(elapsedRef.current)
                         setYtSrc(getYouTubeEmbedUrl(webinar.video_url!, offset) || '')
                         setYtMuted(false)
                         setYtKey(k => k + 1)
