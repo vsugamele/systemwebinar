@@ -489,6 +489,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // YouTube overlay state
   const ytIframeRef = useRef<HTMLIFrameElement>(null)
   const [ytPlaying, setYtPlaying] = useState(false)
+  // Tracks if user tapped and YouTube is buffering (playerState 3), for instant UI feedback
+  const [ytInteractionStarted, setYtInteractionStarted] = useState(false)
   // ytMuted tracks whether user has explicitly clicked to unmute
   const [ytMuted, setYtMuted] = useState(true)
   // ytKey: incrementing forces the iframe to remount (used when unmuting)
@@ -517,13 +519,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // Container where we inject the iframe via DOM on iOS tap (user-gesture context)
   const iosIframeContainerRef = useRef<HTMLDivElement>(null)
 
-  // Branding mask: stays visible for 3s AFTER ytPlaying becomes true.
-  // This gives YouTube enough time to fully fade out its native title bar,
-  // "Watch on YouTube" watermark, etc. Works on ALL platforms.
-  const [ytBrandingVisible, setYtBrandingVisible] = useState(true)
+  // Delayed masks: stay visible for 1.8s AFTER ytPlaying becomes true.
+  // This covers the top/bottom YouTube UI while it natively fades out,
+  // without freezing the central video area.
+  const [ytBrandingMasksVisible, setYtBrandingMasksVisible] = useState(true)
   useEffect(() => {
     if (!ytPlaying) return
-    const timer = setTimeout(() => setYtBrandingVisible(false), 3000)
+    const timer = setTimeout(() => setYtBrandingMasksVisible(false), 1800)
     return () => clearTimeout(timer)
   }, [ytPlaying])
 
@@ -1341,10 +1343,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
         // Handle both infoDelivery (polling) and onStateChange (event-driven)
         if (data?.event === 'infoDelivery' && typeof data?.info?.playerState === 'number') {
-          setYtPlaying(data.info.playerState === 1)
+          if (data.info.playerState === 1) setYtPlaying(true)
+          if (data.info.playerState === 1 || data.info.playerState === 3) setYtInteractionStarted(true)
         } else if (data?.event === 'onStateChange' && typeof data?.info === 'number') {
-          // playerState 1 = playing
-          setYtPlaying(data.info === 1)
+          // playerState 1 = playing, 3 = buffering
+          if (data.info === 1) setYtPlaying(true)
+          if (data.info === 1 || data.info === 3) setYtInteractionStarted(true)
         }
       } catch { /* ignore */ }
     }
@@ -1966,25 +1970,44 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       onLoad={() => setYtIframeLoaded(true)}
                     />
 
-                    {/* ── Poster Overlay (all platforms) ─────────────────────────
-                         Covers 100% of the YouTube UI using the video's own thumbnail.
-                         pointer-events:none lets taps/clicks pass through.
-                         
-                         Stays visible for 3 FULL SECONDS after ytPlaying=true so
-                         YouTube has time to natively fade its title bar / watermark.
-                         Since the poster IS the video frame, users just see a still
-                         image that smoothly "comes alive" — zero branding flash. ── */}
-                    {ytBrandingVisible && (
+                    {/* ── Universal Branding Delayed Masks ────────────────────────
+                         YouTube natively takes ~2 seconds to fade out its title bar
+                         AFTER playback starts. This layer keeps black bars over the
+                         top and bottom for an extra 1.8s after ytPlaying becomes true.
+                         This prevents the "1 second flash" of YouTube data without
+                         freezing the actual video content in the middle. ── */}
+                    <div style={{
+                      position: 'absolute', inset: 0, zIndex: 6,
+                      opacity: ytBrandingMasksVisible ? 1 : 0,
+                      transition: 'opacity 0.8s ease',
+                      pointerEvents: 'none',
+                    }}>
                       <div style={{
-                        position: 'absolute', inset: 0, zIndex: 7,
-                        backgroundImage: ytThumb ? `url(${ytThumb})` : undefined,
-                        backgroundColor: '#000',
-                        backgroundSize: 'cover', backgroundPosition: 'center',
-                        pointerEvents: 'none',
-                      }}>
-                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)' }} />
-                      </div>
-                    )}
+                        position: 'absolute', top: 0, left: 0, right: 0, height: '22%',
+                        background: 'linear-gradient(to bottom, #000 0%, #000 65%, rgba(0,0,0,0) 100%)',
+                      }} />
+                      <div style={{
+                        position: 'absolute', bottom: 0, left: 0, right: 0, height: '18%',
+                        background: 'linear-gradient(to top, #000 0%, #000 65%, rgba(0,0,0,0) 100%)',
+                      }} />
+                    </div>
+
+                    {/* ── Universal Poster Overlay ───────────────────────────────
+                         Covers 100% of the YouTube UI before play using the video's
+                         own thumbnail. pointer-events:none lets taps pass through.
+                         FADES OUT IMMEDIATELY when video starts playing to avoid
+                         the "3 second frozen delay" feeling. ── */}
+                    <div style={{
+                      position: 'absolute', inset: 0, zIndex: 7,
+                      backgroundImage: ytThumb ? `url(${ytThumb})` : undefined,
+                      backgroundColor: '#000',
+                      backgroundSize: 'cover', backgroundPosition: 'center',
+                      opacity: !ytPlaying ? 1 : 0,
+                      transition: 'opacity 0.4s ease',
+                      pointerEvents: 'none',
+                    }}>
+                      <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)' }} />
+                    </div>
 
                     {/* ── Non-iOS: spinner while iframe loads ─────────────────── */}
                     {!isIOS && !ytIframeLoaded && (
@@ -2039,10 +2062,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     )}
 
                     {/* ── iOS: instruction label (centered, pointer-events:none) ────
-                         The user taps YouTube's own play button directly (the only
-                         reliable way to start video on iOS Safari). This label is purely
-                         informational — it cannot block taps. Disappears on ytPlaying. ── */}
-                    {isIOS && !ytPlaying && ytIframeLoaded && (
+                         Disappears IMMEDIATELY on ytInteractionStarted (buffering or playing)
+                         to eliminate any perceived "delay" or unresponsiveness. ── */}
+                    {isIOS && !ytInteractionStarted && ytIframeLoaded && (
                       <div style={{
                         position: 'absolute', inset: 0,
                         zIndex: 8, display: 'flex',
@@ -2059,6 +2081,25 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                         }}>
                           ▶ Toque no vídeo para iniciar
                         </div>
+                      </div>
+                    )}
+
+                    {/* ── iOS: Buffering Spinner ──────────────────────────────────
+                         Shows only while the video is buffering (tapped but not yet playing).
+                         Gives the user instant visual feedback that their tap worked. ── */}
+                    {isIOS && ytInteractionStarted && !ytPlaying && ytIframeLoaded && (
+                      <div style={{
+                        position: 'absolute', inset: 0,
+                        zIndex: 8, display: 'flex',
+                        alignItems: 'center', justifyContent: 'center',
+                        pointerEvents: 'none',
+                      }}>
+                        <div style={{
+                          width: 40, height: 40, borderRadius: '50%',
+                          border: '3px solid rgba(255,255,255,0.12)',
+                          borderTopColor: 'rgba(255,255,255,0.7)',
+                          animation: 'spin 0.8s linear infinite',
+                        }} />
                       </div>
                     )}
               </>
