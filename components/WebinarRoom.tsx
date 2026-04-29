@@ -535,12 +535,17 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // Container where we inject the iframe via DOM on iOS tap (user-gesture context)
   const iosIframeContainerRef = useRef<HTMLDivElement>(null)
 
-  // Delayed masks: stay visible for 1.8s AFTER ytPlaying becomes true.
-  // This covers the top/bottom YouTube UI while it natively fades out,
-  // without freezing the central video area.
+  // Delayed masks: show for 1.8s every time ytPlaying transitions to true.
+  // This covers YouTube's native title bar fade-out on EVERY play/resume
+  // (including after screen lock/unlock on iOS).
   const [ytBrandingMasksVisible, setYtBrandingMasksVisible] = useState(true)
   useEffect(() => {
-    if (!ytPlaying) return
+    if (!ytPlaying) {
+      // Reset masks immediately when paused so they are ready for next play
+      setYtBrandingMasksVisible(true)
+      return
+    }
+    // Video is playing: keep masks for 1.8s then fade out
     const timer = setTimeout(() => setYtBrandingMasksVisible(false), 1800)
     return () => clearTimeout(timer)
   }, [ytPlaying])
@@ -2068,17 +2073,18 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     </div>
 
                     {/* ── Universal Poster Overlay ───────────────────────────────
-                         Covers 100% of the YouTube UI before play using the video's
-                         own thumbnail. pointer-events:none lets taps pass through.
-                         FADES OUT IMMEDIATELY when video starts playing to avoid
-                         the "3 second frozen delay" feeling. ── */}
+                         Covers 100% of the YouTube UI before every play (including
+                         after screen lock/unlock). Disappears INSTANTLY when
+                         ytPlaying=true so the YouTube UI never shows through. ── */}
                     <div style={{
                       position: 'absolute', inset: 0, zIndex: 7,
                       backgroundImage: ytThumb ? `url(${ytThumb})` : undefined,
                       backgroundColor: '#000',
                       backgroundSize: 'cover', backgroundPosition: 'center',
                       opacity: !ytPlaying ? 1 : 0,
-                      transition: 'opacity 0.4s ease',
+                      // Instant on play (0.05s) to prevent any YouTube UI flash.
+                      // The Branding Masks layer above stays for 1.8s and handles the edge.
+                      transition: ytPlaying ? 'opacity 0.05s' : 'opacity 0s',
                       pointerEvents: 'none',
                     }}>
                       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)' }} />
