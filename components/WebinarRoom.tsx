@@ -1935,9 +1935,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                   onLoad={() => setYtIframeLoaded(true)}
                 />
 
-                {/* Black bar on top — covers YouTube title/channel name branding.
-                    pointer-events:none so clicks pass through to the iframe on iOS. */}
-                {ytIframeLoaded && (
+                {/* Black bar on top — covers YouTube title/channel name branding on iOS.
+                    On Android/desktop, clip-path+top:-9%/height:118% handles this cleanly.
+                    pointer-events:none so clicks pass through to the iframe. */}
+                {ytIframeLoaded && isIOS && (
                   <div style={{
                     position: 'absolute', top: 0, left: 0, right: 0,
                     height: '14%',
@@ -1947,9 +1948,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                   }} />
                 )}
 
-                {/* Black bar on bottom — covers "Assista no YouTube" + logo branding.
-                    pointer-events:none so clicks pass through to the iframe on iOS. */}
-                {ytIframeLoaded && (
+                {/* Black bar on bottom — covers "Assista no YouTube" + logo branding on iOS.
+                    On Android/desktop, clip-path+top:-9%/height:118% handles this cleanly.
+                    pointer-events:none so clicks pass through to the iframe. */}
+                {ytIframeLoaded && isIOS && (
                   <div style={{
                     position: 'absolute', bottom: 0, left: 0, right: 0,
                     height: '12%',
