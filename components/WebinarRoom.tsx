@@ -505,6 +505,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // Using the API directly (vs postMessage strings) gives us reliable unMute/setVolume on iOS
   const ytPlayerRef   = useRef<any>(null)
   const ytWrapperRef  = useRef<HTMLDivElement>(null)
+  const ytUnmuteTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [ytPlaying, setYtPlaying]     = useState(false)
   const [ytBuffering, setYtBuffering] = useState(false)
   const [ytMuted, setYtMuted]         = useState(true)
@@ -1382,6 +1383,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         },
         events: {
           onReady: () => {
+            // Cancel fallback timer — onReady fired normally
+            if (ytUnmuteTimer.current) { clearTimeout(ytUnmuteTimer.current); ytUnmuteTimer.current = null }
             setYtIframeLoaded(true)
           },
           onStateChange: (e: any) => {
@@ -1392,6 +1395,14 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           },
         },
       })
+
+      // Fallback for old iOS Safari: onReady may not fire reliably.
+      // Force ytIframeLoaded=true after 5s so the unmute button always appears.
+      if (ytUnmuteTimer.current) clearTimeout(ytUnmuteTimer.current)
+      ytUnmuteTimer.current = setTimeout(() => {
+        setYtIframeLoaded(true)
+        ytUnmuteTimer.current = null
+      }, 5000)
     }
 
     // When waitingDone flips to true, React schedules a re-render but hasn't
@@ -1448,6 +1459,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     }
 
     return () => {
+      // Clear the fallback timer
+      if (ytUnmuteTimer.current) { clearTimeout(ytUnmuteTimer.current); ytUnmuteTimer.current = null }
       // Destroy the player on unmount / video URL change / state transitions
       try { ytPlayerRef.current?.destroy() } catch {}
       ytPlayerRef.current = null
