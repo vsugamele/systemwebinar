@@ -783,7 +783,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
         // playerState 1 = playing, -1 = unstarted, 0 = ended, 2 = paused, 3 = buffering
         if (data?.event === 'infoDelivery' && data?.info?.playerState === 1) {
-          setYtMuted(false)
+          // Do NOT set ytMuted(false) here — the video starts playing while still muted.
+          // ytMuted is only cleared when the user explicitly clicks "Clique para ativar o som".
           setYtPlaying(true)
         }
       } catch { /* ignore non-JSON messages */ }
@@ -1412,12 +1413,15 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     }
 
     return () => {
-      // Destroy the player on unmount / video URL change
+      // Destroy the player on unmount / video URL change / waitingDone change
       try { ytPlayerRef.current?.destroy() } catch {}
       ytPlayerRef.current = null
     }
+  // waitingDone is required: ytWrapperRef.current is null while the waiting room is shown
+  // (the div lives inside {waitingDone && ...}). Adding it here re-runs the effect once
+  // the waiting room ends and the wrapper div is mounted in the DOM.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webinar.video_url])
+  }, [webinar.video_url, waitingDone])
 
   // ---- Vimeo: compute iframe src only on client (avoid SSR hydration mismatch) ----
   useEffect(() => {
@@ -2036,7 +2040,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       <div
                         ref={ytWrapperRef}
                         className="yt-iframe"
-                        style={{ position: 'absolute', left: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
+                        style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
                       />
 
                     {/* ── Invisible Shield ───────────────────────────────────────
@@ -2108,8 +2112,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       </div>
                     )}
 
-                    {/* ── Unmute button (shows if muted) ── */}
-                    {ytMuted && (
+                    {/* ── Unmute button: shows when muted and iframe ready ──
+                         On iOS, Safari blocks autoplay with sound. The video starts
+                         paused+muted and ytPlaying never becomes true before the
+                         user interacts. So we MUST NOT gate this on ytPlaying.
+                         We only wait for ytIframeLoaded so ytPlayerRef is valid. ── */}
+                    {ytMuted && ytIframeLoaded && (
                       <div style={{
                         position: 'absolute', inset: 0, zIndex: 8,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -2118,13 +2126,22 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       }}>
                         <button
                           onClick={() => {
+                            const player = ytPlayerRef.current
+                            if (!player) return
                             try {
-                              // Direct API calls — far more reliable than postMessage strings on iOS
-                              ytPlayerRef.current?.playVideo()
-                              ytPlayerRef.current?.unMute()
-                              ytPlayerRef.current?.setVolume(100)
-                            } catch {}
-                            setYtMuted(false)
+                              // 1. Unlock iOS audio context within the user gesture
+                              try {
+                                const AC = window.AudioContext || (window as any).webkitAudioContext
+                                if (AC) new AC().resume()
+                              } catch {}
+                              // 2. playVideo() FIRST — required on iOS to start audio
+                              player.playVideo()
+                              player.unMute()
+                              player.setVolume(100)
+                              setYtMuted(false)
+                            } catch {
+                              // API threw — keep button visible so user can retry
+                            }
                           }}
                           style={{
                             background: 'rgba(255,255,255,0.95)', color: '#111',
