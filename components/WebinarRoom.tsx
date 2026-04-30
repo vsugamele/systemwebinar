@@ -1394,8 +1394,39 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       })
     }
 
+    // When waitingDone flips to true, React schedules a re-render but hasn't
+    // committed the DOM yet — ytWrapperRef.current is still null at this point.
+    // Double-RAF defers execution until AFTER React has painted the new DOM,
+    // guaranteeing ytWrapperRef.current points to the mounted wrapper div.
+    function createPlayerDeferred() {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          if ((window as any).YT?.Player) {
+            createPlayer()
+          } else {
+            if (!document.getElementById('yt-iframe-api-script')) {
+              const tag = document.createElement('script')
+              tag.id  = 'yt-iframe-api-script'
+              tag.src = 'https://www.youtube.com/iframe_api'
+              document.head.appendChild(tag)
+            }
+            const prev = (window as any).onYouTubeIframeAPIReady
+            ;(window as any).onYouTubeIframeAPIReady = () => {
+              prev?.()
+              createPlayer()
+            }
+          }
+        })
+      })
+    }
+
     if ((window as any).YT?.Player) {
-      createPlayer()
+      // If YT API is already loaded, still defer so DOM is ready after waitingDone transition
+      if (waitingDone) {
+        createPlayerDeferred()
+      } else {
+        createPlayer()
+      }
     } else {
       // Inject the API script only once globally
       if (!document.getElementById('yt-iframe-api-script')) {
