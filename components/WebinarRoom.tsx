@@ -123,10 +123,21 @@ function formatCountdown(secs: number) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-/** Extracts video ID from any YouTube URL */
+/** Helper to extract URL from an iframe embed code */
+function extractSrcFromIframe(input: string): string {
+  if (!input) return ''
+  if (input.includes('<iframe') && input.includes('src=')) {
+    const match = input.match(/src=["']([^"']+)["']/)
+    if (match) return match[1]
+  }
+  return input
+}
+
+/** Extracts video ID from any YouTube URL or iframe embed code */
 function getYouTubeVideoId(url: string): string | null {
   try {
-    const u = new URL(url)
+    const cleanUrl = extractSrcFromIframe(url)
+    const u = new URL(cleanUrl)
     if (u.hostname === 'youtu.be') return u.pathname.slice(1)
     if (['www.youtube.com','youtube.com','m.youtube.com'].includes(u.hostname)) {
       const v = u.searchParams.get('v')
@@ -147,7 +158,8 @@ function getYouTubeEmbedUrl(url: string, startSeconds = 0): string | null {
 
 function isYouTubeUrl(url: string): boolean {
   try {
-    const u = new URL(url)
+    const cleanUrl = extractSrcFromIframe(url)
+    const u = new URL(cleanUrl)
     return ['youtu.be', 'www.youtube.com', 'youtube.com', 'm.youtube.com'].includes(u.hostname)
   } catch {
     return false
@@ -156,7 +168,8 @@ function isYouTubeUrl(url: string): boolean {
 
 function isVimeoUrl(url: string): boolean {
   try {
-    const u = new URL(url)
+    const cleanUrl = extractSrcFromIframe(url)
+    const u = new URL(cleanUrl)
     return ['vimeo.com', 'www.vimeo.com', 'player.vimeo.com'].includes(u.hostname)
   } catch {
     return false
@@ -165,7 +178,8 @@ function isVimeoUrl(url: string): boolean {
 
 function getVimeoEmbedUrl(url: string, startSeconds = 0): string | null {
   try {
-    const u = new URL(url)
+    const cleanUrl = extractSrcFromIframe(url)
+    const u = new URL(cleanUrl)
     let videoId: string | null = null
     let hashParam = ''
 
