@@ -1949,7 +1949,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           </div>
         </div>
 
-        <div className={`video-wrapper${(webinar.video_url && (isVimeoUrl(webinar.video_url) || isVturbUrl(webinar.video_url))) ? ' video-wrapper-cover' : ''}`} style={{ position: 'relative' }}>
+        <div className={`video-wrapper${(webinar.video_url && (isVimeoUrl(webinar.video_url) || isVturbUrl(webinar.video_url))) ? ' video-wrapper-cover' : ''}`} style={{ position: 'relative', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           {/* OFFLINE screen — no session in the next 12h */}
           {sessionIsOffline && (
             <div style={{
@@ -2025,9 +2025,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
           {!sessionIsScheduledFuture && webinar.video_url ? (
             isYouTubeUrl(webinar.video_url) ? (
-                   <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', overflow: 'hidden', background: '#000' }}>
+                   <div style={{ position: 'relative', width: '100%', maxHeight: '100%', aspectRatio: '16/9', overflow: 'hidden', background: '#000' }}>
                      <div style={{
-                       position: 'absolute', top: '-120px', left: '-10%', width: '120%', height: 'calc(100% + 240px)',
+                       position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
+                       transform: 'scale(1.2)',
                        pointerEvents: 'none',
                      }}>
                       {/* ── YouTube Iframe API Wrapper ───────────────────────────
@@ -2085,8 +2086,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     }}>
                       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)' }} />
                     </div>
+                  </div>
 
-                    {/* ── Spinner while iframe loads or buffers (All platforms) ── */}
+                  {/* ── OVERLAYS PLACED OUTSIDE THE SCALE CONTAINER ── */}
+                  
+                  {/* ── Spinner while iframe loads or buffers (All platforms) ── */}
                     {(!ytIframeLoaded || ytBuffering) && (
                       <div style={{
                         position: 'absolute', inset: 0, zIndex: 4,
@@ -2109,7 +2113,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     )}
 
                     {/* ── Unmute button (shows if muted) ── */}
-                    {ytMuted && (
+                    {(ytIframeLoaded || ytPlaying) && ytMuted && (
                       <div style={{
                         position: 'absolute', inset: 0, zIndex: 8,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -2139,25 +2143,25 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                         </button>
                       </div>
                     )}
-                </div>
               </div>
             ) : isVimeoUrl(webinar.video_url) ? (
-              <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', overflow: 'hidden', background: '#000' }}>
-                <iframe
-                  ref={vimeoIframeRef}
-                  src={vimeoSrc}
-                  className="yt-iframe"
-                  style={{ position: 'absolute', left: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
-                  allow="autoplay; fullscreen; picture-in-picture"
-                  allowFullScreen={false}
-                  title={webinar.name}
-                  onLoad={() => setVimeoIframeLoaded(true)}
-                />
+              <div style={{ position: 'relative', width: '100%', maxHeight: '100%', aspectRatio: '16/9', overflow: 'hidden', background: '#000' }}>
+                <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', transform: 'scale(1.05)', pointerEvents: 'none' }}>
+                  <iframe
+                    ref={vimeoIframeRef}
+                    src={vimeoSrc}
+                    className="yt-iframe"
+                    style={{ position: 'absolute', left: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
+                    allow="autoplay; fullscreen; picture-in-picture"
+                    allowFullScreen={false}
+                    title={webinar.name}
+                    onLoad={() => setVimeoIframeLoaded(true)}
+                  />
 
-                {/* ── Vimeo: Branding Masks (top + bottom fade) ────────── */}
-                <div style={{
-                  position: 'absolute', inset: 0, zIndex: 6,
-                  opacity: vimeoPlaying ? 0 : 1,
+                  {/* ── Vimeo: Branding Masks (top + bottom fade) ────────── */}
+                  <div style={{
+                    position: 'absolute', inset: 0, zIndex: 6,
+                    opacity: vimeoPlaying ? 0 : 1,
                   transition: 'opacity 1s ease',
                   pointerEvents: 'none',
                 }}>
@@ -2180,6 +2184,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                   pointerEvents: 'none',
                 }} />
 
+                </div>
                 {/* ── Vimeo: Spinner while loading or buffering ──────────── */}
                 {(!vimeoIframeLoaded || vimeoBuffering) && (
                   <div style={{
@@ -2197,7 +2202,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 )}
 
                 {/* ── Vimeo: Unmute button ───────────────────────────────── */}
-                {vimeoMuted && (
+                {(vimeoIframeLoaded || vimeoPlaying) && vimeoMuted && (
                   <div style={{
                     position: 'absolute', inset: 0, zIndex: 9,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
