@@ -490,7 +490,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // ytPlayerRef: holds the YT.Player instance from the official Iframe API
   // Using the API directly (vs postMessage strings) gives us reliable unMute/setVolume on iOS
   const ytPlayerRef   = useRef<any>(null)
-  const ytDivId       = useRef(`yt-player-${Math.random().toString(36).slice(2)}`)
+  const ytWrapperRef  = useRef<HTMLDivElement>(null)
   const [ytPlaying, setYtPlaying]     = useState(false)
   const [ytBuffering, setYtBuffering] = useState(false)
   const [ytMuted, setYtMuted]         = useState(true)
@@ -1337,7 +1337,17 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
     function createPlayer() {
       if (ytPlayerRef.current) return // already created
-      ytPlayerRef.current = new (window as any).YT.Player(ytDivId.current, {
+      if (!ytWrapperRef.current) return
+
+      // Under React Strict Mode, the component mounts/unmounts/remounts.
+      // YT.Player replaces the target element with an <iframe>. If we pass a React-managed
+      // element directly, React loses track of it. Instead, we use a wrapper and manually
+      // inject a fresh child element for YT to consume on every mount.
+      ytWrapperRef.current.innerHTML = ''
+      const playerDiv = document.createElement('div')
+      ytWrapperRef.current.appendChild(playerDiv)
+
+      ytPlayerRef.current = new (window as any).YT.Player(playerDiv, {
         videoId,
         playerVars: {
           autoplay:        1,
@@ -1390,14 +1400,6 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       try { ytPlayerRef.current?.destroy() } catch {}
       ytPlayerRef.current = null
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webinar.video_url])
-
-  // Fallback: if YT API never reports playing after 10s, dismiss the loader
-  useEffect(() => {
-    if (!isYouTubeUrl(webinar.video_url || '')) return
-    const t = setTimeout(() => setYtPlaying(p => p || true), 10000)
-    return () => clearTimeout(t)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [webinar.video_url])
 
@@ -2008,11 +2010,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           {!sessionIsScheduledFuture && webinar.video_url ? (
             isYouTubeUrl(webinar.video_url) ? (
                    <>
-                    {/* ── YouTube Iframe API target div ────────────────────────
-                         YT.Player replaces this div with an iframe internally.
-                         pointer-events:none prevents any click from reaching YT. ── */}
+                    {/* ── YouTube Iframe API Wrapper ───────────────────────────
+                         We pass ytWrapperRef, and the effect creates an inner div
+                         that YT.Player consumes. This survives Strict Mode remounts. ── */}
                     <div
-                      id={ytDivId.current}
+                      ref={ytWrapperRef}
                       className="yt-iframe"
                       style={{ position: 'absolute', left: 0, width: '100%', border: 'none', pointerEvents: 'none' }}
                     />
