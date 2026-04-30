@@ -1349,6 +1349,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
       ytPlayerRef.current = new (window as any).YT.Player(playerDiv, {
         videoId,
+        width: '100%',
+        height: '100%',
         playerVars: {
           autoplay:        1,
           mute:            1,
@@ -2016,7 +2018,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     <div
                       ref={ytWrapperRef}
                       className="yt-iframe"
-                      style={{ position: 'absolute', left: 0, width: '100%', border: 'none', pointerEvents: 'none' }}
+                      style={{ position: 'absolute', left: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
                     />
 
                     {/* ── Invisible Shield ───────────────────────────────────────
@@ -2094,6 +2096,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                         position: 'absolute', inset: 0, zIndex: 8,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)',
+                        pointerEvents: 'auto',
                       }}>
                         <button
                           onClick={() => {
