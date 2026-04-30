@@ -2025,15 +2025,19 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
           {!sessionIsScheduledFuture && webinar.video_url ? (
             isYouTubeUrl(webinar.video_url) ? (
-                   <>
-                    {/* ── YouTube Iframe API Wrapper ───────────────────────────
-                         We pass ytWrapperRef, and the effect creates an inner div
-                         that YT.Player consumes. This survives Strict Mode remounts. ── */}
-                    <div
-                      ref={ytWrapperRef}
-                      className="yt-iframe"
-                      style={{ position: 'absolute', left: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
-                    />
+                   <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', overflow: 'hidden', background: '#000' }}>
+                     <div style={{
+                       position: 'absolute', top: '-120px', left: '-10%', width: '120%', height: 'calc(100% + 240px)',
+                       pointerEvents: 'none',
+                     }}>
+                      {/* ── YouTube Iframe API Wrapper ───────────────────────────
+                           We pass ytWrapperRef, and the effect creates an inner div
+                           that YT.Player consumes. This survives Strict Mode remounts. ── */}
+                      <div
+                        ref={ytWrapperRef}
+                        className="yt-iframe"
+                        style={{ position: 'absolute', left: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
+                      />
 
                     {/* ── Invisible Shield ───────────────────────────────────────
                          Intercepts ALL clicks, right-clicks and double-taps
@@ -2104,8 +2108,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       </div>
                     )}
 
-                    {/* ── Unmute button (shows after player ready + muted) ── */}
-                    {ytIframeLoaded && ytMuted && (
+                    {/* ── Unmute button (shows if muted) ── */}
+                    {ytMuted && (
                       <div style={{
                         position: 'absolute', inset: 0, zIndex: 8,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -2135,15 +2139,15 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                         </button>
                       </div>
                     )}
-
-              </>
+                </div>
+              </div>
             ) : isVimeoUrl(webinar.video_url) ? (
-              <>
+              <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', overflow: 'hidden', background: '#000' }}>
                 <iframe
                   ref={vimeoIframeRef}
                   src={vimeoSrc}
                   className="yt-iframe"
-                  style={{ position: 'absolute', left: 0, width: '100%', border: 'none', pointerEvents: 'none' }}
+                  style={{ position: 'absolute', left: 0, width: '100%', height: '100%', border: 'none', pointerEvents: 'none' }}
                   allow="autoplay; fullscreen; picture-in-picture"
                   allowFullScreen={false}
                   title={webinar.name}
@@ -2193,7 +2197,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 )}
 
                 {/* ── Vimeo: Unmute button ───────────────────────────────── */}
-                {vimeoIframeLoaded && vimeoMuted && (
+                {vimeoMuted && (
                   <div style={{
                     position: 'absolute', inset: 0, zIndex: 9,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -2227,7 +2231,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     </button>
                   </div>
                 )}
-              </>
+              </div>
 
             ) : isVturbUrl(webinar.video_url) ? (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000', overflow: 'hidden' }}>
