@@ -123,35 +123,26 @@ function formatCountdown(secs: number) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
-/** Converts any YouTube watch/share URL into an embed URL */
-function getYouTubeEmbedUrl(url: string, startSeconds = 0): string | null {
+/** Extracts video ID from any YouTube URL */
+function getYouTubeVideoId(url: string): string | null {
   try {
     const u = new URL(url)
-    let videoId: string | null = null
-
-    if (u.hostname === 'youtu.be') {
-      videoId = u.pathname.slice(1)
-    } else if (
-      u.hostname === 'www.youtube.com' ||
-      u.hostname === 'youtube.com' ||
-      u.hostname === 'm.youtube.com'
-    ) {
-      videoId = u.searchParams.get('v')
-      if (!videoId && u.pathname.startsWith('/embed/')) {
-        videoId = u.pathname.split('/embed/')[1]?.split('?')[0]
-      }
+    if (u.hostname === 'youtu.be') return u.pathname.slice(1)
+    if (['www.youtube.com','youtube.com','m.youtube.com'].includes(u.hostname)) {
+      const v = u.searchParams.get('v')
+      if (v) return v
+      if (u.pathname.startsWith('/embed/')) return u.pathname.split('/embed/')[1]?.split('?')[0] ?? null
     }
-
-    if (!videoId) return null
-    const start = startSeconds > 0 ? `&start=${startSeconds}` : ''
-    // mute=1 is required for iOS Safari to allow autoplay. 
-    // We will unmute it later via postMessage when the user clicks our custom unmute button.
-    const origin = typeof window !== 'undefined' ? encodeURIComponent(window.location.origin) : ''
-    const originParam = origin ? `&origin=${origin}` : ''
-    return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&modestbranding=1&rel=0&disablekb=1&iv_load_policy=3&playsinline=1&fs=0&showinfo=0&enablejsapi=1${originParam}${start}`
-  } catch {
     return null
-  }
+  } catch { return null }
+}
+
+/** Converts any YouTube watch/share URL into an embed URL */
+function getYouTubeEmbedUrl(url: string, startSeconds = 0): string | null {
+  const videoId = getYouTubeVideoId(url)
+  if (!videoId) return null
+  const start = startSeconds > 0 ? `&start=${startSeconds}` : ''
+  return `https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&mute=1&controls=0&modestbranding=1&rel=0&disablekb=1&iv_load_policy=3&playsinline=1&fs=0&showinfo=0&enablejsapi=1${start}`
 }
 
 function isYouTubeUrl(url: string): boolean {
@@ -495,20 +486,16 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const waitEnabled = !!webinar.waiting_room_enabled && startOffset > 0 && startOffset < waitDelay
   const [waitingDone, setWaitingDone] = useState(!waitEnabled)
 
-  // YouTube overlay state
-  const ytIframeRef = useRef<HTMLIFrameElement>(null)
-  const [ytPlaying, setYtPlaying] = useState(false)
+  // ---- YouTube Player API state ----
+  // ytPlayerRef: holds the YT.Player instance from the official Iframe API
+  // Using the API directly (vs postMessage strings) gives us reliable unMute/setVolume on iOS
+  const ytPlayerRef   = useRef<any>(null)
+  const ytDivId       = useRef(`yt-player-${Math.random().toString(36).slice(2)}`)
+  const [ytPlaying, setYtPlaying]     = useState(false)
   const [ytBuffering, setYtBuffering] = useState(false)
-  // ytMuted tracks whether user has explicitly clicked to unmute
-  const [ytMuted, setYtMuted] = useState(true)
-  // ytKey: incrementing forces the iframe to remount (used when unmuting)
-  const [ytKey, setYtKey] = useState(0)
-  // When true, the next iframe load should NOT be silenced (user unmuted)
-  const ytUnmutedRef = useRef(false)
-  // Stable YouTube src — empty string during SSR, set on client after mount
-  const [ytSrc, setYtSrc] = useState('')
-  // ytIframeLoaded: true once the iframe onLoad fires — reveals the video background
+  const [ytMuted, setYtMuted]         = useState(true)
   const [ytIframeLoaded, setYtIframeLoaded] = useState(false)
+  const ytStartOffset = useRef(0)
 
   // ---- Vimeo state ----
   const vimeoIframeRef = useRef<HTMLIFrameElement>(null)
@@ -758,9 +745,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         const video = videoRef.current
         if (video?.paused) video.play().catch(() => {})
         if (isYouTubeUrl(webinar.video_url || '')) {
-          ytIframeRef.current?.contentWindow?.postMessage(
-            JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*'
-          )
+          try { ytPlayerRef.current?.playVideo() } catch {}
         }
         if (sessionOnBgRef.current) {
           sessionOnBgRef.current = false
@@ -819,9 +804,6 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   
   const ytPlayingRef = useRef(ytPlaying)
   useEffect(() => { ytPlayingRef.current = ytPlaying }, [ytPlaying])
-
-  // Reset ytIframeLoaded when the iframe remounts (ytKey increments)
-  useEffect(() => { setYtIframeLoaded(false) }, [ytKey])
 
   // iOS: dismiss the loading overlay as soon as YouTube confirms it is playing
   // (ytPlaying is driven by the global postMessage listener that catches all YT iframes)
@@ -1344,88 +1326,80 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events])
 
-  // ---- YouTube: compute iframe src only on client to avoid SSR hydration mismatch ----
+  // ---- YouTube Iframe API: load the API script once and create the player ----
   useEffect(() => {
     if (!isYouTubeUrl(webinar.video_url || '')) return
-    const offset = ytKey > 0
-      ? Math.floor(elapsedRef.current)
-      : (startOffset > 0 ? startOffset : (webinar.evergreen_offset_seconds || 0))
-    setYtSrc(getYouTubeEmbedUrl(webinar.video_url!, offset) || '')
-  // startOffset intentionally excluded: we only want the src to change when ytKey changes
-  // (router.refresh changes startOffset but must NOT reload the iframe mid-session)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webinar.video_url, ytKey])
+    const videoId = getYouTubeVideoId(webinar.video_url!)
+    if (!videoId) return
 
-  // ---- YouTube: always-on playerState listener → drives ytPlaying state ----
-  useEffect(() => {
-    if (!isYouTubeUrl(webinar.video_url || '')) return
-    function onMessage(e: MessageEvent) {
-      try {
-        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
-        // Handle both infoDelivery (polling) and onStateChange (event-driven)
-        if (data?.event === 'infoDelivery' && typeof data?.info?.playerState === 'number') {
-          if (data.info.playerState === 1) { setYtPlaying(true); setYtBuffering(false) }
-          if (data.info.playerState === 2) { setYtPlaying(false); setYtBuffering(false) }
-          if (data.info.playerState === 3) setYtBuffering(true)
-        } else if (data?.event === 'onStateChange' && typeof data?.info === 'number') {
-          // playerState 1 = playing, 2 = paused, 3 = buffering
-          if (data.info === 1) { setYtPlaying(true); setYtBuffering(false) }
-          if (data.info === 2) { setYtPlaying(false); setYtBuffering(false) }
-          if (data.info === 3) setYtBuffering(true)
-        }
-      } catch { /* ignore */ }
-    }
-    window.addEventListener('message', onMessage)
+    // Compute start offset once
+    ytStartOffset.current = startOffset > 0 ? startOffset : (webinar.evergreen_offset_seconds || 0)
 
-    // Fallback: if YT never fires a playing event within 8s (e.g. blocked by browser
-    // policies), force the loading overlay away so users aren't stuck.
-    const fallback = setTimeout(() => {
-      setYtPlaying(prev => {
-        if (!prev) {
-          console.warn('[WebinarRoom] YouTube playerState never received — removing loading overlay via fallback')
-          return true
-        }
-        return prev
+    function createPlayer() {
+      if (ytPlayerRef.current) return // already created
+      ytPlayerRef.current = new (window as any).YT.Player(ytDivId.current, {
+        videoId,
+        playerVars: {
+          autoplay:        1,
+          mute:            1,
+          controls:        0,
+          modestbranding:  1,
+          rel:             0,
+          disablekb:       1,
+          iv_load_policy:  3,
+          playsinline:     1,
+          fs:              0,
+          showinfo:        0,
+          start:           ytStartOffset.current > 0 ? ytStartOffset.current : undefined,
+          origin:          typeof window !== 'undefined' ? window.location.origin : undefined,
+        },
+        events: {
+          onReady: () => {
+            setYtIframeLoaded(true)
+          },
+          onStateChange: (e: any) => {
+            // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
+            if (e.data === 1) { setYtPlaying(true);  setYtBuffering(false) }
+            if (e.data === 2) { setYtPlaying(false); setYtBuffering(false) }
+            if (e.data === 3) { setYtBuffering(true) }
+          },
+        },
       })
-    }, 8000)
+    }
+
+    if ((window as any).YT?.Player) {
+      createPlayer()
+    } else {
+      // Inject the API script only once globally
+      if (!document.getElementById('yt-iframe-api-script')) {
+        const tag = document.createElement('script')
+        tag.id  = 'yt-iframe-api-script'
+        tag.src = 'https://www.youtube.com/iframe_api'
+        document.head.appendChild(tag)
+      }
+      // YT calls this global when ready
+      const prev = (window as any).onYouTubeIframeAPIReady
+      ;(window as any).onYouTubeIframeAPIReady = () => {
+        prev?.()
+        createPlayer()
+      }
+    }
 
     return () => {
-      window.removeEventListener('message', onMessage)
-      clearTimeout(fallback)
+      // Destroy the player on unmount / video URL change
+      try { ytPlayerRef.current?.destroy() } catch {}
+      ytPlayerRef.current = null
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webinar.video_url, ytKey])
+  }, [webinar.video_url])
 
-  // ---- YouTube: silence on initial load; re-runs on ytKey (iframe remount) ----
+  // Fallback: if YT API never reports playing after 10s, dismiss the loader
   useEffect(() => {
     if (!isYouTubeUrl(webinar.video_url || '')) return
-
-    const shouldSilence = !ytUnmutedRef.current
-    ytUnmutedRef.current = false // reset for next run
-
-    if (!shouldSilence) return // user unmuted — don't silence, let autoplay run
-
-    let done = false
-    function post(fn: string, args: unknown[] = []) {
-      ytIframeRef.current?.contentWindow?.postMessage(
-        JSON.stringify({ event: 'command', func: fn, args }), '*'
-      )
-    }
-    function silence() {
-      if (done) return
-      post('playVideo')
-      post('setVolume', [0])
-    }
-    const interval = setInterval(silence, 600)
-    // After 5s give up silencing (player confirmed playing via the other effect)
-    const timeout = setTimeout(() => {
-      done = true
-      clearInterval(interval)
-      post('setVolume', [0])
-    }, 5000)
-    return () => { done = true; clearInterval(interval); clearTimeout(timeout) }
+    const t = setTimeout(() => setYtPlaying(p => p || true), 10000)
+    return () => clearTimeout(t)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webinar.video_url, ytKey])
+  }, [webinar.video_url])
 
   // ---- Vimeo: compute iframe src only on client (avoid SSR hydration mismatch) ----
   useEffect(() => {
@@ -2033,21 +2007,23 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
           {!sessionIsScheduledFuture && webinar.video_url ? (
             isYouTubeUrl(webinar.video_url) ? (
-                  <>
-                    <iframe
-                      key={ytKey}
-                      ref={ytIframeRef}
-                      src={ytSrc}
+                   <>
+                    {/* ── YouTube Iframe API target div ────────────────────────
+                         YT.Player replaces this div with an iframe internally.
+                         pointer-events:none prevents any click from reaching YT. ── */}
+                    <div
+                      id={ytDivId.current}
                       className="yt-iframe"
-                      style={{
-                        position: 'absolute', left: 0, width: '100%', border: 'none',
-                        // Always none — our overlay buttons handle interaction.
-                        pointerEvents: 'none',
-                      }}
-                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                      allowFullScreen={false}
-                      title={webinar.name}
-                      onLoad={() => setYtIframeLoaded(true)}
+                      style={{ position: 'absolute', left: 0, width: '100%', border: 'none', pointerEvents: 'none' }}
+                    />
+
+                    {/* ── Invisible Shield ───────────────────────────────────────
+                         Intercepts ALL clicks, right-clicks and double-taps
+                         so the user can never interact with the raw YouTube player.── */}
+                    <div
+                      style={{ position: 'absolute', inset: 0, zIndex: 5, cursor: 'default' }}
+                      onContextMenu={e => { e.preventDefault(); e.stopPropagation() }}
+                      onDoubleClick={e => e.preventDefault()}
                     />
 
                     {/* ── Universal Branding Delayed Masks ────────────────────────
@@ -2082,8 +2058,6 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       backgroundColor: '#000',
                       backgroundSize: 'cover', backgroundPosition: 'center',
                       opacity: !ytPlaying ? 1 : 0,
-                      // Instant on play (0.05s) to prevent any YouTube UI flash.
-                      // The Branding Masks layer above stays for 1.8s and handles the edge.
                       transition: ytPlaying ? 'opacity 0.05s' : 'opacity 0s',
                       pointerEvents: 'none',
                     }}>
@@ -2112,7 +2086,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       </div>
                     )}
 
-                    {/* ── Unmute button (shows after iframe loaded + muted) ── */}
+                    {/* ── Unmute button (shows after player ready + muted) ── */}
                     {ytIframeLoaded && ytMuted && (
                       <div style={{
                         position: 'absolute', inset: 0, zIndex: 8,
@@ -2121,16 +2095,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                       }}>
                         <button
                           onClick={() => {
-                            ytUnmutedRef.current = true
-                            if (ytIframeRef.current?.contentWindow) {
-                              // If autoplay was blocked, we must also send playVideo
-                              ytIframeRef.current.contentWindow.postMessage('{"event":"command","func":"playVideo","args":[]}', '*')
-                              ytIframeRef.current.contentWindow.postMessage('{"event":"command","func":"unMute","args":[]}', '*')
-                              ytIframeRef.current.contentWindow.postMessage('{"event":"command","func":"setVolume","args":[100]}', '*')
-                            }
+                            try {
+                              // Direct API calls — far more reliable than postMessage strings on iOS
+                              ytPlayerRef.current?.playVideo()
+                              ytPlayerRef.current?.unMute()
+                              ytPlayerRef.current?.setVolume(100)
+                            } catch {}
                             setYtMuted(false)
-                            // NO LONGER reloading the iframe (setYtKey) — this allows the
-                            // silent video to seamlessly continue without a black screen!
                           }}
                           style={{
                             background: 'rgba(255,255,255,0.95)', color: '#111',
