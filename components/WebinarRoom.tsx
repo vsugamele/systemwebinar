@@ -1421,8 +1421,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     }
 
     if ((window as any).YT?.Player) {
-      // If YT API is already loaded, still defer so DOM is ready after waitingDone transition
-      if (waitingDone) {
+      // Defer when the wrapper div is only just being mounted:
+      //   - waitingDone just became true (WaitingRoom ended)
+      //   - sessionIsScheduledFuture just became false (countdown reached zero)
+      // In both cases the ytWrapperRef div is mounting for the first time
+      // and React hasn't painted it yet — we MUST defer.
+      if (waitingDone && !sessionIsScheduledFuture) {
         createPlayerDeferred()
       } else {
         createPlayer()
@@ -1444,15 +1448,16 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     }
 
     return () => {
-      // Destroy the player on unmount / video URL change / waitingDone change
+      // Destroy the player on unmount / video URL change / state transitions
       try { ytPlayerRef.current?.destroy() } catch {}
       ytPlayerRef.current = null
     }
-  // waitingDone is required: ytWrapperRef.current is null while the waiting room is shown
-  // (the div lives inside {waitingDone && ...}). Adding it here re-runs the effect once
-  // the waiting room ends and the wrapper div is mounted in the DOM.
+  // sessionIsScheduledFuture is required: ytWrapperRef is inside {!sessionIsScheduledFuture && ...}
+  // so when the live countdown reaches zero, the wrapper mounts for the first time
+  // and we need to re-run this effect to initialize the player.
+  // waitingDone is required for the same reason (wrapper is inside {waitingDone && ...}).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webinar.video_url, waitingDone])
+  }, [webinar.video_url, waitingDone, sessionIsScheduledFuture])
 
   // ---- Vimeo: compute iframe src only on client (avoid SSR hydration mismatch) ----
   useEffect(() => {
