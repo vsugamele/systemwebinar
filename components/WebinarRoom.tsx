@@ -509,6 +509,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const devOffset = devTMatch ? parseInt(devTMatch) * 60 : null
   
   const startOffsetOverride = tOffset !== null ? tOffset : (devOffset !== null ? devOffset : 0)
+  
+  // isDevMode: true when ?t or ?dev_t is explicitly present in the URL.
+  // Only affects the local developer/admin view — leads arriving without these
+  // params always follow the normal scheduling logic.
+  const isDevMode = tOffset !== null || devOffset !== null
+  
   const startOffset = startOffsetOverride > 0 ? startOffsetOverride : getStartOffset(webinar.session_started_at)
   const waitDelay = webinar.waiting_delay_seconds ?? 120
   const waitEnabled = !!webinar.waiting_room_enabled && startOffset > 0 && startOffset < waitDelay
@@ -580,14 +586,17 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // Using it directly eliminates the 0 → real-value flip that caused the flash.
   const [countdownToStart, setCountdownToStart] = useState<number>(initialCountdownSeconds)
 
-  // A session is active only if session_started_at is set
-  const hasStarted = !!liveSessionStartedAt
+  // A session is active only if session_started_at is set — OR if we are in dev mode
+  // (the developer is testing with ?t= or ?dev_t= even without an active session).
+  const hasStarted = !!liveSessionStartedAt || isDevMode
   // Compute startOffset from liveSessionStartedAt so it stays current
   const liveStartOffset = liveSessionStartedAt ? getStartOffset(liveSessionStartedAt) : 0
+  // In dev mode, never mark session as ended — the developer is previewing the room.
   const isSessionActive = hasStarted && elapsedSeconds >= 0 && !isSessionEnded
 
-  // Session is "offline" when countdown > 12h or there's no next schedule and no active session
-  const sessionIsOffline = !hasStarted && (!nextScheduledStart || countdownToStart > 43200)
+  // Session is "offline" when countdown > 12h or there's no next schedule and no active session.
+  // In dev mode, always treat the session as online so the video renders.
+  const sessionIsOffline = !isDevMode && !hasStarted && (!nextScheduledStart || countdownToStart > 43200)
 
   // Ref for use inside interval closures
   const hasStartedRef = useRef(hasStarted)
@@ -2108,8 +2117,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             </div>
           )}
 
-          {/* Session Ended overlay */}
-          {isSessionEnded && !sessionIsScheduledFuture && (
+          {/* Session Ended overlay — hidden in dev mode so admins can test past the normal duration */}
+          {isSessionEnded && !sessionIsScheduledFuture && !isDevMode && (
             <div style={{
               position: 'absolute', inset: 0, zIndex: 30, background: '#000',
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
