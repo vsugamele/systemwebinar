@@ -1285,6 +1285,25 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   useEffect(() => {
     const engine = new EventEngine(events)
 
+    // Catch-up: fire events already past when user joins mid-session
+    // This ensures late-joining users still see the pitch button & popups
+    const catchUpTick = elapsedRef.current
+    if (catchUpTick > 0) {
+      // We tick once silently to mark past events as fired but don't show
+      // pitch/popup for events >5 min old (user is well past those moments).
+      // Events within last 5 minutes are still shown.
+      const REFIRE_WINDOW = 300 // seconds
+      events
+        .filter(e => e.timestamp_seconds <= catchUpTick)
+        .forEach(ev => {
+          const age = catchUpTick - ev.timestamp_seconds
+          if (age <= REFIRE_WINDOW) {
+            // Within refire window: fire the event so user sees it
+            engine.tick(catchUpTick)
+          }
+        })
+    }
+
     engine.on('poll', (ev) => {
       const p = ev.payload as PollPayload
       setPollPayload(p)
@@ -2466,29 +2485,26 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             </div>
           ) : null}
 
-          {/* PITCH BUTTON */}
+          {/* PITCH BUTTON — position:fixed so it's never clipped by video-wrapper */}
           {pitchVisible && pitchPayload && (
             <div className="pitch-button">
               <button className="pitch-close" onClick={handleCTADismiss}>✕</button>
               {pitchPayload.image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img 
-                  src={pitchPayload.image_url} 
-                  alt="Oferta" 
-                  className="pitch-image" 
+                <img
+                  src={pitchPayload.image_url}
+                  alt="Oferta"
+                  className="pitch-image"
                   onClick={handleCTAClick}
                   style={{ cursor: 'pointer' }}
                 />
               )}
               <div className="pitch-body">
-                {/* Text above button */}
                 {pitchPayload.text_above && (
                   <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--warning)', textAlign: 'center', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     {pitchPayload.text_above}
                   </p>
                 )}
-
-                {/* Countdown badge */}
                 {countdown > 0 && (
                   <div style={{
                     display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
@@ -2502,13 +2518,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>restantes</span>
                   </div>
                 )}
-
-                {/* CTA Button */}
                 <button className="pitch-cta" onClick={handleCTAClick}>
                   {pitchPayload.cta_text}
                 </button>
-
-                {/* Scarcity spots */}
                 {scarcitySpots > 0 && (
                   <div style={{
                     textAlign: 'center', fontSize: 11, marginTop: 6,
@@ -2522,9 +2534,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             </div>
           )}
 
-          {/* OFFER POPUP */}
+          {/* OFFER POPUP — position:fixed centered over the whole page */}
           {popupVisible && popupPayload && (
-            <div className="offer-overlay">
+            <div className="offer-overlay" style={{ position: 'fixed', zIndex: 99990 }}>
               <div className="offer-modal">
                 <button
                   onClick={handlePopupDismiss}
@@ -2532,7 +2544,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     position: 'absolute', top: 16, right: 16,
                     background: 'var(--bg-elevated)', border: '1px solid var(--border)',
                     borderRadius: '50%', width: 32, height: 32,
-                    color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16
+                    color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
                   ✕
                 </button>

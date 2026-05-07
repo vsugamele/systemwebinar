@@ -1032,17 +1032,17 @@ tbody tr:hover td { background: var(--bg-hover); }
    PITCH BUTTON (Floating CTA)
    ============================================= */
 .pitch-button {
-  position: absolute;
+  position: fixed;
   bottom: 24px;
   right: 24px;
   background: var(--bg-card);
   border: 1px solid rgba(99,102,241,0.4);
   border-radius: var(--radius-lg);
   overflow: hidden;
-  width: 280px;
+  width: 300px;
   box-shadow: 0 8px 40px rgba(0,0,0,0.6);
   animation: slideInBottom 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), pitchPulse 2.5s ease-in-out 0.6s infinite;
-  z-index: 20;
+  z-index: 99980;
 }
 
 .pitch-close {
@@ -1098,14 +1098,14 @@ tbody tr:hover td { background: var(--bg-hover); }
    OFFER POPUP
    ============================================= */
 .offer-overlay {
-  position: absolute;
+  position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.75);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 30;
+  z-index: 99990;
   animation: fadeIn 0.3s ease;
 }
 
@@ -1598,26 +1598,20 @@ tbody tr:hover td { background: var(--bg-hover); }
 @media (max-width: 640px) {
   .hidden-mobile { display: none !important; }
 
-  /* Pitch button full-width on small phones, above home indicator */
+  /* Pitch button: full-width at bottom on mobile, above safe area */
   .pitch-button {
     width: calc(100% - 32px);
     left: 16px;
     right: 16px;
-    bottom: max(16px, env(safe-area-inset-bottom, 16px));
+    bottom: max(80px, calc(env(safe-area-inset-bottom, 0px) + 16px));
     max-width: none;
   }
 
-  /* Mobile flex layout is handled by the 1024px media query above.
-     Do NOT revert to grid here — that breaks the flex-based mobile layout. */
-  
   .pitch-image {
-    max-height: 90px; /* Reduced to avoid covering the whole screen */
+    max-height: 90px;
   }
   .pitch-body {
     padding: 10px;
-  }
-  .pitch-button {
-    bottom: 80px; /* Keep above keyboard potentially, or just slightly higher */
   }
 }
 
