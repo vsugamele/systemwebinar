@@ -291,6 +291,91 @@ export default function WebinarOverviewPage() {
         {/* ═══════════════════════════════════════════════════════════════ */}
         {/* SEÇÃO 1 — ESSENCIAIS (sempre aberta)                           */}
         {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        {/* SEÇÃO — TESTES (MODO DEVELOPER)                                 */}
+        {/* ═══════════════════════════════════════════════════════════════ */}
+        <Section
+          icon="🛠️"
+          title="Ferramentas de Teste"
+          subtitle="Valide eventos, ofertas e chat pulando para minutos específicos."
+          defaultOpen={false}
+        >
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+            <div style={{ padding: 12, borderRadius: 12, background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                🚀 Iniciar agora
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
+                Abre a sala forçando o início imediato do vídeo.
+              </div>
+              <button 
+                onClick={() => window.open(`/w/${webinar.slug}?t=1`, '_blank')}
+                className="btn btn-ghost" 
+                style={{ width: '100%', fontSize: 12, padding: '6px 12px' }}
+              >
+                Abrir Sala (T=0)
+              </button>
+            </div>
+
+            <div style={{ padding: 12, borderRadius: 12, background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                ⏱️ Pular para Minuto
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
+                Valide ofertas ou chat que aparecem mais adiante.
+              </div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button 
+                  onClick={() => window.open(`/w/${webinar.slug}?dev_t=10`, '_blank')}
+                  className="btn btn-ghost" 
+                  style={{ flex: 1, fontSize: 11, padding: '6px 4px' }}
+                >
+                  Min 10
+                </button>
+                <button 
+                  onClick={() => window.open(`/w/${webinar.slug}?dev_t=30`, '_blank')}
+                  className="btn btn-ghost" 
+                  style={{ flex: 1, fontSize: 11, padding: '6px 4px' }}
+                >
+                  Min 30
+                </button>
+                <button 
+                  onClick={() => window.open(`/w/${webinar.slug}?dev_t=60`, '_blank')}
+                  className="btn btn-ghost" 
+                  style={{ flex: 1, fontSize: 11, padding: '6px 4px' }}
+                >
+                  Min 60
+                </button>
+              </div>
+            </div>
+
+            <div style={{ padding: 12, borderRadius: 12, background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+                🔗 Link com Tempo
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
+                Use <b>?t=segundos</b> ou <b>?dev_t=minutos</b> na URL.
+              </div>
+              <button 
+                onClick={() => {
+                  const segs = prompt('Digite o segundo para iniciar:', '60');
+                  if (segs) {
+                    navigator.clipboard.writeText(`${window.location.origin}/w/${webinar.slug}?t=${segs}`);
+                    toast.success('Link copiado!');
+                  }
+                }}
+                className="btn btn-ghost" 
+                style={{ width: '100%', fontSize: 12, padding: '6px 12px' }}
+              >
+                Gerar Link Custom
+              </button>
+            </div>
+          </div>
+          <div style={{ marginTop: 16, fontSize: 11, color: 'var(--text-muted)', background: 'rgba(245,158,11,0.05)', padding: '8px 12px', borderRadius: 8, border: '1px solid rgba(245,158,11,0.1)' }}>
+            ⚠️ <b>Dica:</b> Para testar o fluxo de cadastro completo mantendo o tempo, adicione o parâmetro no link da <b>Página de Captura</b>.
+          </div>
+        </Section>
+
         <Section
           icon="🎬"
           title="Essenciais"

@@ -17,14 +17,6 @@ interface EmailTemplate {
   created_at: string
 }
 
-export interface InWebinarEmail {
-  id: string
-  subject: string
-  body: string
-  trigger_minute: number
-  enabled: boolean
-}
-
 const defaultTemplates: Omit<EmailTemplate, 'id' | 'webinar_id' | 'created_at'>[] = [
   {
     type: 'confirmation',
@@ -86,9 +78,7 @@ export default function EmailsPage() {
   const [selectedProject, setSelectedProject] = useState(searchParams.get('project') ?? '')
   const [selectedWebinar, setSelectedWebinar] = useState(searchParams.get('webinar') ?? '')
   const [templates, setTemplates] = useState<EmailTemplate[]>([])
-  const [inWebinarEmails, setInWebinarEmails] = useState<InWebinarEmail[]>([])
   const [editTemplate, setEditTemplate] = useState<EmailTemplate | null>(null)
-  const [editInWebinar, setEditInWebinar] = useState<InWebinarEmail | null>(null)
   const [saving, setSaving] = useState(false)
   const supabase = createClient()
 
@@ -108,11 +98,6 @@ export default function EmailsPage() {
     }
   }
 
-  async function loadInWebinarEmails() {
-    const { data } = await supabase.from('webi_webinars').select('in_webinar_emails').eq('id', selectedWebinar).single()
-    setInWebinarEmails(data?.in_webinar_emails || [])
-  }
-
   useEffect(() => {
     supabase.from('webi_projects').select('*').order('created_at').then(({ data }) => setProjects(data || []))
   }, [])
@@ -125,7 +110,6 @@ export default function EmailsPage() {
 
   useEffect(() => {
     if (!selectedWebinar) return
-    loadInWebinarEmails()
     supabase.from('webi_email_templates').select('*').eq('webinar_id', selectedWebinar).order('delay_minutes')
       .then(async ({ data }) => {
         if (data && data.length > 0) {
@@ -162,55 +146,6 @@ export default function EmailsPage() {
       loadTemplates()
     } catch (err) {
       toast.error('Erro ao alternar status do e-mail.')
-    }
-  }
-
-  async function saveInWebinarEmail() {
-    if (!editInWebinar) return
-    setSaving(true)
-    
-    let updated = [...inWebinarEmails]
-    if (updated.find(x => x.id === editInWebinar.id)) {
-      updated = updated.map(x => x.id === editInWebinar.id ? editInWebinar : x)
-    } else {
-      updated.push(editInWebinar)
-    }
-    
-    // Sort by trigger_minute
-    updated.sort((a, b) => a.trigger_minute - b.trigger_minute)
-    
-    try {
-      await supabase.from('webi_webinars').update({ in_webinar_emails: updated }).eq('id', selectedWebinar)
-      toast.success('E-mail in-webinar atualizado!')
-      setEditInWebinar(null)
-      loadInWebinarEmails()
-    } catch (err) {
-      toast.error('Erro ao salvar e-mail.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  async function toggleInWebinarEnabled(t: InWebinarEmail) {
-    const updated = inWebinarEmails.map(x => x.id === t.id ? { ...x, enabled: !x.enabled } : x)
-    try {
-      await supabase.from('webi_webinars').update({ in_webinar_emails: updated }).eq('id', selectedWebinar)
-      toast.success(t.enabled ? 'E-mail desativado.' : 'E-mail ativado!')
-      loadInWebinarEmails()
-    } catch (err) {
-      toast.error('Erro ao alternar status.')
-    }
-  }
-
-  async function deleteInWebinar(tId: string) {
-    if (!confirm('Excluir este e-mail programado?')) return
-    const updated = inWebinarEmails.filter(x => x.id !== tId)
-    try {
-      await supabase.from('webi_webinars').update({ in_webinar_emails: updated }).eq('id', selectedWebinar)
-      toast.success('Excluído.')
-      loadInWebinarEmails()
-    } catch (err) {
-      toast.error('Erro ao excluir.')
     }
   }
 
@@ -330,68 +265,6 @@ export default function EmailsPage() {
               <code style={{ color: 'var(--brand-light)' }}>{'{{webinar_url}}'}</code> — Link direto para a sala &nbsp;|&nbsp;
               <code style={{ color: 'var(--brand-light)' }}>{'{{webinar_name}}'}</code> — Nome do webinar
             </div>
-            
-            <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '40px 0' }} />
-
-            {/* In-Webinar Emails */}
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 4 }}>E-mails de Retenção (Durante a Aula)</h2>
-                  <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                    Dispare e-mails para quem estiver assistindo baseado no tempo exato de vídeo (ex: enviar material no minuto 30).
-                  </p>
-                </div>
-                <button className="btn btn-primary btn-sm" onClick={() => setEditInWebinar({
-                  id: crypto.randomUUID(),
-                  subject: 'Aqui está seu material prometido!',
-                  body: 'Olá {{name}},\n\nVocê chegou numa parte importante da aula, baixe aqui o material...',
-                  trigger_minute: 30,
-                  enabled: true
-                })}>
-                  ➕ Novo E-mail de Retenção
-                </button>
-              </div>
-
-              {inWebinarEmails.length === 0 ? (
-                <div style={{ background: 'var(--bg-card)', border: '1px dashed var(--border)', borderRadius: 12, padding: 32, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                  Nenhum e-mail de retenção configurado.<br/>Crie um para engajar seu lead durante a transmissão!
-                </div>
-              ) : (
-                <div style={{ display: 'grid', gap: 16 }}>
-                  {inWebinarEmails.map(t => (
-                    <div key={t.id} style={{
-                      display: 'flex', alignItems: 'center', gap: 16,
-                      background: 'var(--bg-card)', border: `1px solid ${t.enabled ? 'var(--border)' : 'var(--border)'}`,
-                      borderLeft: `3px solid ${t.enabled ? '#8b5cf6' : 'var(--border)'}`,
-                      borderRadius: 12, padding: '16px 20px',
-                      opacity: t.enabled ? 1 : 0.5,
-                    }}>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: 14 }}>
-                          No Minuto {t.trigger_minute}
-                          <span style={{ marginLeft: 8, fontSize: 11, color: '#8b5cf6',
-                            background: 'rgba(139, 92, 246, 0.1)', borderRadius: 20, padding: '2px 8px' }}>
-                            Retenção / Material
-                          </span>
-                        </div>
-                        <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4, fontStyle: 'italic' }}>
-                          {t.subject}
-                        </div>
-                      </div>
-                      
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => setEditInWebinar({ ...t })}>✏️ Editar</button>
-                        <button className={`btn btn-sm ${t.enabled ? 'btn-ghost' : 'btn-primary'}`} onClick={() => toggleInWebinarEnabled(t)}>
-                          {t.enabled ? '⏸ Desativar' : '▶ Ativar'}
-                        </button>
-                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => deleteInWebinar(t.id)}>🗑</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </>
         )}
       </div>
@@ -426,52 +299,6 @@ export default function EmailsPage() {
             <div className="modal-footer">
               <button className="btn btn-ghost" onClick={() => setEditTemplate(null)}>Cancelar</button>
               <button className="btn btn-primary" onClick={saveTemplate} disabled={saving}>
-                {saving ? <span className="spinner" /> : 'Salvar'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Edit InWebinar Email Modal */}
-      {editInWebinar && (
-        <div className="modal-overlay" onClick={e => e.target === e.currentTarget && setEditInWebinar(null)}>
-          <div className="modal" style={{ maxWidth: 640 }}>
-            <div className="modal-header">
-              <h2 className="modal-title">⏱ Editar E-mail (Minuto {editInWebinar.trigger_minute})</h2>
-              <button className="modal-close" onClick={() => setEditInWebinar(null)}>✕</button>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div className="form-group">
-                <label className="form-label">Minuto do Vídeo</label>
-                <input className="form-input"
-                  type="number" min={0}
-                  value={editInWebinar.trigger_minute}
-                  onChange={e => setEditInWebinar(t => t && ({ ...t, trigger_minute: parseInt(e.target.value) || 0 }))}
-                  placeholder="Ex: 30" />
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-                  O e-mail será disparado assim que o espectador ultrapassar este minuto no vídeo.
-                </div>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Assunto do e-mail</label>
-                <input className="form-input"
-                  value={editInWebinar.subject}
-                  onChange={e => setEditInWebinar(t => t && ({ ...t, subject: e.target.value }))}
-                  placeholder="Assunto do e-mail..." />
-              </div>
-              <div className="form-group">
-                <label className="form-label">Corpo do e-mail</label>
-                <textarea className="form-input form-textarea"
-                  style={{ minHeight: 200, fontFamily: 'monospace', fontSize: 13 }}
-                  value={editInWebinar.body}
-                  onChange={e => setEditInWebinar(t => t && ({ ...t, body: e.target.value }))}
-                  placeholder="Corpo do e-mail..." />
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-ghost" onClick={() => setEditInWebinar(null)}>Cancelar</button>
-              <button className="btn btn-primary" onClick={saveInWebinarEmail} disabled={saving}>
                 {saving ? <span className="spinner" /> : 'Salvar'}
               </button>
             </div>

@@ -93,7 +93,8 @@ export default function LandingPageClient({
 
       // Instead of waiting or showing thank you, redirect immediately to room 
       // where room logic dictates if it's counting down or live.
-      router.push(`/w/${slug}`)
+      const currentSearchParams = typeof window !== 'undefined' ? window.location.search : ''
+      router.push(`/w/${slug}${currentSearchParams}`)
     } catch (err: any) {
       setError(err.message)
       setLoading(false)

@@ -355,6 +355,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const engineRef = useRef<EventEngine | null>(null)
   const sectionRef = useRef<HTMLDivElement>(null)
   const sessionId = useRef(generateSessionId())
+  const sentEmailsRef = useRef<Set<string>>(new Set())
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -475,6 +476,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // New feature state
   const [quizOpen, setQuizOpen] = useState(false)
   const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  const [actualDuration, setActualDuration] = useState<number | null>(null)
   const [aiTyping, setAiTyping] = useState(false)
   const [saleToastActive, setSaleToastActive] = useState(false)
 
@@ -495,7 +497,19 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   // Waiting room + session clock
   const brandColor = webinar.brand_color || '#6366f1'
-  const startOffset = getStartOffset(webinar.session_started_at)
+  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
+  const tMatch = searchParams?.get('t')
+  const devTMatch = searchParams?.get('dev_t')
+  
+  // Priority: 
+  // 1. ?t=X (seconds)
+  // 2. ?dev_t=X (minutes)
+  // 3. Normal scheduled time
+  const tOffset = tMatch ? parseInt(tMatch) : null
+  const devOffset = devTMatch ? parseInt(devTMatch) * 60 : null
+  
+  const startOffsetOverride = tOffset !== null ? tOffset : (devOffset !== null ? devOffset : 0)
+  const startOffset = startOffsetOverride > 0 ? startOffsetOverride : getStartOffset(webinar.session_started_at)
   const waitDelay = webinar.waiting_delay_seconds ?? 120
   const waitEnabled = !!webinar.waiting_room_enabled && startOffset > 0 && startOffset < waitDelay
   const [waitingDone, setWaitingDone] = useState(!waitEnabled)
@@ -510,6 +524,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const [ytBuffering, setYtBuffering] = useState(false)
   const [ytMuted, setYtMuted]         = useState(true)
   const [ytIframeLoaded, setYtIframeLoaded] = useState(false)
+  // Once the video plays for the first time, keep this true forever.
+  // This prevents the black poster overlay from covering the video during
+  // mid-session pauses or re-buffers (e.g. at ~51min when YouTube re-buffers).
+  const [ytEverPlayed, setYtEverPlayed] = useState(false)
   const ytStartOffset = useRef(0)
 
   // ---- Vimeo state ----
@@ -552,7 +570,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     return () => clearTimeout(timer)
   }, [ytPlaying])
 
-  const duration = webinar.duration_seconds || 3600
+  const duration = actualDuration || webinar.duration_seconds || 14400
   const isSessionEnded = elapsedSeconds >= duration
 
   // Scheduled start countdown — driven by next_scheduled_start (future occurrence)
@@ -875,6 +893,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       if (!isNativeVideo && currentTick > 0 && currentTick % 30 === 0) {
         trackEvent('watch_second', currentTick)
       }
+      
+      evaluateEmailTriggers(currentTick)
 
       // 30-minute milestone (fire once)
       if (currentTick === 1800) {
@@ -895,8 +915,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     const vPeak   = webinar.fake_viewers_peak   ?? Math.max(50, webinar.peak_viewers_max || 50)
     const vEnd    = webinar.fake_viewers_end    ?? Math.max(15, webinar.peak_viewers_min || 15)
     const peakPct = webinar.fake_viewers_peak_at_pct ?? 30
-    const duration = webinar.duration_seconds || 3600
-
+    
+    // Use the component-level duration which is more robust
     const initial = getTargetViewers(startOffset / duration, vStart, vPeak, vEnd, peakPct)
     setViewers(initial)
 
@@ -954,7 +974,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         // Use wall-clock elapsed time so chat works even without video play
         const currentTime = elapsedRef.current
         // Stop firing chat messages after session ends
-        if (currentTime >= (webinar.duration_seconds || 3600)) return
+        if (currentTime >= duration) return
         const seg = findActiveSegment(segs, currentTime)
 
         if (!seg || seg.cpm <= 0) {
@@ -970,7 +990,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           if (!waitingDoneRef.current || !hasStartedRef.current) { tick(); return }
           const fireTime = elapsedRef.current
           // Guard: stop when session ended
-          if (fireTime >= (webinar.duration_seconds || 3600)) return
+          if (fireTime >= duration) return
           const activeSeg = findActiveSegment(segs, fireTime)
           if (activeSeg && activeSeg.cpm > 0) {
             const phrases = getPhrasesForSegment(activeSeg)
@@ -1018,7 +1038,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         // Use wall-clock elapsed time so chat works even without video play
         const currentTime = elapsedRef.current
         // Stop firing chat messages after session ends
-        if (currentTime >= (webinar.duration_seconds || 3600)) return
+        if (currentTime >= duration) return
         if (currentTime >= startSec && currentTime <= endSec) {
           const name = poolNames[Math.floor(Math.random() * poolNames.length)]
           const text = phrases[Math.floor(Math.random() * phrases.length)]
@@ -1382,14 +1402,22 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           origin:          typeof window !== 'undefined' ? window.location.origin : undefined,
         },
         events: {
-          onReady: () => {
+          onReady: (e: any) => {
             // Cancel fallback timer — onReady fired normally
             if (ytUnmuteTimer.current) { clearTimeout(ytUnmuteTimer.current); ytUnmuteTimer.current = null }
             setYtIframeLoaded(true)
+            const d = e.target?.getDuration?.()
+            if (d && d > 0) setActualDuration(Math.floor(d))
           },
           onStateChange: (e: any) => {
             // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
-            if (e.data === 1) { setYtPlaying(true);  setYtBuffering(false) }
+            if (e.data === 1) {
+              setYtPlaying(true)
+              setYtEverPlayed(true)  // latch: never goes back to false
+              setYtBuffering(false)
+              const d = e.target?.getDuration?.()
+              if (d && d > 0) setActualDuration(Math.floor(d))
+            }
             if (e.data === 2) { setYtPlaying(false); setYtBuffering(false) }
             if (e.data === 3) { setYtBuffering(true) }
           },
@@ -1495,6 +1523,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           if (data.event === 'playProgress' || data.event === 'timeupdate') {
             setVimeoPlaying(true); setVimeoBuffering(false)
           }
+          if (data.event === 'loaded' && data.data?.duration) {
+            setActualDuration(Math.floor(data.data.duration))
+          }
         }
       } catch { /* ignore */ }
     }
@@ -1516,6 +1547,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       )
       vimeoIframeRef.current?.contentWindow?.postMessage(
         JSON.stringify({ method: 'addEventListener', value: 'timeupdate' }), '*'
+      )
+      vimeoIframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ method: 'addEventListener', value: 'loaded' }), '*'
       )
     }, 1000)
 
@@ -1555,6 +1589,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       if (t % 10 === 0 && t > 0) {
         trackEvent('watch_second', t)
       }
+      
+      evaluateEmailTriggers(t)
 
       // Track progress_50 once when viewer watches past 50% of the video
       if (!progress50FiredRef.fired && video.duration > 0 && video.currentTime > video.duration * 0.5) {
@@ -1573,7 +1609,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       lastVideoTimeRef.current = video.currentTime
     }
 
+    const onLoadedMetadata = () => {
+      if (video.duration > 0) setActualDuration(Math.floor(video.duration))
+    }
+
     video.addEventListener('loadeddata', onLoaded)
+    video.addEventListener('loadedmetadata', onLoadedMetadata)
     video.addEventListener('timeupdate', onTimeUpdate)
     video.addEventListener('timeupdate', onTimeUpdateStore)
     video.addEventListener('seeking', onSeeking)
@@ -1582,6 +1623,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
     return () => {
       video.removeEventListener('loadeddata', onLoaded)
+      video.removeEventListener('loadedmetadata', onLoadedMetadata)
       video.removeEventListener('timeupdate', onTimeUpdate)
       video.removeEventListener('timeupdate', onTimeUpdateStore)
       video.removeEventListener('seeking', onSeeking)
@@ -1615,6 +1657,27 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       })
     } catch {}
   }
+
+  const evaluateEmailTriggers = useCallback((currentTick: number) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const inWebinarEmails = (webinar as any).in_webinar_emails || []
+    if (!inWebinarEmails.length) return
+    
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    inWebinarEmails.forEach((em: any) => {
+      if (em.enabled && currentTick >= em.trigger_minute * 60) {
+        if (!sentEmailsRef.current.has(em.id)) {
+          sentEmailsRef.current.add(em.id)
+          trackEvent('trigger_in_webinar_email', currentTick, { 
+            email_id: em.id, 
+            subject: em.subject, 
+            body: em.body,
+            webinar_name: webinar.name
+          })
+        }
+      }
+    })
+  }, [webinar])
 
   // ---- Chat message sender (called by ChatPanel.onSendMessage) ----
   async function sendChatMessage(text: string) {
@@ -2127,13 +2190,18 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                          Covers 100% of the YouTube UI before every play (including
                          after screen lock/unlock). Disappears INSTANTLY when
                          ytPlaying=true so the YouTube UI never shows through. ── */}
+                    {/* ── Universal Poster Overlay ───────────────────────────────
+                         Shows before first play (thumbnail/black). Once the video
+                         has EVER played (ytEverPlayed), never returns to opaque —
+                         this fixes the black screen at ~51min caused by YouTube
+                         sending state=2 (paused) during a mid-session re-buffer. ── */}
                     <div style={{
                       position: 'absolute', inset: 0, zIndex: 7,
                       backgroundImage: ytThumb ? `url(${ytThumb})` : undefined,
                       backgroundColor: '#000',
                       backgroundSize: 'cover', backgroundPosition: 'center',
-                      opacity: !ytPlaying ? 1 : 0,
-                      transition: ytPlaying ? 'opacity 0.05s' : 'opacity 0s',
+                      opacity: ytEverPlayed ? 0 : (!ytPlaying ? 1 : 0),
+                      transition: ytPlaying || ytEverPlayed ? 'opacity 0.05s' : 'opacity 0s',
                       pointerEvents: 'none',
                     }}>
                       <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)' }} />

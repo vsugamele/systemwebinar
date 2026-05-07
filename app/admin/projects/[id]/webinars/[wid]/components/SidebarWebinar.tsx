@@ -65,6 +65,7 @@ export function SidebarWebinar({ projectId, webinarId }: { projectId: string; we
   ]
 
   const auxLinks = [
+    { href: `${base}/chat-history`,                                    label: '💬 Histórico de Chat' },
     { href: `/admin/emails?project=${projectId}&webinar=${webinarId}`, label: '✉️ E-mails Ocultos' },
     { href: `/admin/projects/${projectId}/analytics`,                  label: '📊 Analytics Global' },
   ]

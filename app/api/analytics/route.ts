@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { imperioSend } from '@/lib/imperio'
+import { getResend } from '@/lib/resend'
 
 export async function POST(req: NextRequest) {
   try {
@@ -48,6 +49,48 @@ export async function POST(req: NextRequest) {
           tags: ['webinar-engajado'],
           metadata: { webinar_id: body.webinar_id, tempo_assistido_min: 30 },
         })
+      }
+    }
+
+    // Custom in-webinar emails via Resend
+    if (body.event_type === 'trigger_in_webinar_email') {
+      const emailId = body.metadata?.email_id as string
+      const rawSubject = body.metadata?.subject as string
+      const rawBody = body.metadata?.body as string
+      const leadEmail = body.metadata?.lead_email as string
+      const leadName = body.metadata?.lead_name as string || 'Espectador'
+      const webinarName = body.metadata?.webinar_name as string || ''
+
+      if (leadEmail && rawSubject && rawBody) {
+        // Evaluate variables
+        const subject = rawSubject
+          .replace(/{{name}}/g, leadName)
+          .replace(/{{email}}/g, leadEmail)
+          .replace(/{{webinar_name}}/g, webinarName)
+        
+        const content = rawBody
+          .replace(/{{name}}/g, leadName)
+          .replace(/{{email}}/g, leadEmail)
+          .replace(/{{webinar_name}}/g, webinarName)
+          .replace(/\n/g, '<br/>')
+
+        const html = `
+          <div style="font-family:sans-serif;max-width:600px;margin:0 auto;color:#333;line-height:1.6">
+            ${content}
+          </div>
+        `
+
+        try {
+          const resend = getResend()
+          await resend.emails.send({
+            from: process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev',
+            to: leadEmail,
+            subject,
+            html,
+          })
+        } catch (e) {
+          console.error('Failed to send in-webinar email:', e)
+        }
       }
     }
 
