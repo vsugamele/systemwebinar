@@ -475,7 +475,20 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   // New feature state
   const [quizOpen, setQuizOpen] = useState(false)
-  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  // Seed elapsedSeconds with the real start offset so isSessionEnded is correct
+  // from the very first render. Without this, the video player initialises and
+  // starts auto-playing before the elapsed counter effect can set the true value,
+  // causing audio to leak through the "Encerrado" overlay when a lead returns.
+  const [elapsedSeconds, setElapsedSeconds] = useState(() => {
+    if (typeof window === 'undefined') return 0
+    const sp = new URLSearchParams(window.location.search)
+    const t = sp.get('t')
+    const dt = sp.get('dev_t')
+    const tOff = t ? parseInt(t) : null
+    const dtOff = dt ? parseInt(dt) * 60 : null
+    const override = tOff !== null ? tOff : (dtOff !== null ? dtOff : 0)
+    return override > 0 ? override : getStartOffset(webinar.session_started_at)
+  })
   const [actualDuration, setActualDuration] = useState<number | null>(null)
   const [aiTyping, setAiTyping] = useState(false)
   const [saleToastActive, setSaleToastActive] = useState(false)
@@ -800,6 +813,32 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => document.removeEventListener('visibilitychange', onVisibilityChange)
   }, [webinar.video_url])
+
+  // ---- Stop all video/audio as soon as the session is considered ended ----
+  // This fires both when isSessionEnded flips to true mid-session (live end)
+  // and — critically — when the component mounts while the session is already
+  // over (returning lead).  Without this, the YT/Vimeo/native player could
+  // initialise for a brief window and leak audio through the ended overlay.
+  useEffect(() => {
+    if (!isSessionEnded) return
+    // YouTube IFrame API
+    try { ytPlayerRef.current?.pauseVideo() } catch {}
+    try { ytPlayerRef.current?.mute() } catch {}
+    // Native <video>
+    if (videoRef.current) {
+      videoRef.current.pause()
+      videoRef.current.muted = true
+    }
+    // Vimeo postMessage API
+    try {
+      vimeoIframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ method: 'pause' }), '*'
+      )
+      vimeoIframeRef.current?.contentWindow?.postMessage(
+        JSON.stringify({ method: 'setVolume', value: 0 }), '*'
+      )
+    } catch {}
+  }, [isSessionEnded])
 
   // ---- YouTube postMessage: detect when video starts playing ----
   // YouTube sends playerState=1 (playing) via postMessage when the user starts the video.
@@ -2148,7 +2187,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             />
           )}
 
-          {!sessionIsScheduledFuture && webinar.video_url ? (
+          {!sessionIsScheduledFuture && (!isSessionEnded || isDevMode) && webinar.video_url ? (
             isYouTubeUrl(webinar.video_url) ? (
                    <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', overflow: 'hidden', background: '#000' }}>
                      <div style={{
