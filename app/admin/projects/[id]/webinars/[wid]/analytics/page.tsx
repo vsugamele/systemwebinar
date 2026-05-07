@@ -152,10 +152,10 @@ export default function AnalyticsPage() {
               <Tooltip
                 contentStyle={{ background: '#1e1b4b', border: '1px solid #4f46e5', borderRadius: 8, color: '#fff' }}
                 labelFormatter={label => `Minuto ${label}`}
-                formatter={(value: any, name: string) => {
+                formatter={(value: any, name: any) => {
                   if (name === 'viewers') return [value, 'Espectadores']
                   if (name === 'dropoff') return [value, 'Saíram neste minuto']
-                  return [value, name]
+                  return [value, name as string]
                 }}
               />
               {peakMinute !== null && (
