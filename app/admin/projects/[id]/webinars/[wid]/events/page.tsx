@@ -232,16 +232,26 @@ function QuickPitchForm({ webinarId, duration, onCreated }: { webinarId: string;
       <div>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
           <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>⏱ Aparecer no minuto</label>
-          <code style={{ fontSize: 12, color: 'var(--brand-light)', fontWeight: 700 }}>{mm}:{ss}</code>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Segundos exatos:</span>
+            <input
+              type="number"
+              className="form-input"
+              value={atSecs}
+              onChange={e => setAtSecs(+e.target.value)}
+              style={{ width: 70, padding: '2px 6px', fontSize: 12, height: 24, textAlign: 'center' }}
+            />
+            <code style={{ fontSize: 12, color: 'var(--brand-light)', fontWeight: 700 }}>{mm}:{ss}</code>
+          </div>
         </div>
         <input
-          type="range" min={0} max={duration} step={30}
+          type="range" min={0} max={Math.max(duration, atSecs, 10800)} step={1}
           value={atSecs}
           onChange={e => setAtSecs(+e.target.value)}
           style={{ width: '100%', accentColor: '#6366f1' }}
         />
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>
-          <span>00:00</span><span>{String(Math.floor(duration / 60))}:00</span>
+          <span>00:00</span><span>{String(Math.floor(Math.max(duration, atSecs, 10800) / 60))}:00</span>
         </div>
       </div>
 

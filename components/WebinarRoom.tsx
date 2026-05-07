@@ -915,19 +915,38 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       const videoEl = videoRef.current
       let currentTick = elapsedRef.current
 
-        if (videoEl) {
+      if (videoEl) {
         // Native video: sync with actual playback position
         if (!videoEl.paused) currentTick = Math.floor(videoEl.currentTime)
+        
+        // Auto-sync Native Video if it falls behind wall-clock time
+        const lsa = liveSessionStartedAtRef.current
+        if (lsa && !videoEl.paused) {
+          const wallClockTick = Math.floor((Date.now() - new Date(lsa).getTime()) / 1000)
+          if (Math.abs(videoEl.currentTime - wallClockTick) > 5) {
+            videoEl.currentTime = wallClockTick
+            currentTick = wallClockTick
+          }
+        }
       } else {
         // Non-native videos (YouTube, Vimeo, VTurb, etc)
         // Only advance the clock if the session has actually started.
-        // Use liveSessionStartedAtRef (not the state value) to avoid stale closure:
-        // this setInterval was created at mount with deps=[], so direct state access
-        // would freeze on the initial null value even after an optimistic update.
+        // Use liveSessionStartedAtRef (not the state value) to avoid stale closure.
         const lsa = liveSessionStartedAtRef.current
         if (lsa) {
           const wallClockTick = Math.floor((Date.now() - new Date(lsa).getTime()) / 1000)
           currentTick = Math.max(elapsedRef.current, wallClockTick)
+          
+          // Auto-sync YouTube if it falls behind (e.g. mobile backgrounding or lock screen)
+          if (isYouTubeUrl(webinar.video_url || '')) {
+            try {
+              const ytTime = ytPlayerRef.current?.getCurrentTime()
+              if (ytTime !== undefined && Math.abs(ytTime - wallClockTick) > 5) {
+                ytPlayerRef.current?.seekTo(wallClockTick, true)
+                if (!ytPlayingRef.current) ytPlayerRef.current?.playVideo()
+              }
+            } catch {}
+          }
         }
         // else: no session started yet → keep elapsed frozen at 0
       }
