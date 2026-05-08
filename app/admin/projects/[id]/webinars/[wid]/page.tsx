@@ -22,6 +22,7 @@ interface WebinarData {
   whatsapp_welcome_message?: string
   whatsapp_pitch_message?: string
   custom_background_url?: string | null
+  video_orientation?: 'horizontal' | 'vertical'
 }
 
 // ── Collapsible section ────────────────────────────────────────────────────────
@@ -448,7 +449,7 @@ export default function WebinarOverviewPage() {
           subtitle="Aparência da sala — dark, branco ou YouTube"
           defaultOpen={true}
         >
-          <ThemeSelector webinarId={wid} currentTheme={webinar.theme || 'dark'} />
+          <ThemeSelector webinarId={wid} currentTheme={webinar.theme || 'dark'} currentOrientation={webinar.video_orientation || 'horizontal'} />
         </Section>
 
         {/* ═══════════════════════════════════════════════════════════════ */}
@@ -678,9 +679,10 @@ const THEMES = [
   },
 ]
 
-function ThemeSelector({ webinarId, currentTheme }: { webinarId: string; currentTheme: 'dark' | 'light' | 'youtube' }) {
+function ThemeSelector({ webinarId, currentTheme, currentOrientation }: { webinarId: string; currentTheme: 'dark' | 'light' | 'youtube'; currentOrientation: 'horizontal' | 'vertical' }) {
   const supabase = createClient()
   const [theme, setTheme] = useState(currentTheme)
+  const [orientation, setOrientation] = useState(currentOrientation)
   const [saving, setSaving] = useState(false)
 
   async function applyTheme(t: 'dark' | 'light' | 'youtube') {
@@ -693,9 +695,83 @@ function ThemeSelector({ webinarId, currentTheme }: { webinarId: string; current
     else toast.success('Tema atualizado!')
   }
 
+  async function applyOrientation(o: 'horizontal' | 'vertical') {
+    const prev = orientation
+    setOrientation(o)
+    setSaving(true)
+    const { error } = await supabase.from('webi_webinars').update({ video_orientation: o }).eq('id', webinarId)
+    setSaving(false)
+    if (error) { setOrientation(prev); toast.error('Erro ao salvar orientação.') }
+    else toast.success('Orientação atualizada!')
+  }
+
   return (
     <div>
-      {saving && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Salvando tema…</div>}
+      {saving && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8 }}>Salvando…</div>}
+
+      {/* ── Video Orientation ── */}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>📐 Orientação do Vídeo</div>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+          Escolha horizontal (16:9) para vídeos gravados deitados, ou vertical (9:16) para experts filmados em pé no celular.
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 400 }}>
+          {[
+            { id: 'horizontal' as const, label: '📺 Horizontal', desc: '16:9 — padrão', ratio: '16 / 9' },
+            { id: 'vertical' as const, label: '📱 Vertical', desc: '9:16 — expert em pé', ratio: '9 / 16' },
+          ].map(o => {
+            const active = orientation === o.id
+            return (
+              <button
+                key={o.id}
+                type="button"
+                onClick={() => applyOrientation(o.id)}
+                style={{
+                  background: 'none',
+                  border: `2px solid ${active ? 'var(--brand)' : 'var(--border)'}`,
+                  borderRadius: 12, padding: 0, cursor: 'pointer', textAlign: 'left',
+                  transition: 'border-color 0.15s',
+                  boxShadow: active ? '0 0 0 3px var(--brand-glow)' : 'none',
+                  overflow: 'hidden',
+                }}
+              >
+                <div style={{
+                  background: '#0a0a0f', padding: 12,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  height: 80, position: 'relative',
+                }}>
+                  <div style={{
+                    aspectRatio: o.ratio,
+                    height: o.id === 'vertical' ? '90%' : 'auto',
+                    width: o.id === 'horizontal' ? '80%' : 'auto',
+                    background: '#1a1a2e',
+                    borderRadius: 6,
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 24,
+                  }}>
+                    {o.id === 'horizontal' ? '🖥️' : '🧑'}
+                  </div>
+                  {active && (
+                    <div style={{
+                      position: 'absolute', top: 4, right: 4, width: 16, height: 16, borderRadius: '50%',
+                      background: 'var(--brand)', color: '#fff', fontSize: 9, fontWeight: 900,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>✓</div>
+                  )}
+                </div>
+                <div style={{ padding: '8px 10px', background: 'var(--bg-elevated)' }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 2 }}>{o.label}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{o.desc}</div>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Theme Color ── */}
+      <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>🎨 Tema de Cor</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
         {THEMES.map(t => {
           const p = t.preview

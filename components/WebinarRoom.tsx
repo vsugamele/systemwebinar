@@ -50,6 +50,7 @@ interface WebinarConfig {
   fallback_url?: string | null
   is_panic_active?: boolean
   custom_background_url?: string | null
+  video_orientation?: 'horizontal' | 'vertical'
 }
 
 const PT_BAD_WORDS = [
@@ -2075,6 +2076,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       <div 
         className="webinar-page-wrapper" 
         data-theme={webinar.theme || 'dark'}
+        data-layout={webinar.video_orientation === 'vertical' ? 'vertical' : 'horizontal'}
         style={webinar.custom_background_url ? { 
           backgroundImage: `url(${webinar.custom_background_url})`,
           backgroundSize: 'cover',

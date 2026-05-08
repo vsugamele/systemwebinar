@@ -926,6 +926,76 @@ tbody tr:hover td { background: var(--bg-hover); }
 }
 
 
+/* =============================================
+   VERTICAL VIDEO LAYOUT (9:16 / portrait)
+   ============================================= */
+
+/* ── Desktop: video column is narrower (portrait), chat column fills remaining space ── */
+.webinar-page-wrapper[data-layout="vertical"] .webinar-room {
+  grid-template-columns: minmax(0, 480px) 1fr;
+}
+
+/* Center the video-section content, add subtle background padding */
+.webinar-page-wrapper[data-layout="vertical"] .video-section {
+  background: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Portrait video wrapper: 9:16 aspect ratio */
+.webinar-page-wrapper[data-layout="vertical"] .video-wrapper {
+  aspect-ratio: 9 / 16 !important;
+  width: auto !important;
+  height: 100% !important;
+  max-height: calc(100dvh - 60px);
+  flex: 1;
+  margin: 0 auto;
+}
+
+.webinar-page-wrapper[data-layout="vertical"] .video-wrapper video {
+  object-fit: cover;
+}
+
+/* YouTube embed: in vertical mode, don't crop top/bottom */
+.webinar-page-wrapper[data-layout="vertical"] .yt-iframe {
+  top: 0;
+  height: 100%;
+}
+
+/* ── Mobile (≤1024px): stack vertically, video takes ~55% height ── */
+@media (max-width: 1024px) {
+  .webinar-page-wrapper[data-layout="vertical"] .webinar-room {
+    display: flex !important;
+    flex-direction: column !important;
+    grid-template-columns: unset;
+  }
+
+  .webinar-page-wrapper[data-layout="vertical"] .video-section {
+    flex: 0 0 auto;
+  }
+
+  .webinar-page-wrapper[data-layout="vertical"] .video-wrapper {
+    aspect-ratio: 9 / 16 !important;
+    width: auto !important;
+    /* On mobile, limit to ~55% of screen height so chat is still visible */
+    height: calc((var(--app-height, 100dvh) - 52px) * 0.55) !important;
+    max-height: none;
+    margin: 0 auto;
+  }
+
+  .webinar-page-wrapper[data-layout="vertical"] .yt-iframe {
+    top: 0 !important;
+    height: 100% !important;
+  }
+
+  .webinar-page-wrapper[data-layout="vertical"] .chat-section {
+    flex: 1 1 0;
+    min-height: 0;
+  }
+}
+
+
 /* ---- Chat section ---- */
 .chat-section {
   display: flex;
