@@ -261,8 +261,13 @@ export default function ChatPanel({
 
             const isBroadcast = msg.isBroadcast
             const isAi = msg.author?.startsWith('🤖')
+            const isPitchCard = msg.id?.startsWith('pitch-chat-')
             return (
-              <div key={msg.id || i} className="chat-message" style={isBroadcast ? {
+              <div key={msg.id || i} className="chat-message" style={isPitchCard ? {
+                background: 'linear-gradient(135deg, rgba(34,197,94,0.10), rgba(99,102,241,0.08))',
+                borderRadius: 10, padding: '8px 10px',
+                border: '1px solid rgba(34,197,94,0.35)', margin: '4px 0',
+              } : isBroadcast ? {
                 background: 'rgba(34,197,94,0.08)', borderRadius: 8, padding: '6px 8px',
                 border: '1px solid rgba(34,197,94,0.2)', margin: '2px 0'
               } : isAi ? {
@@ -273,7 +278,8 @@ export default function ChatPanel({
                   <div
                     className="chat-avatar"
                     style={{
-                      background: isAi ? 'var(--brand)'
+                      background: isPitchCard ? 'linear-gradient(135deg, #22c55e, #6366f1)'
+                        : isAi ? 'var(--brand)'
                         : msg.isSimulated
                           ? `hsl(${(msg.author.charCodeAt(0) * 37) % 360}, 70%, 40%)`
                           : 'var(--brand)',
@@ -281,12 +287,19 @@ export default function ChatPanel({
                       backgroundSize: 'cover',
                     }}
                   >
-                    {!msg.avatar && getInitials(msg.author)}
+                    {!msg.avatar && (isPitchCard ? '🎁' : getInitials(msg.author))}
                   </div>
                 )}
-                <div>
-                  {!isBroadcast && <div className="chat-msg-author" style={isAi ? { color: 'var(--brand)' } : {}}>{msg.author}</div>}
-                  <div className="chat-msg-text" style={isBroadcast ? { color: 'var(--success)', fontWeight: 600 } : {}}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  {!isBroadcast && (
+                    <div className="chat-msg-author" style={isPitchCard ? { color: '#22c55e' } : isAi ? { color: 'var(--brand)' } : {}}>
+                      {msg.author}{isPitchCard && ' 🎯'}
+                    </div>
+                  )}
+                  <div className="chat-msg-text" style={{
+                    ...(isBroadcast ? { color: 'var(--success)', fontWeight: 600 } : {}),
+                    whiteSpace: 'pre-line',
+                  }}>
                     {msg.text}
                   </div>
                   {msg.image_url && (

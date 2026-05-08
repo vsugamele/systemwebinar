@@ -1350,6 +1350,30 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       setPitchVisible(true)
       trackEvent('popup_seen', ev.timestamp_seconds, { type: 'pitch' })
 
+      // ── Inject offer card into the chat ──────────────────────────────
+      // Appears 2s after the pitch fires so it feels natural (host shares link)
+      setTimeout(() => {
+        const hostName = webinar.display_name || webinar.ai_persona_name || 'Apresentador'
+        const lines: string[] = []
+        if (p.text_above) lines.push(`🔥 ${p.text_above}`)
+        lines.push(p.cta_text ? `👉 ${p.cta_text}` : '👉 Acesse a oferta agora!')
+        if (p.scarcity_spots && p.scarcity_spots > 0) {
+          lines.push(`⚠️ Apenas ${p.scarcity_spots} vagas disponíveis!`)
+        }
+        appendMessages([{
+          id: `pitch-chat-${ev.id}`,
+          author: hostName,
+          text: lines.join('\n'),
+          timestamp: sessionBaseTime + ev.timestamp_seconds + 2,
+          isSimulated: false,
+          isBroadcast: false,
+          image_url: p.image_url || undefined,
+          link_url: p.cta_url || undefined,
+          link_text: p.cta_text || 'Quero garantir minha vaga →',
+        }])
+      }, 2000)
+      // ─────────────────────────────────────────────────────────────────
+
       // Countdown
       if (p.countdown_seconds && p.countdown_seconds > 0) {
         startCountdown(p.countdown_seconds)
