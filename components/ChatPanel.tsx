@@ -160,6 +160,7 @@ interface ChatPanelProps {
   quizAnswers?: Record<string, number>
   quizVoteCounts?: Record<string, number[]>
   onQuizVote?: (questionId: string, optionIdx: number) => void
+  hasBottomBar?: boolean
 }
 
 export default function ChatPanel({
@@ -176,6 +177,7 @@ export default function ChatPanel({
   quizAnswers = {},
   quizVoteCounts = {},
   onQuizVote,
+  hasBottomBar = false,
 }: ChatPanelProps) {
   const [chatTab, setChatTab] = useState<ChatTab>(defaultTab)
   const [chatInput, setChatInput] = useState('')
@@ -424,7 +426,7 @@ export default function ChatPanel({
       )}
 
       {/* DYNAMIC INPUT BY TAB */}
-      <div className="chat-input-area">
+      <div className="chat-input-area" style={{ paddingBottom: hasBottomBar ? 'calc(80px + env(safe-area-inset-bottom))' : undefined }}>
         {chatTab === 'chat' && (
           <>
             <input

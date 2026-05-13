@@ -2700,6 +2700,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         quizAnswers={quizAnswers}
         quizVoteCounts={quizVoteCounts}
         onQuizVote={handleQuizVote}
+        hasBottomBar={pitchVisible && !!pitchPayload}
       />
       {/* Mobile landscape chat toggle button */}
       <button
