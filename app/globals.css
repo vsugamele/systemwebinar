@@ -1668,20 +1668,11 @@ tbody tr:hover td { background: var(--bg-hover); }
 @media (max-width: 640px) {
   .hidden-mobile { display: none !important; }
 
-  /* Pitch button: full-width at bottom on mobile, above safe area */
+  /* Pitch button: hide the floating card on mobile.
+     The OfferBar at the bottom already provides the CTA.
+     The card was covering the chat input area and blocking interaction. */
   .pitch-button {
-    width: calc(100% - 32px);
-    left: 16px;
-    right: 16px;
-    bottom: max(80px, calc(env(safe-area-inset-bottom, 0px) + 16px));
-    max-width: none;
-  }
-
-  .pitch-image {
-    max-height: 90px;
-  }
-  .pitch-body {
-    padding: 10px;
+    display: none !important;
   }
 }
 

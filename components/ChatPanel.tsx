@@ -426,7 +426,7 @@ export default function ChatPanel({
       )}
 
       {/* DYNAMIC INPUT BY TAB */}
-      <div className="chat-input-area" style={{ paddingBottom: hasBottomBar ? 'calc(80px + env(safe-area-inset-bottom))' : undefined }}>
+      <div className="chat-input-area" style={{ paddingBottom: hasBottomBar ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : undefined }}>
         {chatTab === 'chat' && (
           <>
             <input
