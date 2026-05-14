@@ -2511,176 +2511,6 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             </div>
           ) : null}
 
-          {/* PITCH BUTTON — position:fixed so it's never clipped by video-wrapper */}
-          {pitchVisible && pitchPayload && (
-            <div className="pitch-button">
-              <button className="pitch-close" onClick={handleCTADismiss}>✕</button>
-              {pitchPayload.image_url && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={pitchPayload.image_url}
-                  alt="Oferta"
-                  className="pitch-image"
-                  onClick={handleCTAClick}
-                  style={{ cursor: 'pointer' }}
-                />
-              )}
-              <div className="pitch-body">
-                {pitchPayload.text_above && (
-                  <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--warning)', textAlign: 'center', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                    {pitchPayload.text_above}
-                  </p>
-                )}
-                {countdown > 0 && (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
-                    borderRadius: 8, padding: '6px 10px', marginBottom: 8,
-                  }}>
-                    <span style={{ fontSize: 16 }}>⏳</span>
-                    <span style={{ fontSize: 14, fontWeight: 800, color: '#ef4444', fontFamily: 'monospace' }}>
-                      {formatCountdown(countdown)}
-                    </span>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>restantes</span>
-                  </div>
-                )}
-                <button className="pitch-cta" onClick={handleCTAClick}>
-                  {pitchPayload.cta_text}
-                </button>
-                {scarcitySpots > 0 && (
-                  <div style={{
-                    textAlign: 'center', fontSize: 11, marginTop: 6,
-                    color: scarcitySpots <= 3 ? '#ef4444' : 'var(--text-muted)',
-                    fontWeight: scarcitySpots <= 3 ? 700 : 400,
-                  }}>
-                    {scarcitySpots <= 3 ? '🔴' : '🟡'} Apenas {scarcitySpots} {scarcitySpots === 1 ? 'vaga restante' : 'vagas restantes'}!
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* OFFER POPUP — position:fixed centered over the whole page */}
-          {popupVisible && popupPayload && (
-            <div className="offer-overlay" style={{ position: 'fixed', zIndex: 99990 }}>
-              <div className="offer-modal">
-                <button
-                  onClick={handlePopupDismiss}
-                  style={{
-                    position: 'absolute', top: 16, right: 16,
-                    background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-                    borderRadius: '50%', width: 32, height: 32,
-                    color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                  ✕
-                </button>
-                {popupPayload.image_url && (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={popupPayload.image_url} alt="" className="offer-image" />
-                )}
-                <h2 className="offer-title">{popupPayload.title}</h2>
-                {popupPayload.subtitle && <p className="offer-subtitle">{popupPayload.subtitle}</p>}
-                <button className="offer-cta" onClick={handlePopupCTA}>
-                  {popupPayload.cta_text}
-                </button>
-                <button className="offer-dismiss" onClick={handlePopupDismiss}>
-                  Não, obrigado
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* POLL OVERLAY */}
-          {pollVisible && pollPayload && (
-            <div className="offer-overlay">
-              <div className="offer-modal" style={{ maxWidth: 400, textAlign: 'left', padding: '24px 24px 32px 24px' }}>
-                <button
-                  onClick={() => setPollVisible(false)}
-                  style={{
-                    position: 'absolute', top: 16, right: 16,
-                    background: 'var(--bg-elevated)', border: '1px solid var(--border)',
-                    borderRadius: '50%', width: 32, height: 32,
-                    color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center'
-                  }}>
-                  ✕
-                </button>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-                  <div style={{ background: 'var(--brand-glow)', width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
-                    📊
-                  </div>
-                  <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: '#fff' }}>Enquete</h3>
-                </div>
-                
-                <h4 style={{ fontSize: 17, fontWeight: 600, marginBottom: 20, color: '#f3f4f6', lineHeight: 1.4 }}>
-                  {pollPayload.question}
-                </h4>
-                
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {pollPayload.options.map((opt, i) => {
-                    const isVoted = pollVotedOption === opt
-                    let totalVotes = Object.values(pollResults).reduce((a, b) => a + b, 0)
-                    if (pollVotedOption) totalVotes++
-                    const myVotes = (pollResults[opt] || 0) + (isVoted ? 1 : 0)
-                    const pct = totalVotes > 0 ? Math.round((myVotes / totalVotes) * 100) : 0
-                    
-                    return (
-                      <button
-                        key={i}
-                        onClick={() => {
-                          if (!pollVotedOption) {
-                            setPollVotedOption(opt)
-                            // Simulate small bounce of votes after clicking
-                            setTimeout(() => {
-                              setPollResults(prev => ({ ...prev, [opt]: (prev[opt] || 0) + 4 }))
-                            }, 800)
-                          }
-                        }}
-                        disabled={!!pollVotedOption}
-                        className="poll-option-btn"
-                        style={{
-                          position: 'relative',
-                          background: isVoted ? 'var(--brand-glow)' : 'var(--bg-elevated)',
-                          border: `1px solid ${isVoted ? 'var(--brand)' : 'var(--border)'}`,
-                          padding: '14px 16px',
-                          borderRadius: 8,
-                          cursor: pollVotedOption ? 'default' : 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          overflow: 'hidden',
-                          transition: 'all 0.2s',
-                          color: '#fff',
-                        }}
-                      >
-                        {/* Progress bar background (only shows after voting) */}
-                        {pollVotedOption && (
-                          <div style={{
-                            position: 'absolute', top: 0, left: 0, bottom: 0,
-                            width: `${pct}%`,
-                            background: isVoted ? 'var(--brand-glow)' : 'rgba(255,255,255,0.06)',
-                            zIndex: 1,
-                            transition: 'width 0.8s cubic-bezier(0.16, 1, 0.3, 1)'
-                          }} />
-                        )}
-                        
-                        <span style={{ position: 'relative', zIndex: 2, fontWeight: isVoted ? 600 : 400, color: isVoted ? 'var(--brand)' : '#d1d5db', textAlign: 'left', lineHeight: 1.3, paddingRight: 32 }}>
-                          {opt}
-                        </span>
-                        
-                        {pollVotedOption && (
-                          <span style={{ position: 'relative', zIndex: 2, fontSize: 13, fontWeight: 600, color: isVoted ? 'var(--brand)' : '#9ca3af' }}>
-                            {pct}%
-                          </span>
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-            </div>
-          )}
         </div>
 
       </div>
@@ -2711,6 +2541,175 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         {mobileChatOpen ? '✕' : '💬'}
       </button>
       </div>{/* end .webinar-room */}
+
+      {/* PITCH BUTTON — renderizado FORA do .video-wrapper para que position:fixed
+          funcione corretamente no iOS Safari (clip-path/overflow:hidden no pai
+          quebram fixed positioning quando o elemento está dentro desse contêiner) */}
+      {pitchVisible && pitchPayload && (
+        <div className="pitch-button">
+          <button className="pitch-close" onClick={handleCTADismiss}>✕</button>
+          {pitchPayload.image_url && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={pitchPayload.image_url}
+              alt="Oferta"
+              className="pitch-image"
+              onClick={handleCTAClick}
+              style={{ cursor: 'pointer' }}
+            />
+          )}
+          <div className="pitch-body">
+            {pitchPayload.text_above && (
+              <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--warning)', textAlign: 'center', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                {pitchPayload.text_above}
+              </p>
+            )}
+            {countdown > 0 && (
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)',
+                borderRadius: 8, padding: '6px 10px', marginBottom: 8,
+              }}>
+                <span style={{ fontSize: 16 }}>⏳</span>
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#ef4444', fontFamily: 'monospace' }}>
+                  {formatCountdown(countdown)}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>restantes</span>
+              </div>
+            )}
+            <button className="pitch-cta" onClick={handleCTAClick}>
+              {pitchPayload.cta_text}
+            </button>
+            {scarcitySpots > 0 && (
+              <div style={{
+                textAlign: 'center', fontSize: 11, marginTop: 6,
+                color: scarcitySpots <= 3 ? '#ef4444' : 'var(--text-muted)',
+                fontWeight: scarcitySpots <= 3 ? 700 : 400,
+              }}>
+                {scarcitySpots <= 3 ? '🔴' : '🟡'} Apenas {scarcitySpots} {scarcitySpots === 1 ? 'vaga restante' : 'vagas restantes'}!
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* OFFER POPUP — renderizado fora do video-wrapper pelo mesmo motivo */}
+      {popupVisible && popupPayload && (
+        <div className="offer-overlay" style={{ position: 'fixed', zIndex: 99990 }}>
+          <div className="offer-modal">
+            <button
+              onClick={handlePopupDismiss}
+              style={{
+                position: 'absolute', top: 16, right: 16,
+                background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                borderRadius: '50%', width: 32, height: 32,
+                color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+              ✕
+            </button>
+            {popupPayload.image_url && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={popupPayload.image_url} alt="" className="offer-image" />
+            )}
+            <h2 className="offer-title">{popupPayload.title}</h2>
+            {popupPayload.subtitle && <p className="offer-subtitle">{popupPayload.subtitle}</p>}
+            <button className="offer-cta" onClick={handlePopupCTA}>
+              {popupPayload.cta_text}
+            </button>
+            <button className="offer-dismiss" onClick={handlePopupDismiss}>
+              Não, obrigado
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* POLL OVERLAY — renderizado fora do video-wrapper pelo mesmo motivo */}
+      {pollVisible && pollPayload && (
+        <div className="offer-overlay">
+          <div className="offer-modal" style={{ maxWidth: 400, textAlign: 'left', padding: '24px 24px 32px 24px' }}>
+            <button
+              onClick={() => setPollVisible(false)}
+              style={{
+                position: 'absolute', top: 16, right: 16,
+                background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                borderRadius: '50%', width: 32, height: 32,
+                color: 'var(--text-muted)', cursor: 'pointer', fontSize: 16,
+                display: 'flex', alignItems: 'center', justifyContent: 'center'
+              }}>
+              ✕
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <div style={{ background: 'var(--brand-glow)', width: 36, height: 36, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18 }}>
+                📊
+              </div>
+              <h3 style={{ fontSize: 18, fontWeight: 700, margin: 0, color: '#fff' }}>Enquete</h3>
+            </div>
+            
+            <h4 style={{ fontSize: 17, fontWeight: 600, marginBottom: 20, color: '#f3f4f6', lineHeight: 1.4 }}>
+              {pollPayload.question}
+            </h4>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {pollPayload.options.map((opt, i) => {
+                const isVoted = pollVotedOption === opt
+                let totalVotes = Object.values(pollResults).reduce((a, b) => a + b, 0)
+                if (pollVotedOption) totalVotes++
+                const myVotes = (pollResults[opt] || 0) + (isVoted ? 1 : 0)
+                const pct = totalVotes > 0 ? Math.round((myVotes / totalVotes) * 100) : 0
+                
+                return (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      if (!pollVotedOption) {
+                        setPollVotedOption(opt)
+                        setTimeout(() => {
+                          setPollResults(prev => ({ ...prev, [opt]: (prev[opt] || 0) + 4 }))
+                        }, 800)
+                      }
+                    }}
+                    disabled={!!pollVotedOption}
+                    className="poll-option-btn"
+                    style={{
+                      position: 'relative',
+                      background: isVoted ? 'var(--brand-glow)' : 'var(--bg-elevated)',
+                      border: `1px solid ${isVoted ? 'var(--brand)' : 'var(--border)'}`,
+                      padding: '14px 16px',
+                      borderRadius: 8,
+                      cursor: pollVotedOption ? 'default' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      overflow: 'hidden',
+                      transition: 'all 0.2s',
+                      color: '#fff',
+                    }}
+                  >
+                    {pollVotedOption && (
+                      <div style={{
+                        position: 'absolute', top: 0, left: 0, bottom: 0,
+                        width: `${pct}%`,
+                        background: isVoted ? 'var(--brand-glow)' : 'rgba(255,255,255,0.06)',
+                        zIndex: 1,
+                        transition: 'width 0.8s cubic-bezier(0.16, 1, 0.3, 1)'
+                      }} />
+                    )}
+                    <span style={{ position: 'relative', zIndex: 2, fontWeight: isVoted ? 600 : 400, color: isVoted ? 'var(--brand)' : '#d1d5db', textAlign: 'left', lineHeight: 1.3, paddingRight: 32 }}>
+                      {opt}
+                    </span>
+                    {pollVotedOption && (
+                      <span style={{ position: 'relative', zIndex: 2, fontSize: 13, fontWeight: 600, color: isVoted ? 'var(--brand)' : '#9ca3af' }}>
+                        {pct}%
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* OFFER BAR — sticky bottom bar when pitch fires */}
       <OfferBar
