@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { EventEngine } from '@/lib/event-engine'
 import { createClient } from '@/lib/supabase/client'
 import type { RealtimeChannel } from '@supabase/supabase-js'
-import type { Webinar, WebinarEvent, ChatMessage, ChatMessagePayload, OfferPopupPayload, PitchButtonPayload, ChatSegment, PollPayload } from '@/types'
+import type { Webinar, WebinarEvent, ChatMessage, ChatMessagePayload, OfferPopupPayload, PitchButtonPayload, ChatSegment, PollPayload, PinnedMessagePayload } from '@/types'
 import dynamic from 'next/dynamic'
 import ChatPanel from './ChatPanel'
 import type { Material } from './ChatPanel'
@@ -493,6 +493,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const [actualDuration, setActualDuration] = useState<number | null>(null)
   const [aiTyping, setAiTyping] = useState(false)
   const [saleToastActive, setSaleToastActive] = useState(false)
+
+  // Pinned message state
+  const [pinnedMessage, setPinnedMessage] = useState<{ text: string; author?: string } | null>(null)
+  const pinnedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Chat identity modal (name + email capture)
   const [identityModalOpen, setIdentityModalOpen] = useState(false)
@@ -1466,6 +1470,22 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             isSimulated: true,
           }])
         }, 3000 + fi * (800 + Math.random() * 1200))
+      }
+    })
+
+    engine.on('pinned_message', (ev) => {
+      const p = ev.payload as PinnedMessagePayload
+      if (!p.text?.trim()) {
+        // Empty text clears the pinned banner
+        setPinnedMessage(null)
+        if (pinnedTimerRef.current) clearTimeout(pinnedTimerRef.current)
+        return
+      }
+      setPinnedMessage({ text: p.text, author: p.author })
+      // Auto-dismiss if duration_seconds is set
+      if (pinnedTimerRef.current) clearTimeout(pinnedTimerRef.current)
+      if (p.duration_seconds && p.duration_seconds > 0) {
+        pinnedTimerRef.current = setTimeout(() => setPinnedMessage(null), p.duration_seconds * 1000)
       }
     })
 
@@ -2535,6 +2555,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         quizVoteCounts={quizVoteCounts}
         onQuizVote={handleQuizVote}
         hasBottomBar={pitchVisible && !!pitchPayload}
+        pinnedMessage={pinnedMessage}
       />
       {/* Mobile landscape chat toggle button */}
       <button

@@ -975,19 +975,32 @@ tbody tr:hover td { background: var(--bg-hover); }
     display: flex !important;
     flex-direction: column !important;
     grid-template-columns: unset;
+    /* Override the generic mobile rule that sets height:100% */
+    height: var(--app-height, 100dvh);
   }
 
   .webinar-page-wrapper[data-layout="vertical"] .video-section {
     flex: 0 0 auto;
+    position: relative !important; /* cancel fixed positioning */
+    overflow: hidden;
+  }
+
+  /* Video header em vertical fica sticky sobre o video-section, não fixed global */
+  .webinar-page-wrapper[data-layout="vertical"] .video-header {
+    position: sticky !important;
+    top: 0;
+    height: 52px;
+    z-index: 200;
   }
 
   .webinar-page-wrapper[data-layout="vertical"] .video-wrapper {
     aspect-ratio: 9 / 16 !important;
     width: auto !important;
-    /* On mobile, limit to ~55% of screen height so chat is still visible */
-    height: calc((var(--app-height, 100dvh) - 52px) * 0.55) !important;
+    /* On mobile, limit to ~52% of screen height so chat is still visible */
+    height: calc((var(--app-height, 100dvh) - 52px) * 0.52) !important;
     max-height: none;
     margin: 0 auto;
+    flex: 0 0 auto !important;
   }
 
   .webinar-page-wrapper[data-layout="vertical"] .yt-iframe {
@@ -995,9 +1008,15 @@ tbody tr:hover td { background: var(--bg-hover); }
     height: 100% !important;
   }
 
+  /* Chat section in vertical mobile: fills remaining space */
   .webinar-page-wrapper[data-layout="vertical"] .chat-section {
     flex: 1 1 0;
     min-height: 0;
+    /* In vertical mode: transparent Instagram-live overlay */
+    background: rgba(0, 0, 0, 0.72) !important;
+    border-left: none !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
   }
 }
 
@@ -1009,6 +1028,99 @@ tbody tr:hover td { background: var(--bg-hover); }
   background: var(--bg-card);
   border-left: 1px solid var(--border);
   overflow: hidden;
+}
+
+/* ── VERTICAL LAYOUT DESKTOP: transparent Instagram-live style chat ── */
+.webinar-page-wrapper[data-layout="vertical"] .chat-section {
+  background: rgba(0, 0, 0, 0.55);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+/* Make chat messages text more visible over transparent bg */
+.webinar-page-wrapper[data-layout="vertical"] .chat-msg-text {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.webinar-page-wrapper[data-layout="vertical"] .chat-input {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.webinar-page-wrapper[data-layout="vertical"] .chat-input-area {
+  background: rgba(0, 0, 0, 0.3);
+  border-top-color: rgba(255, 255, 255, 0.1);
+}
+
+.webinar-page-wrapper[data-layout="vertical"] .chat-messages {
+  background: transparent;
+}
+
+/* Override header bg for vertical transparent effect */
+.webinar-page-wrapper[data-layout="vertical"] .chat-section > div:first-child {
+  background: rgba(0, 0, 0, 0.4) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* =============================================
+   PINNED MESSAGE BANNER
+   ============================================= */
+.pinned-message-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.15));
+  border-bottom: 1px solid rgba(99, 102, 241, 0.35);
+  border-left: 3px solid var(--brand);
+  position: relative;
+  animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.pinned-message-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.pinned-message-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.pinned-message-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--brand-light);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 2px;
+}
+
+.pinned-message-text {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.pinned-message-author {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+/* Vertical mode: pinned has darker glass bg */
+.webinar-page-wrapper[data-layout="vertical"] .pinned-message-banner {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(139, 92, 246, 0.25));
+  border-bottom-color: rgba(99, 102, 241, 0.4);
 }
 
 .chat-header {
@@ -1584,6 +1696,12 @@ tbody tr:hover td { background: var(--bg-hover); }
     /* padding-top creates space for the fixed header inside the wrapper */
     padding-top: 52px;
     box-sizing: border-box;
+  }
+
+  /* Vertical layout: no padding-top because header is sticky inside video-section, not fixed */
+  .webinar-page-wrapper[data-layout="vertical"] {
+    padding-top: 0 !important;
+    overflow-y: auto;
   }
 
   /*

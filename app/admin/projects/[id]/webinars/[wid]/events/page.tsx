@@ -11,6 +11,7 @@ import type { WebinarEvent, EventType } from '@/types'
 
 const EVENT_TYPES = [
   { type: 'chat_message', label: 'Mensagem no Chat', icon: '💬', chipClass: 'chip-chat' },
+  { type: 'pinned_message', label: 'Mensagem Fixada', icon: '📌', chipClass: 'chip-chat' },
   { type: 'offer_popup', label: 'Pop-up de Oferta', icon: '🎯', chipClass: 'chip-popup' },
   { type: 'pitch_button', label: 'Botão de Pitch', icon: '🛒', chipClass: 'chip-pitch' },
   { type: 'hide_pitch_button', label: 'Ocultar Pitch', icon: '🙈', chipClass: 'chip-pitch' },
@@ -21,6 +22,7 @@ const EVENT_TYPES = [
 
 const emptyPayloads: Record<EventType, object> = {
   chat_message: { author: '', avatar: '', text: '', image_url: '', link_url: '', link_text: '' },
+  pinned_message: { text: '', author: '', duration_seconds: 0 },
   offer_popup: { title: '', subtitle: '', image_url: '', cta_text: 'Quero Agora', cta_url: '', duration_seconds: 30 },
   pitch_button: {
     image_url: '', text_above: '', cta_text: 'Garantir Minha Vaga', cta_url: '',
@@ -1500,6 +1502,32 @@ export default function EventsPage() {
                       <input className="form-input" placeholder="Ver agora →"
                         value={form.payload.link_text || ''} onChange={e => updatePayload('link_text', e.target.value)} />
                     </div>
+                  </div>
+                </>
+              )}
+
+              {form.type === 'pinned_message' && (
+                <>
+                  <div style={{ background: 'linear-gradient(135deg, rgba(99,102,241,0.12), rgba(139,92,246,0.08))', border: '1px solid rgba(99,102,241,0.25)', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: 'var(--text-secondary)', marginBottom: 4 }}>
+                    📌 A mensagem aparece fixada <strong>no topo do chat</strong> (abaixo das abas) enquanto estiver ativa. Para remover antes do fim, crie outro evento <code>pinned_message</code> sem texto no mesmo webinar.
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Texto da Mensagem Fixada *</label>
+                    <textarea className="form-input form-textarea" placeholder="🔥 Oferta especial disponível agora! Clique no botão abaixo para garantir..."
+                      value={form.payload.text || ''} onChange={e => updatePayload('text', e.target.value)}
+                      style={{ minHeight: 80 }} />
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Deixe vazio para <strong>desafixar</strong> a mensagem anterior.</div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Atribuição (opcional)</label>
+                    <input className="form-input" placeholder="Ex: Apresentador, Equipe de Suporte..."
+                      value={form.payload.author || ''} onChange={e => updatePayload('author', e.target.value)} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Duração (segundos, 0 = permanente)</label>
+                    <input type="number" min={0} className="form-input" style={{ width: 140 }}
+                      value={form.payload.duration_seconds || 0} onChange={e => updatePayload('duration_seconds', Number(e.target.value))} />
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Após esse tempo o banner some automaticamente. Use 0 para manter até o próximo evento de fixação.</div>
                   </div>
                 </>
               )}

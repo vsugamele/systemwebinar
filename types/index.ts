@@ -6,7 +6,7 @@ export interface ChatSegment {
   cpm: number
   phrases?: 'elogios' | 'vaga' | 'engajamento' | 'todas' | null
 }
-export type EventType = 'chat_message' | 'offer_popup' | 'pitch_button' | 'hide_pitch_button' | 'email_auto' | 'poll' | 'quiz_question'
+export type EventType = 'chat_message' | 'offer_popup' | 'pitch_button' | 'hide_pitch_button' | 'email_auto' | 'poll' | 'quiz_question' | 'pinned_message'
 export type SessionEventType = 'joined' | 'watch_second' | 'watch_milestone_30min' | 'progress_50' | 'cta_clicked' | 'cta_dismissed' | 'popup_seen' | 'popup_dismissed' | 'left' | 'chat_sent'
 
 export interface Project {
@@ -122,6 +122,14 @@ export interface QuizQuestionPayload {
   question_id: string
 }
 
+export interface PinnedMessagePayload {
+  text: string
+  author?: string
+  avatar?: string
+  /** Se definido, o fixado desaparece automaticamente após N segundos */
+  duration_seconds?: number
+}
+
 export type EventPayload =
   | ChatMessagePayload
   | OfferPopupPayload
@@ -129,6 +137,7 @@ export type EventPayload =
   | EmailAutoPayload
   | PollPayload
   | QuizQuestionPayload
+  | PinnedMessagePayload
   | Record<string, never>
 
 export interface PollPayload {

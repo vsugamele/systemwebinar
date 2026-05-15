@@ -161,6 +161,7 @@ interface ChatPanelProps {
   quizVoteCounts?: Record<string, number[]>
   onQuizVote?: (questionId: string, optionIdx: number) => void
   hasBottomBar?: boolean
+  pinnedMessage?: { text: string; author?: string } | null
 }
 
 export default function ChatPanel({
@@ -178,6 +179,7 @@ export default function ChatPanel({
   quizVoteCounts = {},
   onQuizVote,
   hasBottomBar = false,
+  pinnedMessage = null,
 }: ChatPanelProps) {
   const [chatTab, setChatTab] = useState<ChatTab>(defaultTab)
   const [chatInput, setChatInput] = useState('')
@@ -238,6 +240,20 @@ export default function ChatPanel({
           </button>
         ))}
       </div>
+
+      {/* PINNED MESSAGE BANNER */}
+      {pinnedMessage && chatTab === 'chat' && (
+        <div className="pinned-message-banner">
+          <span className="pinned-message-icon">📌</span>
+          <div className="pinned-message-body">
+            <div className="pinned-message-label">Mensagem Fixada</div>
+            <div className="pinned-message-text">{pinnedMessage.text}</div>
+            {pinnedMessage.author && (
+              <div className="pinned-message-author">— {pinnedMessage.author}</div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* CHAT TAB */}
       {chatTab === 'chat' && (
