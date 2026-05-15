@@ -923,6 +923,12 @@ tbody tr:hover td { background: var(--bg-hover); }
     height: 118% !important;
     transform: none !important;
   }
+
+  /* Vertical layout: no crop — video must fill the 9:16 container exactly */
+  .webinar-page-wrapper[data-layout="vertical"] .yt-iframe {
+    top: 0 !important;
+    height: 100% !important;
+  }
 }
 
 

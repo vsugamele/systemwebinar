@@ -2253,9 +2253,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
           {!sessionIsScheduledFuture && (!isSessionEnded || isDevMode) && webinar.video_url ? (
             isYouTubeUrl(webinar.video_url) ? (
-                   <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', overflow: 'hidden', background: '#000' }}>
+                   <div style={{ position: 'relative', width: '100%', paddingTop: webinar.video_orientation === 'vertical' ? '177.78%' : '56.25%', overflow: 'hidden', background: '#000' }}>
                      <div style={{
-                       position: 'absolute', top: '-120px', left: '-10%', width: '120%', height: 'calc(100% + 240px)',
+                       position: 'absolute',
+                       top: webinar.video_orientation === 'vertical' ? '0' : '-120px',
+                       left: webinar.video_orientation === 'vertical' ? '0' : '-10%',
+                       width: webinar.video_orientation === 'vertical' ? '100%' : '120%',
+                       height: webinar.video_orientation === 'vertical' ? '100%' : 'calc(100% + 240px)',
                        pointerEvents: 'none',
                      }}>
                       {/* ── YouTube Iframe API Wrapper ───────────────────────────
@@ -2388,7 +2392,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 </div>
               </div>
             ) : isVimeoUrl(webinar.video_url) ? (
-              <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', overflow: 'hidden', background: '#000' }}>
+              <div style={{ position: 'relative', width: '100%', paddingTop: webinar.video_orientation === 'vertical' ? '177.78%' : '56.25%', overflow: 'hidden', background: '#000' }}>
                 <iframe
                   ref={vimeoIframeRef}
                   src={vimeoSrc}
