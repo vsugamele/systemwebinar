@@ -12,6 +12,13 @@ interface AnalyticsSummary {
   ctaClicks: number
   peakViewers: number
   conversionRate: number
+  joined: number
+  progress50: number
+  chatMessagesCount: number
+  chatUniqueSenders: number
+  quizResponsesCount: number
+  quizAvgScore: number
+  utmSourceBreakdown: Record<string, { count: number; attended: number }>
 }
 
 interface ViewersByMinute {
@@ -26,7 +33,20 @@ export default function AnalyticsPage() {
 
   const [loading, setLoading] = useState(true)
   const [webinarName, setWebinarName] = useState('')
-  const [summary, setSummary] = useState<AnalyticsSummary>({ totalLeads: 0, totalAttended: 0, ctaClicks: 0, peakViewers: 0, conversionRate: 0 })
+  const [summary, setSummary] = useState<AnalyticsSummary>({
+    totalLeads: 0,
+    totalAttended: 0,
+    ctaClicks: 0,
+    peakViewers: 0,
+    conversionRate: 0,
+    joined: 0,
+    progress50: 0,
+    chatMessagesCount: 0,
+    chatUniqueSenders: 0,
+    quizResponsesCount: 0,
+    quizAvgScore: 0,
+    utmSourceBreakdown: {}
+  })
   const [retentionData, setRetentionData] = useState<ViewersByMinute[]>([])
   const [peakMinute, setPeakMinute] = useState<number | null>(null)
 
@@ -36,17 +56,13 @@ export default function AnalyticsPage() {
       const { data: webinar } = await supabase.from('webi_webinars').select('name').eq('id', wid).single()
       if (webinar) setWebinarName(webinar.name)
 
-      // Use the aggregated analytics API + leads count in parallel
-      const [apiRes, leadsRes, attendeesRes] = await Promise.all([
-        fetch(`/api/analytics?webinar_id=${wid}`).then(r => r.json()),
-        supabase.from('webi_leads').select('*', { count: 'exact', head: true }).eq('webinar_id', wid),
-        supabase.from('webi_leads').select('*', { count: 'exact', head: true }).eq('webinar_id', wid).eq('attended', true),
-      ])
+      // Use the enriched aggregated analytics API
+      const apiRes = await fetch(`/api/analytics?webinar_id=${wid}`).then(r => r.json())
 
       const viewersByMinute: ViewersByMinute[] = apiRes.viewers_by_minute || []
       const ctaClicks = apiRes.cta_clicks || 0
-      const totalLeads = leadsRes.count || 0
-      const totalAttended = attendeesRes.count || 0
+      const totalLeads = apiRes.total_leads || 0
+      const totalAttended = apiRes.total_attended || 0
 
       // Fill blank minutes for smooth curve and find peak/dropoff
       const maxMin = viewersByMinute.length > 0 ? viewersByMinute[viewersByMinute.length - 1].minute : 0
@@ -63,9 +79,24 @@ export default function AnalyticsPage() {
         prevViewers = v
       }
 
-      const conversionRate = totalAttended > 0 ? (ctaClicks / totalAttended) * 100 : 0
+      // Conversion rate relative to those who actually entered the room (better cohort)
+      const joinedCount = apiRes.joined || 0
+      const conversionRate = joinedCount > 0 ? (ctaClicks / joinedCount) * 100 : 0
 
-      setSummary({ totalLeads, totalAttended, ctaClicks, peakViewers: peak, conversionRate })
+      setSummary({
+        totalLeads,
+        totalAttended,
+        ctaClicks,
+        peakViewers: peak,
+        conversionRate,
+        joined: joinedCount,
+        progress50: apiRes.progress_50 || 0,
+        chatMessagesCount: apiRes.chat_messages_count || 0,
+        chatUniqueSenders: apiRes.chat_unique_senders || 0,
+        quizResponsesCount: apiRes.quiz_responses_count || 0,
+        quizAvgScore: apiRes.quiz_avg_score || 0,
+        utmSourceBreakdown: apiRes.utm_source_breakdown || {}
+      })
       setRetentionData(filled)
       if (peak > 0) setPeakMinute(peakMin)
       setLoading(false)
@@ -77,101 +108,220 @@ export default function AnalyticsPage() {
 
   const metricCards = [
     { label: 'Total de Leads', value: summary.totalLeads, icon: '👤', color: 'var(--text-primary)' },
-    { label: 'Espectadores (Show Up)', value: summary.totalAttended, icon: '👁', color: 'var(--text-primary)' },
-    { label: 'Pico Instantâneo', value: summary.peakViewers, icon: '📈', color: '#a78bfa' },
-    { label: 'Cliques no Pitch', value: summary.ctaClicks, icon: '🛒', color: '#10b981', highlight: true },
+    { label: 'Compareceram (Show Up)', value: summary.totalAttended, icon: '👁', color: 'var(--text-primary)' },
+    { label: 'Pico Simultâneo', value: summary.peakViewers, icon: '📈', color: '#a78bfa' },
+    { label: 'Cliques no Pitch', value: summary.ctaClicks, icon: '🛒', color: '#f97316', highlight: true },
     {
-      label: 'Taxa de Conversão',
+      label: 'Conversão (Cliques/Entraram)',
       value: `${summary.conversionRate.toFixed(1)}%`,
       icon: '🎯',
-      color: summary.conversionRate >= 5 ? '#10b981' : summary.conversionRate >= 2 ? '#f59e0b' : '#ef4444',
+      color: summary.conversionRate >= 10 ? '#10b981' : summary.conversionRate >= 3 ? '#f97316' : '#ef4444',
       highlight: true,
     },
   ]
 
+  // Funnel calculations
+  const funnelStages = [
+    { name: '1. Cadastro', count: summary.totalLeads, pct: 100, color: '#3b82f6', subtitle: 'Registrados' },
+    { name: '2. Presença', count: summary.joined, pct: summary.totalLeads > 0 ? Math.round((summary.joined / summary.totalLeads) * 100) : 0, color: '#10b981', subtitle: 'Entraram na Sala' },
+    { name: '3. Retenção (50%+)', count: summary.progress50, pct: summary.joined > 0 ? Math.round((summary.progress50 / summary.joined) * 100) : 0, color: '#8b5cf6', subtitle: 'Assistiram metade' },
+    { name: '4. Cliques', count: summary.ctaClicks, pct: summary.joined > 0 ? Math.round((summary.ctaClicks / summary.joined) * 100) : 0, color: '#f97316', subtitle: 'Clicaram no CTA' }
+  ]
+
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', padding: '32px 24px' }}>
-      <div className="page-header">
+      <div className="page-header" style={{ marginBottom: 24 }}>
         <div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
             <Link href={`/admin/projects/${id}/webinars`} style={{ color: 'var(--brand-light)' }}>Webinars</Link> / {webinarName}
           </div>
           <h1 className="page-title">📊 Analytics</h1>
-          <p className="page-subtitle">Retenção, conversão e métricas profundas do seu evento</p>
+          <p className="page-subtitle">Métricas avançadas de retenção, conversão e engajamento</p>
         </div>
       </div>
 
-      {/* Metric Cards — auto-fit so they wrap cleanly on mobile */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 32 }}>
+      {/* Metric Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         {metricCards.map(card => (
           <div
             key={card.label}
             className="card"
             style={{
-              padding: 24,
+              padding: 20,
               display: 'flex', flexDirection: 'column', gap: 8,
               border: card.highlight ? `1px solid ${card.color}44` : undefined,
+              background: card.highlight ? 'rgba(255,255,255,0.01)' : 'var(--bg-card)'
             }}
           >
             <div style={{ fontSize: 20 }}>{card.icon}</div>
             <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{card.label}</div>
-            <div style={{ fontSize: 30, fontWeight: 800, color: card.color }}>{card.value}</div>
+            <div style={{ fontSize: 26, fontWeight: 800, color: card.color }}>{card.value}</div>
           </div>
         ))}
       </div>
 
-      {/* Retention Curve */}
-      <div className="card" style={{ padding: 24 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-          <div style={{ fontSize: 16, fontWeight: 700 }}>📉 Curva de Retenção (Atenção por Minuto)</div>
-          {peakMinute !== null && (
-            <div style={{ fontSize: 12, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 8, padding: '4px 12px' }}>
-              Pico no minuto {peakMinute}
+      {/* Visual Funnel Section */}
+      <div className="card" style={{ padding: 24, marginBottom: 24 }}>
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 20, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span>⏳ Funil de Performance</span>
+        </h3>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: 16
+        }}>
+          {funnelStages.map((stage, idx) => (
+            <div key={stage.name} style={{
+              background: 'var(--bg-elevated)',
+              borderRadius: 12,
+              padding: 16,
+              position: 'relative',
+              borderLeft: `4px solid ${stage.color}`
+            }}>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{stage.name}</div>
+              <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, color: 'var(--text-primary)' }}>
+                {stage.count} <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>leads</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+                <div style={{ flex: 1, height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+                  <div style={{ width: `${stage.pct}%`, height: '100%', borderRadius: 3, background: stage.color }} />
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 700, color: stage.color }}>{stage.pct}%</span>
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 6 }}>{stage.subtitle}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Chart and Sub-Engagement Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr', lgGridTemplateColumns: '2fr 1fr', gap: 24, marginBottom: 24 }}>
+        
+        {/* Retention Curve */}
+        <div className="card" style={{ padding: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>📉 Curva de Retenção (Atenção por Minuto)</div>
+            {peakMinute !== null && (
+              <div style={{ fontSize: 12, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 8, padding: '4px 12px' }}>
+                Pico no minuto {peakMinute}
+              </div>
+            )}
+          </div>
+          {retentionData.length === 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 280, gap: 12, color: 'var(--text-muted)', fontSize: 14 }}>
+              <div style={{ fontSize: 40 }}>📭</div>
+              <div>Dados aparecerão após o primeiro espectador assistir ao vídeo</div>
+              <div style={{ fontSize: 12, opacity: 0.7 }}>O tracker coleta dados a cada 10–30s de reprodução</div>
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={320}>
+              <ComposedChart data={retentionData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="colorViewers" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
+                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="minute" stroke="#6b7280" fontSize={12} tickFormatter={tick => `${tick}m`} />
+                <YAxis yAxisId="left" stroke="#6b7280" fontSize={12} />
+                <YAxis yAxisId="right" orientation="right" stroke="#ef4444" fontSize={12} hide />
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+                <Tooltip
+                  contentStyle={{ background: '#1e1b4b', border: '1px solid #4f46e5', borderRadius: 8, color: '#fff' }}
+                  labelFormatter={label => `Minuto ${label}`}
+                  formatter={(value: any, name: any) => {
+                    if (name === 'viewers') return [value, 'Espectadores']
+                    if (name === 'dropoff') return [value, 'Saíram neste minuto']
+                    return [value, name as string]
+                  }}
+                />
+                {peakMinute !== null && (
+                  <ReferenceLine
+                    yAxisId="left"
+                    x={peakMinute}
+                    stroke="#a78bfa"
+                    strokeDasharray="4 4"
+                    label={{ value: '🔝 Pico', fill: '#a78bfa', fontSize: 11, position: 'top' }}
+                  />
+                )}
+                <Bar yAxisId="right" dataKey="dropoff" fill="#ef4444" barSize={10} opacity={0.6} radius={[4,4,0,0]} />
+                <Area yAxisId="left" type="monotone" dataKey="viewers" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorViewers)" dot={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24 }}>
+        
+        {/* Interaction & Engagement Blocks */}
+        <div className="card" style={{ padding: 24 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>💬 Engajamento do Chat</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ background: 'var(--bg-elevated)', borderRadius: 12, padding: 16 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Total de Mensagens</div>
+              <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, color: '#6366f1' }}>{summary.chatMessagesCount}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>Reais (não simuladas)</div>
+            </div>
+            <div style={{ background: 'var(--bg-elevated)', borderRadius: 12, padding: 16 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Usuários Ativos</div>
+              <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, color: '#3b82f6' }}>{summary.chatUniqueSenders}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>Enviaram no mínimo 1 msg</div>
+            </div>
+          </div>
+
+          <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 24, marginBottom: 16 }}>📝 Performance do Quiz</h3>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ background: 'var(--bg-elevated)', borderRadius: 12, padding: 16 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Respostas Enviadas</div>
+              <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, color: '#10b981' }}>{summary.quizResponsesCount}</div>
+            </div>
+            <div style={{ background: 'var(--bg-elevated)', borderRadius: 12, padding: 16 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Pontuação Média</div>
+              <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, color: '#eab308' }}>{summary.quizAvgScore}%</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Traffic Source Segmentation (UTMs) */}
+        <div className="card" style={{ padding: 24 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>🔗 Origem do Tráfego (UTMs)</h3>
+          {Object.keys(summary.utmSourceBreakdown).length === 0 ? (
+            <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '32px 0' }}>
+              Nenhum lead com parâmetros de rastreamento (UTM) registrado ainda.
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)', textAlign: 'left' }}>
+                    <th style={{ padding: '8px 0', color: 'var(--text-muted)' }}>Campanha (utm_source)</th>
+                    <th style={{ padding: '8px 0', textAlign: 'center', color: 'var(--text-muted)' }}>Leads</th>
+                    <th style={{ padding: '8px 0', textAlign: 'center', color: 'var(--text-muted)' }}>Presença</th>
+                    <th style={{ padding: '8px 0', textAlign: 'right', color: 'var(--text-muted)' }}>Show Up %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(summary.utmSourceBreakdown)
+                    .sort(([, a], [, b]) => b.count - a.count)
+                    .map(([source, data]) => {
+                      const showUpPct = data.count > 0 ? (data.attended / data.count) * 100 : 0
+                      return (
+                        <tr key={source} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
+                          <td style={{ padding: '10px 0', fontWeight: 600, color: 'var(--text-primary)' }}>{source}</td>
+                          <td style={{ padding: '10px 0', textAlign: 'center' }}>{data.count}</td>
+                          <td style={{ padding: '10px 0', textAlign: 'center', color: '#10b981' }}>{data.attended}</td>
+                          <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 700, color: showUpPct >= 40 ? '#10b981' : showUpPct >= 20 ? '#eab308' : '#ef4444' }}>
+                            {showUpPct.toFixed(0)}%
+                          </td>
+                        </tr>
+                      )
+                    })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
-        {retentionData.length === 0 ? (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 280, gap: 12, color: 'var(--text-muted)', fontSize: 14 }}>
-            <div style={{ fontSize: 40 }}>📭</div>
-            <div>Dados aparecerão após o primeiro espectador assistir ao vídeo</div>
-            <div style={{ fontSize: 12, opacity: 0.7 }}>O tracker coleta dados a cada 10–30s de reprodução</div>
-          </div>
-        ) : (
-          <ResponsiveContainer width="100%" height={320}>
-            <ComposedChart data={retentionData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="colorViewers" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
-                  <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="minute" stroke="#6b7280" fontSize={12} tickFormatter={tick => `${tick}m`} />
-              <YAxis yAxisId="left" stroke="#6b7280" fontSize={12} />
-              <YAxis yAxisId="right" orientation="right" stroke="#ef4444" fontSize={12} hide />
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
-              <Tooltip
-                contentStyle={{ background: '#1e1b4b', border: '1px solid #4f46e5', borderRadius: 8, color: '#fff' }}
-                labelFormatter={label => `Minuto ${label}`}
-                formatter={(value: any, name: any) => {
-                  if (name === 'viewers') return [value, 'Espectadores']
-                  if (name === 'dropoff') return [value, 'Saíram neste minuto']
-                  return [value, name as string]
-                }}
-              />
-              {peakMinute !== null && (
-                <ReferenceLine
-                  yAxisId="left"
-                  x={peakMinute}
-                  stroke="#a78bfa"
-                  strokeDasharray="4 4"
-                  label={{ value: '🔝 Pico', fill: '#a78bfa', fontSize: 11, position: 'top' }}
-                />
-              )}
-              <Bar yAxisId="right" dataKey="dropoff" fill="#ef4444" barSize={10} opacity={0.6} radius={[4,4,0,0]} />
-              <Area yAxisId="left" type="monotone" dataKey="viewers" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorViewers)" dot={false} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        )}
       </div>
     </div>
   )

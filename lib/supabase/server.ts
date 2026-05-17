@@ -24,10 +24,23 @@ export async function createClient() {
 
 export async function createServiceClient() {
   const cookieStore = await cookies()
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  // Fallback se a chave do service role for nula, vazia ou o placeholder do .env.local
+  const keyToUse = (!serviceKey || serviceKey === 'your-service-role-key') ? anonKey : serviceKey
+  
+  if (!keyToUse) {
+    throw new Error('Supabase key (service role or anon key) not configured')
+  }
+
+  if (!serviceKey || serviceKey === 'your-service-role-key') {
+    console.warn('⚠️ SUPABASE_SERVICE_ROLE_KEY não configurada no ambiente. Usando chave anônima como fallback.')
+  }
 
   return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    keyToUse!,
     {
       cookies: {
         getAll() {

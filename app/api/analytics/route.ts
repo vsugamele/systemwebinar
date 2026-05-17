@@ -129,10 +129,29 @@ export async function GET(req: NextRequest) {
       .sort(([a], [b]) => a - b)
       .map(([minute, sessions]) => ({ minute, viewers: sessions.size }))
 
-    // Other aggregates
-    const { count: totalLeads } = await supabase
-      .from('webi_leads').select('id', { count: 'exact', head: true }).eq('webinar_id', webinarId)
+    // Leads and UTM breakdown
+    const { data: leadsData } = await supabase
+      .from('webi_leads')
+      .select('id, attended, metadata')
+      .eq('webinar_id', webinarId)
 
+    const totalLeads = leadsData?.length || 0
+    const totalAttended = leadsData?.filter(l => l.attended)?.length || 0
+
+    const utmSourceBreakdown: Record<string, { count: number; attended: number }> = {}
+    leadsData?.forEach(lead => {
+      const meta = (lead.metadata as Record<string, any>) || {}
+      const source = meta.utm_source || meta.source || 'Direto / Orgânico'
+      if (!utmSourceBreakdown[source]) {
+        utmSourceBreakdown[source] = { count: 0, attended: 0 }
+      }
+      utmSourceBreakdown[source].count++
+      if (lead.attended) {
+        utmSourceBreakdown[source].attended++
+      }
+    })
+
+    // CTA & Popup clicks/views
     const { count: ctaClicks } = await supabase
       .from('webi_session_events').select('id', { count: 'exact', head: true })
       .eq('webinar_id', webinarId).eq('event_type', 'cta_clicked')
@@ -145,11 +164,56 @@ export async function GET(req: NextRequest) {
       .from('webi_session_events').select('id', { count: 'exact', head: true })
       .eq('webinar_id', webinarId).eq('event_type', 'joined')
 
+    // Progress 50% watch rate
+    const { count: progress50 } = await supabase
+      .from('webi_session_events').select('id', { count: 'exact', head: true })
+      .eq('webinar_id', webinarId).eq('event_type', 'progress_50')
+
+    // Chat metrics
+    let chatMessagesCount = 0
+    let chatUniqueSenders = 0
+    try {
+      const { data: chatMessages } = await supabase
+        .from('webi_live_chat')
+        .select('session_id')
+        .eq('webinar_id', webinarId)
+        .eq('is_simulated', false)
+
+      chatMessagesCount = chatMessages?.length || 0
+      chatUniqueSenders = new Set(chatMessages?.map(c => c.session_id) || []).size
+    } catch (err) {
+      console.warn('Erro ao ler mensagens de chat do banco para analytics:', err)
+    }
+
+    // Quiz metrics
+    let quizResponsesCount = 0
+    let quizAvgScore = 0
+    try {
+      const { data: quizResponses } = await supabase
+        .from('webi_quiz_responses')
+        .select('score')
+        .eq('webinar_id', webinarId)
+
+      quizResponsesCount = quizResponses?.length || 0
+      quizAvgScore = quizResponsesCount > 0
+        ? quizResponses!.reduce((acc, r) => acc + (r.score || 0), 0) / quizResponsesCount
+        : 0
+    } catch (err) {
+      console.warn('Erro ao ler respostas de quiz do banco para analytics:', err)
+    }
+
     return NextResponse.json({
-      total_leads: totalLeads || 0,
+      total_leads: totalLeads,
+      total_attended: totalAttended,
       joined: uniqueJoined || 0,
       cta_clicks: ctaClicks || 0,
       popup_seen: popupSeen || 0,
+      progress_50: progress50 || 0,
+      chat_messages_count: chatMessagesCount,
+      chat_unique_senders: chatUniqueSenders,
+      quiz_responses_count: quizResponsesCount,
+      quiz_avg_score: Math.round(quizAvgScore),
+      utm_source_breakdown: utmSourceBreakdown,
       viewers_by_minute: viewersByMinute,
     })
   } catch (error: any) {
