@@ -153,12 +153,15 @@ export async function GET(req: NextRequest) {
 
     // CTA & Popup clicks/views
     const { data: ctaClickEvents } = await supabase
-      .from('webi_session_events').select('metadata')
+      .from('webi_session_events').select('metadata, timestamp_video')
       .eq('webinar_id', webinarId).eq('event_type', 'cta_clicked')
 
     const ctaClicks = ctaClickEvents?.length || 0
     const pitchPerformance: Record<string, { clicks: number; text?: string }> = {}
+    const clicksByMinute: Record<number, number> = {}
+
     ctaClickEvents?.forEach(ev => {
+      // 1. A/B Testing Pitch
       const meta = ev.metadata as Record<string, any>
       if (meta && meta.source === 'pitch_button') {
         const image = meta.pitch_image || 'sem-imagem'
@@ -167,7 +170,18 @@ export async function GET(req: NextRequest) {
         }
         pitchPerformance[image].clicks++
       }
+
+      // 2. Clicks by Minute (Mapa de Conversão)
+      if (ev.timestamp_video !== null && ev.timestamp_video !== undefined) {
+        const minute = Math.floor(ev.timestamp_video / 60)
+        if (!clicksByMinute[minute]) clicksByMinute[minute] = 0
+        clicksByMinute[minute]++
+      }
     })
+
+    const clicksByMinuteArray = Object.entries(clicksByMinute)
+      .map(([minute, clicks]) => ({ minute: Number(minute), clicks }))
+      .sort((a, b) => a.minute - b.minute)
 
     const { count: popupSeen } = await supabase
       .from('webi_session_events').select('id', { count: 'exact', head: true })
@@ -185,15 +199,28 @@ export async function GET(req: NextRequest) {
     // Chat metrics
     let chatMessagesCount = 0
     let chatUniqueSenders = 0
+    let topChatters: { author: string, messages: number }[] = []
     try {
       const { data: chatMessages } = await supabase
         .from('webi_live_chat')
-        .select('session_id')
+        .select('session_id, author')
         .eq('webinar_id', webinarId)
         .eq('is_simulated', false)
 
       chatMessagesCount = chatMessages?.length || 0
       chatUniqueSenders = new Set(chatMessages?.map(c => c.session_id) || []).size
+
+      // Top Chatters (Hot Leads)
+      const chattersMap: Record<string, number> = {}
+      chatMessages?.forEach(c => {
+        const author = c.author || 'Anônimo'
+        if (!chattersMap[author]) chattersMap[author] = 0
+        chattersMap[author]++
+      })
+      topChatters = Object.entries(chattersMap)
+        .map(([author, messages]) => ({ author, messages }))
+        .sort((a, b) => b.messages - a.messages)
+        .slice(0, 10) // Top 10
     } catch (err) {
       console.warn('Erro ao ler mensagens de chat do banco para analytics:', err)
     }
@@ -224,11 +251,13 @@ export async function GET(req: NextRequest) {
       progress_50: progress50 || 0,
       chat_messages_count: chatMessagesCount,
       chat_unique_senders: chatUniqueSenders,
+      top_chatters: topChatters,
       quiz_responses_count: quizResponsesCount,
       quiz_avg_score: Math.round(quizAvgScore),
       utm_source_breakdown: utmSourceBreakdown,
       pitch_performance: pitchPerformance,
       viewers_by_minute: viewersByMinute,
+      clicks_by_minute: clicksByMinuteArray,
     })
   } catch (error: any) {
     console.error('Error in /api/analytics:', error)

@@ -17,9 +17,10 @@ interface AnalyticsSummary {
   chatMessagesCount: number
   chatUniqueSenders: number
   quizResponsesCount: number
-  quizAvgScore: number
   utmSourceBreakdown: Record<string, { count: number; attended: number }>
   pitchPerformance: Record<string, { clicks: number; text?: string }>
+  topChatters: { author: string; messages: number }[]
+  clicksByMinute: { minute: number; clicks: number }[]
 }
 
 interface ViewersByMinute {
@@ -47,10 +48,13 @@ export default function AnalyticsPage() {
     quizResponsesCount: 0,
     quizAvgScore: 0,
     utmSourceBreakdown: {},
-    pitchPerformance: {}
+    pitchPerformance: {},
+    topChatters: [],
+    clicksByMinute: []
   })
   const [retentionData, setRetentionData] = useState<ViewersByMinute[]>([])
   const [peakMinute, setPeakMinute] = useState<number | null>(null)
+  const [maxDropoffMinute, setMaxDropoffMinute] = useState<{ minute: number, dropoff: number } | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -72,11 +76,14 @@ export default function AnalyticsPage() {
       let peak = 0
       let peakMin = 0
       let prevViewers = 0
+      let maxDrop = 0
+      let maxDropMin = 0
       for (let i = 0; i <= maxMin; i++) {
         const point = viewersByMinute.find(v => v.minute === i)
         const v = point ? point.viewers : 0
         if (v > peak) { peak = v; peakMin = i }
         const dropoff = (i > 0 && prevViewers > v) ? prevViewers - v : 0
+        if (dropoff > maxDrop) { maxDrop = dropoff; maxDropMin = i }
         filled.push({ minute: i, viewers: v, dropoff })
         prevViewers = v
       }
@@ -98,10 +105,20 @@ export default function AnalyticsPage() {
         quizResponsesCount: apiRes.quiz_responses_count || 0,
         quizAvgScore: apiRes.quiz_avg_score || 0,
         utmSourceBreakdown: apiRes.utm_source_breakdown || {},
-        pitchPerformance: apiRes.pitch_performance || {}
+        pitchPerformance: apiRes.pitch_performance || {},
+        topChatters: apiRes.top_chatters || [],
+        clicksByMinute: apiRes.clicks_by_minute || []
       })
-      setRetentionData(filled)
+      
+      // Merge clicks with retention data for unified chart
+      const mergedRetention = filled.map(f => {
+        const c = (apiRes.clicks_by_minute || []).find((ck: any) => ck.minute === f.minute)
+        return { ...f, clicks: c ? c.clicks : 0 }
+      })
+
+      setRetentionData(mergedRetention)
       if (peak > 0) setPeakMinute(peakMin)
+      if (maxDrop > 0) setMaxDropoffMinute({ minute: maxDropMin, dropoff: maxDrop })
       setLoading(false)
     }
     load()
@@ -202,13 +219,24 @@ export default function AnalyticsPage() {
         
         {/* Retention Curve */}
         <div className="card" style={{ padding: 24 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 20 }}>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>📉 Curva de Retenção (Atenção por Minuto)</div>
-            {peakMinute !== null && (
-              <div style={{ fontSize: 12, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 8, padding: '4px 12px' }}>
-                Pico no minuto {peakMinute}
+          {/* Chart Header & Warnings */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8 }}>📉 Mapa de Atenção e Conversão</div>
+              <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                {peakMinute !== null && (
+                  <div style={{ fontSize: 12, color: '#a78bfa', background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.3)', borderRadius: 8, padding: '4px 12px' }}>
+                    📈 Pico no minuto {peakMinute}
+                  </div>
+                )}
+                {maxDropoffMinute !== null && (
+                  <div style={{ fontSize: 12, color: '#ef4444', background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, padding: '4px 12px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>⚠️ Ponto Cego:</span>
+                    <span>Maior fuga no minuto {maxDropoffMinute.minute} ({maxDropoffMinute.dropoff} pessoas saíram)</span>
+                  </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
           {retentionData.length === 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 280, gap: 12, color: 'var(--text-muted)', fontSize: 14 }}>
@@ -235,6 +263,7 @@ export default function AnalyticsPage() {
                   formatter={(value: any, name: any) => {
                     if (name === 'viewers') return [value, 'Espectadores']
                     if (name === 'dropoff') return [value, 'Saíram neste minuto']
+                    if (name === 'clicks') return [value, 'Cliques no Pitch']
                     return [value, name as string]
                   }}
                 />
@@ -247,7 +276,17 @@ export default function AnalyticsPage() {
                     label={{ value: '🔝 Pico', fill: '#a78bfa', fontSize: 11, position: 'top' }}
                   />
                 )}
+                {maxDropoffMinute !== null && (
+                  <ReferenceLine
+                    yAxisId="left"
+                    x={maxDropoffMinute.minute}
+                    stroke="#ef4444"
+                    strokeDasharray="3 3"
+                    label={{ value: '⚠️ Fuga', fill: '#ef4444', fontSize: 11, position: 'insideTopLeft' }}
+                  />
+                )}
                 <Bar yAxisId="right" dataKey="dropoff" fill="#ef4444" barSize={10} opacity={0.6} radius={[4,4,0,0]} />
+                <Bar yAxisId="right" dataKey="clicks" fill="#f97316" barSize={14} opacity={0.9} radius={[4,4,0,0]} />
                 <Area yAxisId="left" type="monotone" dataKey="viewers" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorViewers)" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -260,7 +299,7 @@ export default function AnalyticsPage() {
         {/* Interaction & Engagement Blocks */}
         <div className="card" style={{ padding: 24 }}>
           <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>💬 Engajamento do Chat</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
             <div style={{ background: 'var(--bg-elevated)', borderRadius: 12, padding: 16 }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Total de Mensagens</div>
               <div style={{ fontSize: 24, fontWeight: 800, marginTop: 4, color: '#6366f1' }}>{summary.chatMessagesCount}</div>
@@ -273,7 +312,29 @@ export default function AnalyticsPage() {
             </div>
           </div>
 
-          <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 24, marginBottom: 16 }}>📝 Performance do Quiz</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+            🔥 Hot Leads <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>(Top Comentaristas)</span>
+          </h3>
+          <div style={{ background: 'var(--bg-elevated)', borderRadius: 12, overflow: 'hidden' }}>
+            {summary.topChatters.length === 0 ? (
+              <div style={{ padding: '24px 16px', textAlign: 'center', fontSize: 13, color: 'var(--text-muted)' }}>
+                Nenhum lead comentou ainda.
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <tbody>
+                  {summary.topChatters.map((chatter, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid rgba(255,255,255,0.02)' }}>
+                      <td style={{ padding: '10px 16px', fontWeight: 600, color: 'var(--text-primary)' }}>{chatter.author}</td>
+                      <td style={{ padding: '10px 16px', textAlign: 'right', fontWeight: 700, color: '#6366f1' }}>{chatter.messages} <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>msgs</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32, marginBottom: 16 }}>📝 Performance do Quiz</h3>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
             <div style={{ background: 'var(--bg-elevated)', borderRadius: 12, padding: 16 }}>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Respostas Enviadas</div>
