@@ -245,6 +245,13 @@ export default function AdminDashboard() {
                   {/* Actions */}
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                     <Link
+                      href={`/admin/projects/${w.project_id}/webinars/${w.id}`}
+                      className="btn btn-ghost btn-sm"
+                      title="Configurações"
+                    >
+                      ⚙️ Config
+                    </Link>
+                    <Link
                       href={`/w/${w.slug}?test=1`}
                       target="_blank"
                       className="btn btn-ghost btn-sm"

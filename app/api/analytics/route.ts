@@ -152,7 +152,8 @@ export async function GET(req: NextRequest) {
       popup_seen: popupSeen || 0,
       viewers_by_minute: viewersByMinute,
     })
-  } catch (error) {
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  } catch (error: any) {
+    console.error('Error in /api/analytics:', error)
+    return NextResponse.json({ error: 'Internal Server Error', details: error?.message || String(error) }, { status: 500 })
   }
 }

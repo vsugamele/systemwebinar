@@ -34,8 +34,26 @@ export default function AnalyticsPage() {
   useEffect(() => {
     if (!selectedWebinar) return
     fetch(`/api/analytics?webinar_id=${selectedWebinar}`)
-      .then(r => r.json())
-      .then(d => { setData(d); setLoading(false) })
+      .then(async r => {
+        if (!r.ok) {
+          console.error('Erro na API:', await r.text())
+          setData(null)
+          setLoading(false)
+          return null
+        }
+        return r.json()
+      })
+      .then(d => {
+        if (d) {
+          setData(d)
+          setLoading(false)
+        }
+      })
+      .catch(err => {
+        console.error(err)
+        setData(null)
+        setLoading(false)
+      })
   }, [selectedWebinar])
 
   const maxViewers = data ? Math.max(...data.viewers_by_minute.map(v => v.viewers), 1) : 1
