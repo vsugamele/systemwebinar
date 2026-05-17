@@ -1909,7 +1909,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   function handleCTAClick() {
     if (!pitchPayload) return
-    trackEvent('cta_clicked', Math.floor(videoRef.current?.currentTime || 0))
+    trackEvent('cta_clicked', Math.floor(videoRef.current?.currentTime || 0), { 
+      source: 'pitch_button',
+      pitch_image: pitchPayload.image_url || 'sem-imagem',
+      pitch_text: pitchPayload.cta_text 
+    })
     // Trigger the webhook in the background
     fetch('/api/webhooks/pitch-click', {
       method: 'POST',

@@ -152,9 +152,22 @@ export async function GET(req: NextRequest) {
     })
 
     // CTA & Popup clicks/views
-    const { count: ctaClicks } = await supabase
-      .from('webi_session_events').select('id', { count: 'exact', head: true })
+    const { data: ctaClickEvents } = await supabase
+      .from('webi_session_events').select('metadata')
       .eq('webinar_id', webinarId).eq('event_type', 'cta_clicked')
+
+    const ctaClicks = ctaClickEvents?.length || 0
+    const pitchPerformance: Record<string, { clicks: number; text?: string }> = {}
+    ctaClickEvents?.forEach(ev => {
+      const meta = ev.metadata as Record<string, any>
+      if (meta && meta.source === 'pitch_button') {
+        const image = meta.pitch_image || 'sem-imagem'
+        if (!pitchPerformance[image]) {
+          pitchPerformance[image] = { clicks: 0, text: meta.pitch_text }
+        }
+        pitchPerformance[image].clicks++
+      }
+    })
 
     const { count: popupSeen } = await supabase
       .from('webi_session_events').select('id', { count: 'exact', head: true })
@@ -214,6 +227,7 @@ export async function GET(req: NextRequest) {
       quiz_responses_count: quizResponsesCount,
       quiz_avg_score: Math.round(quizAvgScore),
       utm_source_breakdown: utmSourceBreakdown,
+      pitch_performance: pitchPerformance,
       viewers_by_minute: viewersByMinute,
     })
   } catch (error: any) {

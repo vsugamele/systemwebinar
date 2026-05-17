@@ -19,6 +19,7 @@ interface AnalyticsSummary {
   quizResponsesCount: number
   quizAvgScore: number
   utmSourceBreakdown: Record<string, { count: number; attended: number }>
+  pitchPerformance: Record<string, { clicks: number; text?: string }>
 }
 
 interface ViewersByMinute {
@@ -45,7 +46,8 @@ export default function AnalyticsPage() {
     chatUniqueSenders: 0,
     quizResponsesCount: 0,
     quizAvgScore: 0,
-    utmSourceBreakdown: {}
+    utmSourceBreakdown: {},
+    pitchPerformance: {}
   })
   const [retentionData, setRetentionData] = useState<ViewersByMinute[]>([])
   const [peakMinute, setPeakMinute] = useState<number | null>(null)
@@ -95,7 +97,8 @@ export default function AnalyticsPage() {
         chatUniqueSenders: apiRes.chat_unique_senders || 0,
         quizResponsesCount: apiRes.quiz_responses_count || 0,
         quizAvgScore: apiRes.quiz_avg_score || 0,
-        utmSourceBreakdown: apiRes.utm_source_breakdown || {}
+        utmSourceBreakdown: apiRes.utm_source_breakdown || {},
+        pitchPerformance: apiRes.pitch_performance || {}
       })
       setRetentionData(filled)
       if (peak > 0) setPeakMinute(peakMin)
@@ -319,6 +322,63 @@ export default function AnalyticsPage() {
                     })}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+
+        {/* Pitch Button A/B Test */}
+        <div className="card" style={{ padding: 24, gridColumn: '1 / -1' }}>
+          <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>🛒 Performance do Botão de Oferta (Teste A/B)</h3>
+          {Object.keys(summary.pitchPerformance).length === 0 ? (
+            <div style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', padding: '32px 0' }}>
+              Nenhum clique no botão de oferta registrado ainda.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+              {Object.entries(summary.pitchPerformance)
+                .sort(([, a], [, b]) => b.clicks - a.clicks)
+                .map(([image, data], index) => {
+                  const isTop = index === 0;
+                  return (
+                    <div key={image} style={{
+                      background: 'var(--bg-elevated)',
+                      borderRadius: 12,
+                      padding: 16,
+                      border: isTop ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--border)',
+                      position: 'relative',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 12
+                    }}>
+                      {isTop && (
+                        <div style={{ position: 'absolute', top: -10, right: 16, background: '#10b981', color: '#fff', fontSize: 10, fontWeight: 800, padding: '4px 8px', borderRadius: 10 }}>
+                          🏆 VENCEDOR
+                        </div>
+                      )}
+                      
+                      {image !== 'sem-imagem' ? (
+                        <div style={{ width: '100%', height: 120, borderRadius: 8, overflow: 'hidden', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <img src={image} alt="Pitch CTA" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                        </div>
+                      ) : (
+                        <div style={{ width: '100%', height: 120, borderRadius: 8, background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
+                          (Apenas texto, sem imagem)
+                        </div>
+                      )}
+                      
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: '#f97316' }}>{data.clicks}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Cliques Gerados</div>
+                      </div>
+
+                      {data.text && (
+                        <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center', fontStyle: 'italic', background: 'rgba(255,255,255,0.03)', padding: '6px 8px', borderRadius: 6 }}>
+                          "{data.text}"
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
             </div>
           )}
         </div>
