@@ -51,6 +51,18 @@ export default function LivePage() {
     fake_viewers_peak_at_pct: 30,
   })
 
+  // Realtime audience stats
+  interface RealtimeStats {
+    online_now: number
+    peak_simultaneous: number
+    total_joined: number
+    recent_dropoffs: number
+    recent_cta_clicks: number
+    updated_at: string
+  }
+  const [realtime, setRealtime] = useState<RealtimeStats | null>(null)
+  const [realtimeLoading, setRealtimeLoading] = useState(false)
+
   useEffect(() => {
     supabase
       .from('webi_webinars')
@@ -88,6 +100,24 @@ export default function LivePage() {
         }
         setLoading(false)
       })
+  }, [wid])
+
+  // Poll realtime stats every 30s
+  useEffect(() => {
+    async function fetchRealtime() {
+      setRealtimeLoading(true)
+      try {
+        const res = await fetch(`/api/analytics/realtime?webinar_id=${wid}`)
+        if (res.ok) {
+          const data = await res.json()
+          setRealtime(data)
+        }
+      } catch {}
+      setRealtimeLoading(false)
+    }
+    fetchRealtime()
+    const interval = setInterval(fetchRealtime, 30_000)
+    return () => clearInterval(interval)
   }, [wid])
 
   // Scheduled countdown ticker
@@ -320,6 +350,127 @@ export default function LivePage() {
                   As sessões iniciarão e desligarão sozinhas nos horários programados.
                 </div>
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* REALTIME AUDIENCE WIDGET */}
+        <div className="card" style={{
+          border: '1px solid rgba(99,102,241,0.3)',
+          background: 'rgba(99,102,241,0.04)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{
+                width: 8, height: 8, borderRadius: '50%',
+                background: '#6366f1',
+                boxShadow: '0 0 8px #6366f1',
+                animation: 'livePulse 2s ease-in-out infinite',
+              }} />
+              <span style={{ fontWeight: 700, fontSize: 15 }}>📡 Audiência em Tempo Real</span>
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {realtimeLoading ? 'Atualizando...' : realtime ? `Atualizado às ${new Date(realtime.updated_at).toLocaleTimeString('pt-BR')}` : 'Carregando...'}
+            </div>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+            gap: 12,
+          }}>
+            {/* Online Agora */}
+            <div style={{
+              background: 'var(--bg-elevated)',
+              borderRadius: 12,
+              padding: '14px 16px',
+              border: '1px solid rgba(34,197,94,0.2)',
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#22c55e', lineHeight: 1 }}>
+                {realtime?.online_now ?? '—'}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontWeight: 600 }}>🟢 Online Agora</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>últimos 90s</div>
+            </div>
+
+            {/* Pico Simultâneo */}
+            <div style={{
+              background: 'var(--bg-elevated)',
+              borderRadius: 12,
+              padding: '14px 16px',
+              border: '1px solid rgba(167,139,250,0.2)',
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#a78bfa', lineHeight: 1 }}>
+                {realtime?.peak_simultaneous ?? '—'}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontWeight: 600 }}>📈 Pico Simultâneo</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>últimos 3 dias</div>
+            </div>
+
+            {/* Total que entrou */}
+            <div style={{
+              background: 'var(--bg-elevated)',
+              borderRadius: 12,
+              padding: '14px 16px',
+              border: '1px solid rgba(59,130,246,0.2)',
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#3b82f6', lineHeight: 1 }}>
+                {realtime?.total_joined ?? '—'}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontWeight: 600 }}>👥 Total Entraram</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>todas as sessões</div>
+            </div>
+
+            {/* Saíram recentemente */}
+            <div style={{
+              background: 'var(--bg-elevated)',
+              borderRadius: 12,
+              padding: '14px 16px',
+              border: '1px solid rgba(239,68,68,0.2)',
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#ef4444', lineHeight: 1 }}>
+                {realtime?.recent_dropoffs ?? '—'}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontWeight: 600 }}>🚪 Saíram</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>últimos 5 min</div>
+            </div>
+
+            {/* CTAs recentes */}
+            <div style={{
+              background: 'var(--bg-elevated)',
+              borderRadius: 12,
+              padding: '14px 16px',
+              border: '1px solid rgba(249,115,22,0.2)',
+              textAlign: 'center',
+            }}>
+              <div style={{ fontSize: 28, fontWeight: 800, color: '#f97316', lineHeight: 1 }}>
+                {realtime?.recent_cta_clicks ?? '—'}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontWeight: 600 }}>🛒 Cliques Pitch</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>últimas 24h</div>
+            </div>
+          </div>
+
+          {realtime && realtime.online_now > 0 && realtime.total_joined > 0 && (
+            <div style={{
+              marginTop: 12,
+              fontSize: 12,
+              color: 'var(--text-muted)',
+              background: 'var(--bg-elevated)',
+              borderRadius: 8,
+              padding: '8px 12px',
+              display: 'flex',
+              gap: 16,
+              flexWrap: 'wrap',
+            }}>
+              <span>🔁 Retenção atual: <strong style={{ color: '#6366f1' }}>{Math.round((realtime.online_now / realtime.total_joined) * 100)}%</strong></span>
+              {realtime.recent_cta_clicks > 0 && realtime.online_now > 0 && (
+                <span>💰 Conv. ao vivo: <strong style={{ color: '#f97316' }}>{Math.round((realtime.recent_cta_clicks / realtime.total_joined) * 100)}%</strong></span>
+              )}
             </div>
           )}
         </div>
