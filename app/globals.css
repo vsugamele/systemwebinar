@@ -936,9 +936,9 @@ tbody tr:hover td { background: var(--bg-hover); }
    VERTICAL VIDEO LAYOUT (9:16 / portrait)
    ============================================= */
 
-/* ── Desktop: video column is narrower (portrait), chat column fills remaining space ── */
+/* ── Desktop: video is centered in the main column, chat is a standard sidebar ── */
 .webinar-page-wrapper[data-layout="vertical"] .webinar-room {
-  grid-template-columns: minmax(0, 480px) 1fr;
+  grid-template-columns: 1fr var(--chat-width, 360px);
 }
 
 /* Center the video-section content, add subtle background padding */
@@ -969,38 +969,53 @@ tbody tr:hover td { background: var(--bg-hover); }
   height: 100%;
 }
 
-/* ── Mobile (≤1024px): stack vertically, video takes ~55% height ── */
+/* ── Mobile (≤1024px): imersive Instagram-live style overlay layout ── */
 @media (max-width: 1024px) {
   .webinar-page-wrapper[data-layout="vertical"] .webinar-room {
-    display: flex !important;
-    flex-direction: column !important;
-    grid-template-columns: unset;
-    /* Override the generic mobile rule that sets height:100% */
+    position: relative !important;
+    display: block !important;
     height: var(--app-height, 100dvh);
+    overflow: hidden;
   }
 
   .webinar-page-wrapper[data-layout="vertical"] .video-section {
-    flex: 0 0 auto;
-    position: relative !important; /* cancel fixed positioning */
-    overflow: hidden;
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 1;
+    background: #000;
+    display: flex;
+    flex-direction: column;
   }
 
   /* Video header em vertical fica sticky sobre o video-section, não fixed global */
   .webinar-page-wrapper[data-layout="vertical"] .video-header {
-    position: sticky !important;
+    position: absolute !important;
     top: 0;
+    left: 0;
+    right: 0;
     height: 52px;
     z-index: 200;
+    background: linear-gradient(to bottom, rgba(0, 0, 0, 0.85) 0%, transparent 100%) !important;
+    border-bottom: none !important;
   }
 
   .webinar-page-wrapper[data-layout="vertical"] .video-wrapper {
-    aspect-ratio: 9 / 16 !important;
-    width: auto !important;
-    /* On mobile, limit to ~52% of screen height so chat is still visible */
-    height: calc((var(--app-height, 100dvh) - 52px) * 0.52) !important;
-    max-height: none;
-    margin: 0 auto;
-    flex: 0 0 auto !important;
+    position: absolute !important;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: none !important;
+    aspect-ratio: none !important;
+    margin: 0 !important;
+    z-index: 10;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
   .webinar-page-wrapper[data-layout="vertical"] .yt-iframe {
@@ -1008,15 +1023,61 @@ tbody tr:hover td { background: var(--bg-hover); }
     height: 100% !important;
   }
 
-  /* Chat section in vertical mobile: fills remaining space */
+  /* Chat section in vertical mobile: transparent overlay at the bottom */
   .webinar-page-wrapper[data-layout="vertical"] .chat-section {
-    flex: 1 1 0;
+    position: absolute !important;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 42dvh !important;
     min-height: 0;
-    /* In vertical mode: transparent Instagram-live overlay */
-    background: rgba(0, 0, 0, 0.72) !important;
+    z-index: 100;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.4) 70%, transparent 100%) !important;
     border-left: none !important;
-    backdrop-filter: blur(12px) !important;
-    -webkit-backdrop-filter: blur(12px) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    pointer-events: none !important;
+  }
+
+  .webinar-page-wrapper[data-layout="vertical"] .chat-section > div:first-child,
+  .webinar-page-wrapper[data-layout="vertical"] .chat-section .chat-messages,
+  .webinar-page-wrapper[data-layout="vertical"] .chat-section .chat-input-area {
+    pointer-events: auto !important;
+  }
+
+  /* Make chat messages float and look like bubbles */
+  .webinar-page-wrapper[data-layout="vertical"] .chat-messages {
+    background: transparent !important;
+    padding: 10px 14px !important;
+    gap: 8px !important;
+  }
+
+  .webinar-page-wrapper[data-layout="vertical"] .chat-message {
+    background: rgba(0, 0, 0, 0.45) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    padding: 6px 12px !important;
+    border-radius: 16px !important;
+    max-width: 85% !important;
+    align-self: flex-start !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    backdrop-filter: blur(8px) !important;
+    -webkit-backdrop-filter: blur(8px) !important;
+  }
+
+  .webinar-page-wrapper[data-layout="vertical"] .chat-avatar {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 10px !important;
+  }
+
+  .webinar-page-wrapper[data-layout="vertical"] .chat-msg-author {
+    color: #a5b4fc !important;
+    font-size: 11px !important;
+  }
+
+  .webinar-page-wrapper[data-layout="vertical"] .chat-msg-text {
+    color: #ffffff !important;
+    font-size: 12.5px !important;
   }
 }
 
@@ -2108,5 +2169,15 @@ tbody tr:hover td { background: var(--bg-hover); }
   .sale-toast-card {
     max-width: 240px;
     padding: 10px 12px;
+  }
+}
+
+.analytics-chart-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 1024px) {
+  .analytics-chart-grid {
+    grid-template-columns: 2fr 1fr;
   }
 }

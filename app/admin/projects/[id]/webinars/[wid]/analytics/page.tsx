@@ -17,6 +17,7 @@ interface AnalyticsSummary {
   chatMessagesCount: number
   chatUniqueSenders: number
   quizResponsesCount: number
+  quizAvgScore: number
   utmSourceBreakdown: Record<string, { count: number; attended: number }>
   pitchPerformance: Record<string, { clicks: number; text?: string }>
   topChatters: { author: string; messages: number }[]
@@ -215,7 +216,7 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Chart and Sub-Engagement Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr', lgGridTemplateColumns: '2fr 1fr', gap: 24, marginBottom: 24 }}>
+      <div className="analytics-chart-grid" style={{ gap: 24, marginBottom: 24 }}>
         
         {/* Retention Curve */}
         <div className="card" style={{ padding: 24 }}>

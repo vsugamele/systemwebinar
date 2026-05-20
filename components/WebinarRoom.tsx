@@ -563,6 +563,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const [vimeoSrc, setVimeoSrc] = useState('')
   const sessionOnBgRef = useRef(false)
 
+  // ---- Native Video state ----
+  const [nativeMuted, setNativeMuted] = useState(true)
+
   // Detect iOS — Safari requires user to click INSIDE the iframe to start video
   const [isIOS, setIsIOS] = useState(false)
   useEffect(() => {
@@ -2508,29 +2511,65 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
               </div>
 
             ) : isVturbUrl(webinar.video_url) ? (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000', overflow: 'hidden' }}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000', overflow: 'hidden', width: '100%', height: '100%' }}>
                 <iframe
                   src={getVturbEmbedUrl(webinar.video_url)}
-                  style={{ border: 'none', width: '100%', height: '100%', maxWidth: '100%', maxHeight: '100%', aspectRatio: '16/9' }}
+                  style={{ border: 'none', width: '100%', height: '100%', maxWidth: '100%', maxHeight: '100%', aspectRatio: webinar.video_orientation === 'vertical' ? '9/16' : '16/9' }}
                   allow="autoplay; fullscreen; picture-in-picture"
                   title={webinar.name}
                 />
               </div>
             ) : (
-              <video
-                ref={videoRef}
-                src={webinar.video_url}
-                autoPlay
-                playsInline
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'contain',
-                  pointerEvents: 'none',
-                }}
-                onError={(e) => console.error('Video playback error', e)}
-                onContextMenu={e => e.preventDefault()}
-              />
+              <div style={{ position: 'relative', width: '100%', height: '100%', background: '#000', overflow: 'hidden' }}>
+                <video
+                  ref={videoRef}
+                  src={webinar.video_url}
+                  autoPlay
+                  playsInline
+                  muted={nativeMuted}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: webinar.video_orientation === 'vertical' ? 'cover' : 'contain',
+                    pointerEvents: 'none',
+                  }}
+                  onError={(e) => console.error('Video playback error', e)}
+                  onContextMenu={e => e.preventDefault()}
+                />
+
+                {/* ── Native: Unmute button ── */}
+                {nativeMuted && (
+                  <div style={{
+                    position: 'absolute', inset: 0, zIndex: 9,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'rgba(0,0,0,0.45)', backdropFilter: 'blur(3px)',
+                    pointerEvents: 'auto',
+                  }}>
+                    <button
+                      onClick={() => {
+                        const video = videoRef.current
+                        if (video) {
+                          try {
+                            video.muted = false
+                            video.play().catch(() => {})
+                            setNativeMuted(false)
+                          } catch {}
+                        }
+                      }}
+                      style={{
+                        background: 'rgba(255,255,255,0.95)', color: '#111',
+                        border: 'none', borderRadius: 50, padding: '16px 32px',
+                        fontSize: 16, fontWeight: 700, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        boxShadow: '0 4px 32px rgba(0,0,0,0.5)',
+                        animation: 'pulse-btn 1.8s ease-in-out infinite',
+                      }}
+                    >
+                      🔊 Clique para ativar o som
+                    </button>
+                  </div>
+                )}
+              </div>
             )
           ) : !sessionIsScheduledFuture ? (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 16, color: 'var(--text-muted)' }}>
