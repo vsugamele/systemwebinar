@@ -1032,7 +1032,7 @@ tbody tr:hover td { background: var(--bg-hover); }
     height: 42dvh !important;
     min-height: 0;
     z-index: 100;
-    background: linear-gradient(to top, rgba(0, 0, 0, 0.95) 0%, rgba(0, 0, 0, 0.4) 70%, transparent 100%) !important;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.5) 0%, rgba(0, 0, 0, 0.12) 60%, transparent 100%) !important;
     border-left: none !important;
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
@@ -1053,15 +1053,15 @@ tbody tr:hover td { background: var(--bg-hover); }
   }
 
   .webinar-page-wrapper[data-layout="vertical"] .chat-message {
-    background: rgba(0, 0, 0, 0.45) !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    background: rgba(0, 0, 0, 0.28) !important;
+    border: 1px solid rgba(255, 255, 255, 0.05) !important;
     padding: 6px 12px !important;
     border-radius: 16px !important;
     max-width: 85% !important;
     align-self: flex-start !important;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
-    backdrop-filter: blur(8px) !important;
-    -webkit-backdrop-filter: blur(8px) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+    backdrop-filter: blur(6px) !important;
+    -webkit-backdrop-filter: blur(6px) !important;
   }
 
   .webinar-page-wrapper[data-layout="vertical"] .chat-avatar {
@@ -1078,6 +1078,39 @@ tbody tr:hover td { background: var(--bg-hover); }
   .webinar-page-wrapper[data-layout="vertical"] .chat-msg-text {
     color: #ffffff !important;
     font-size: 12.5px !important;
+  }
+
+  /* Transparent headers & inputs for vertical layout */
+  .webinar-page-wrapper[data-layout="vertical"] .chat-section > div:first-child {
+    background: transparent !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+
+  .webinar-page-wrapper[data-layout="vertical"] .chat-input-area {
+    background: transparent !important;
+    border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  }
+
+  .webinar-page-wrapper[data-layout="vertical"] .chat-input {
+    background: rgba(0, 0, 0, 0.35) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    color: #fff !important;
+    border-radius: 20px !important;
+  }
+
+  .webinar-page-wrapper[data-layout="vertical"] .chat-input::placeholder {
+    color: rgba(255, 255, 255, 0.4) !important;
+  }
+
+  /* Style dynamic active/inactive tabs */
+  .webinar-page-wrapper[data-layout="vertical"] .chat-tab-btn {
+    color: rgba(255, 255, 255, 0.5) !important;
+    border-bottom-color: transparent !important;
+  }
+
+  .webinar-page-wrapper[data-layout="vertical"] .chat-tab-btn.active {
+    color: #818cf8 !important;
+    border-bottom-color: #818cf8 !important;
   }
 }
 

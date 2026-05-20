@@ -220,6 +220,7 @@ export default function ChatPanel({
           <button
             key={tab.id}
             onClick={() => setChatTab(tab.id)}
+            className={`chat-tab-btn ${chatTab === tab.id ? 'active' : ''}`}
             style={{
               flex: 1, padding: '10px 4px', fontSize: 12, fontWeight: 600,
               background: 'none', border: 'none', cursor: 'pointer',

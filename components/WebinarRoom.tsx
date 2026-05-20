@@ -600,6 +600,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const duration = actualDuration || webinar.duration_seconds || 14400
   const isSessionEnded = elapsedSeconds >= duration
 
+  const isSessionEndedRef = useRef(isSessionEnded)
+  useEffect(() => {
+    isSessionEndedRef.current = isSessionEnded
+  }, [isSessionEnded])
+
   // Scheduled start countdown — driven by next_scheduled_start (future occurrence)
   const nextScheduledStart = (webinar as unknown as Record<string, unknown>).next_scheduled_start as string | undefined
 
@@ -1552,7 +1557,18 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
               const d = e.target?.getDuration?.()
               if (d && d > 0) setActualDuration(Math.floor(d))
             }
-            if (e.data === 2) { setYtPlaying(false); setYtBuffering(false) }
+            if (e.data === 2) {
+              setYtPlaying(false)
+              setYtBuffering(false)
+              // Auto-resume playback since it is a simulated live stream
+              if (!isSessionEndedRef.current) {
+                try {
+                  e.target.playVideo()
+                } catch (err) {
+                  console.error('Auto-resume failed:', err)
+                }
+              }
+            }
             if (e.data === 3) { setYtBuffering(true) }
           },
         },
@@ -1651,7 +1667,16 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         if (data?.player_id || data?.event) {
           // Vimeo Player API sends events like: { event: 'play' | 'pause' | 'bufferstart' | 'bufferend' }
           if (data.event === 'play') { setVimeoPlaying(true); setVimeoBuffering(false) }
-          if (data.event === 'pause') setVimeoPlaying(false)
+          if (data.event === 'pause') {
+            setVimeoPlaying(false)
+            if (!isSessionEndedRef.current && vimeoIframeRef.current?.contentWindow) {
+              try {
+                vimeoIframeRef.current.contentWindow.postMessage(
+                  JSON.stringify({ method: 'play' }), '*'
+                )
+              } catch {}
+            }
+          }
           if (data.event === 'bufferstart') setVimeoBuffering(true)
           if (data.event === 'bufferend') { setVimeoBuffering(false) }
           if (data.event === 'playProgress' || data.event === 'timeupdate') {
@@ -2532,6 +2557,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     height: '100%',
                     objectFit: webinar.video_orientation === 'vertical' ? 'cover' : 'contain',
                     pointerEvents: 'none',
+                  }}
+                  onPause={() => {
+                    if (!isSessionEndedRef.current && videoRef.current) {
+                      videoRef.current.play().catch(() => {})
+                    }
                   }}
                   onError={(e) => console.error('Video playback error', e)}
                   onContextMenu={e => e.preventDefault()}
