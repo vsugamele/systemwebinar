@@ -17,6 +17,16 @@ export async function POST(req: NextRequest) {
       metadata: body.metadata || {},
     })
 
+    // Automatically mark lead as attended in the database
+    const leadEmail = body.metadata?.lead_email as string | undefined
+    if (leadEmail && body.webinar_id) {
+      await supabase
+        .from('webi_leads')
+        .update({ attended: true })
+        .eq('webinar_id', body.webinar_id)
+        .eq('email', leadEmail.trim())
+    }
+
     // Imperio HQ — dispatch on key events (fire-and-forget, never block response)
     const imperioProjectId = body.metadata?.imperio_project_id as string | undefined
     if (imperioProjectId) {
@@ -108,12 +118,28 @@ export async function GET(req: NextRequest) {
 
     const supabase = await createServiceClient()
 
+    const mode = searchParams.get('mode') || 'all'
+
+    // 1. Obter informações de início de sessão para filtrar testes/dados antigos se a sessão estiver ativa
+    const { data: webinar } = await supabase
+      .from('webi_webinars')
+      .select('session_started_at, duration_seconds')
+      .eq('id', webinarId)
+      .single()
+
+    const sessionStart = mode === 'live' ? webinar?.session_started_at : null
+
     // Aggregate viewers by minute
-    const { data: sessionsRaw } = await supabase
+    let sessionsQuery = supabase
       .from('webi_session_events')
       .select('session_id, event_type, timestamp_video')
       .eq('webinar_id', webinarId)
       .eq('event_type', 'watch_second')
+
+    if (sessionStart) {
+      sessionsQuery = sessionsQuery.gte('created_at', sessionStart)
+    }
+    const { data: sessionsRaw } = await sessionsQuery
 
     // Build viewers per minute
     const minuteMap = new Map<number, Set<string>>()
@@ -152,9 +178,14 @@ export async function GET(req: NextRequest) {
     })
 
     // CTA & Popup clicks/views
-    const { data: ctaClickEvents } = await supabase
+    let ctaQuery = supabase
       .from('webi_session_events').select('metadata, timestamp_video')
       .eq('webinar_id', webinarId).eq('event_type', 'cta_clicked')
+
+    if (sessionStart) {
+      ctaQuery = ctaQuery.gte('created_at', sessionStart)
+    }
+    const { data: ctaClickEvents } = await ctaQuery
 
     const ctaClicks = ctaClickEvents?.length || 0
     const pitchPerformance: Record<string, { clicks: number; text?: string }> = {}
@@ -183,29 +214,43 @@ export async function GET(req: NextRequest) {
       .map(([minute, clicks]) => ({ minute: Number(minute), clicks }))
       .sort((a, b) => a.minute - b.minute)
 
-    const { count: popupSeen } = await supabase
+    let popupQuery = supabase
       .from('webi_session_events').select('id', { count: 'exact', head: true })
       .eq('webinar_id', webinarId).eq('event_type', 'popup_seen')
 
-    const { count: uniqueJoined } = await supabase
+    let joinedQuery = supabase
       .from('webi_session_events').select('id', { count: 'exact', head: true })
       .eq('webinar_id', webinarId).eq('event_type', 'joined')
 
-    // Progress 50% watch rate
-    const { count: progress50 } = await supabase
+    let progressQuery = supabase
       .from('webi_session_events').select('id', { count: 'exact', head: true })
       .eq('webinar_id', webinarId).eq('event_type', 'progress_50')
+
+    if (sessionStart) {
+      popupQuery = popupQuery.gte('created_at', sessionStart)
+      joinedQuery = joinedQuery.gte('created_at', sessionStart)
+      progressQuery = progressQuery.gte('created_at', sessionStart)
+    }
+
+    const { count: popupSeen } = await popupQuery
+    const { count: uniqueJoined } = await joinedQuery
+    const { count: progress50 } = await progressQuery
 
     // Chat metrics
     let chatMessagesCount = 0
     let chatUniqueSenders = 0
     let topChatters: { author: string, messages: number }[] = []
     try {
-      const { data: chatMessages } = await supabase
+      let chatQuery = supabase
         .from('webi_live_chat')
         .select('session_id, author')
         .eq('webinar_id', webinarId)
         .eq('is_simulated', false)
+
+      if (sessionStart) {
+        chatQuery = chatQuery.gte('created_at', sessionStart)
+      }
+      const { data: chatMessages } = await chatQuery
 
       chatMessagesCount = chatMessages?.length || 0
       chatUniqueSenders = new Set(chatMessages?.map(c => c.session_id) || []).size
@@ -229,10 +274,15 @@ export async function GET(req: NextRequest) {
     let quizResponsesCount = 0
     let quizAvgScore = 0
     try {
-      const { data: quizResponses } = await supabase
+      let quizQuery = supabase
         .from('webi_quiz_responses')
         .select('score')
         .eq('webinar_id', webinarId)
+
+      if (sessionStart) {
+        quizQuery = quizQuery.gte('created_at', sessionStart)
+      }
+      const { data: quizResponses } = await quizQuery
 
       quizResponsesCount = quizResponses?.length || 0
       quizAvgScore = quizResponsesCount > 0
@@ -258,6 +308,8 @@ export async function GET(req: NextRequest) {
       pitch_performance: pitchPerformance,
       viewers_by_minute: viewersByMinute,
       clicks_by_minute: clicksByMinuteArray,
+      is_live_active: !!webinar?.session_started_at,
+      duration_seconds: webinar?.duration_seconds || 3600,
     })
   } catch (error: any) {
     console.error('Error in /api/analytics:', error)

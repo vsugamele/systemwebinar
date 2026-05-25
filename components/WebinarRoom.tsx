@@ -455,6 +455,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     }
   }, [liveSessionStartedAt, initialCountdownSeconds, leadData, webinar.id, webinar.project_id])
 
+  const [realOnlineCount, setRealOnlineCount] = useState(0)
   const [viewers, setViewers] = useState(() => {
     const vStart = webinar.fake_viewers_start ?? 30
     return Math.max(1, vStart)
@@ -989,7 +990,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ---- Viewer counter simulation (4-phase curve) ----
+  // ---- Viewer counter simulation (4-phase curve + Real Users) ----
   useEffect(() => {
     const vStart  = webinar.fake_viewers_start  ?? 30
     const vPeak   = webinar.fake_viewers_peak   ?? Math.max(50, webinar.peak_viewers_max || 50)
@@ -998,7 +999,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     
     // Use the component-level duration which is more robust
     const initial = getTargetViewers(startOffset / duration, vStart, vPeak, vEnd, peakPct)
-    setViewers(initial)
+    setViewers(initial + realOnlineCount)
 
     const interval = setInterval(() => {
       if (!waitingDoneRef.current) return // Only start viewer simulation when in room
@@ -1007,7 +1008,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       const target = getTargetViewers(pct, vStart, vPeak, vEnd, peakPct)
       // Add small noise (±2%) so the number feels organic
       const noise = Math.floor((Math.random() * 0.04 - 0.02) * target)
-      const next = Math.max(1, target + noise)
+      const next = Math.max(1, target + noise + realOnlineCount)
       setViewers(prev => {
         if (next !== prev) {
           setViewersPulse(true)
@@ -1018,7 +1019,28 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     }, 8000)
     return () => clearInterval(interval)
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webinar])
+  }, [webinar, realOnlineCount])
+
+  // ---- Poll real online user count every 30 seconds ----
+  useEffect(() => {
+    let active = true
+    async function fetchRealOnline() {
+      try {
+        const res = await fetch(`/api/analytics/realtime?webinar_id=${webinar.id}`)
+        if (res.ok && active) {
+          const data = await res.json()
+          setRealOnlineCount(data.online_now || 0)
+        }
+      } catch {}
+    }
+    
+    fetchRealOnline()
+    const interval = setInterval(fetchRealOnline, 30000)
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [webinar.id])
 
   // ---- CPM-based chat simulation (supports segments + global mode) ----
   useEffect(() => {
@@ -1795,9 +1817,15 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     try {
       // Enrich with Imperio HQ context if available in localStorage
       const imperioProjectId = (webinar as unknown as Record<string, unknown>).imperio_project_id as string | undefined
-      const leadEmail = typeof window !== 'undefined' ? (localStorage.getItem('webi_lead_email') || '') : ''
-      const leadName = typeof window !== 'undefined' ? (localStorage.getItem('webi_lead_name') || '') : ''
-      const leadPhone = typeof window !== 'undefined' ? (localStorage.getItem('webi_lead_phone') || '') : ''
+      const leadEmail = typeof window !== 'undefined'
+        ? (localStorage.getItem(`webi_lead_email_${webinar.id}`) || localStorage.getItem('webi_lead_email') || leadData?.email || '')
+        : (leadData?.email || '')
+      const leadName = typeof window !== 'undefined'
+        ? (localStorage.getItem(`webi_lead_name_${webinar.id}`) || localStorage.getItem('webi_lead_name') || leadData?.nome || '')
+        : (leadData?.nome || '')
+      const leadPhone = typeof window !== 'undefined'
+        ? (localStorage.getItem(`webi_lead_phone_${webinar.id}`) || localStorage.getItem('webi_lead_phone') || leadData?.phone || '')
+        : (leadData?.phone || '')
 
       await fetch('/api/analytics', {
         method: 'POST',
@@ -1810,7 +1838,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           timestamp_video: timestampVideo,
           metadata: {
             ...metadata,
-            ...(imperioProjectId ? { imperio_project_id: imperioProjectId, lead_email: leadEmail, lead_name: leadName, lead_phone: leadPhone } : {}),
+            lead_email: leadEmail || undefined,
+            lead_name: leadName || undefined,
+            lead_phone: leadPhone || undefined,
+            ...(imperioProjectId ? { imperio_project_id: imperioProjectId } : {}),
           },
         }),
       })
@@ -1867,6 +1898,35 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       localStorage.setItem(`webi_lead_name_${webinar.id}`, currentName)
       if (identity.email) {
         localStorage.setItem(`webi_lead_email_${webinar.id}`, identity.email)
+
+        // Registrar o lead em tempo real no banco de dados
+        try {
+          const utm_source = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('utm_source') || undefined : undefined
+          const utm_medium = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('utm_medium') || undefined : undefined
+          const utm_campaign = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('utm_campaign') || undefined : undefined
+
+          fetch('/api/leads', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              webinar_id: webinar.id,
+              name: currentName,
+              email: identity.email,
+              utm_source,
+              utm_medium,
+              utm_campaign,
+              page_url: typeof window !== 'undefined' ? window.location.href : undefined,
+            })
+          }).then(async res => {
+            if (res.ok) {
+              const resData = await res.json()
+              if (resData.lead_id) {
+                // Grava o lead_id nos cookies para manter a sessão no reload
+                document.cookie = `webi_lead_id_${webinar.id}=${resData.lead_id}; path=/; max-age=31536000`
+              }
+            }
+          }).catch(err => console.warn('Erro ao salvar lead do chat no banco:', err))
+        } catch (err) {}
       }
     }
 

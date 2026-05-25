@@ -35,6 +35,8 @@ export default function AnalyticsPage() {
   const supabase = createClient()
 
   const [loading, setLoading] = useState(true)
+  const [mode, setMode] = useState<'all' | 'live'>('all')
+  const [isLiveActive, setIsLiveActive] = useState(false)
   const [webinarName, setWebinarName] = useState('')
   const [summary, setSummary] = useState<AnalyticsSummary>({
     totalLeads: 0,
@@ -59,27 +61,44 @@ export default function AnalyticsPage() {
 
   useEffect(() => {
     async function load() {
+      setLoading(true)
       // Webinar name
       const { data: webinar } = await supabase.from('webi_webinars').select('name').eq('id', wid).single()
       if (webinar) setWebinarName(webinar.name)
 
       // Use the enriched aggregated analytics API
-      const apiRes = await fetch(`/api/analytics?webinar_id=${wid}`).then(r => r.json())
+      const apiRes = await fetch(`/api/analytics?webinar_id=${wid}&mode=${mode}`).then(r => r.json())
 
-      const viewersByMinute: ViewersByMinute[] = apiRes.viewers_by_minute || []
+      setIsLiveActive(!!apiRes.is_live_active)
+
+      const durationSeconds = apiRes.duration_seconds || 3600
+      let durationMinutes = Math.ceil(durationSeconds / 60)
+      if (durationMinutes <= 0) {
+        const dataMaxMin = (apiRes.viewers_by_minute || []).length > 0
+          ? apiRes.viewers_by_minute[apiRes.viewers_by_minute.length - 1].minute
+          : 0
+        durationMinutes = dataMaxMin > 0 ? dataMaxMin : 60
+      }
+
+      // Filter events to exclude test noise / prolonged session events beyond configured duration
+      const rawViewers: ViewersByMinute[] = apiRes.viewers_by_minute || []
+      const viewersByMinute = rawViewers.filter(v => v.minute <= durationMinutes)
+
+      const rawClicks: { minute: number; clicks: number }[] = apiRes.clicks_by_minute || []
+      const filteredClicks = rawClicks.filter(c => c.minute <= durationMinutes)
+
       const ctaClicks = apiRes.cta_clicks || 0
       const totalLeads = apiRes.total_leads || 0
       const totalAttended = apiRes.total_attended || 0
 
-      // Fill blank minutes for smooth curve and find peak/dropoff
-      const maxMin = viewersByMinute.length > 0 ? viewersByMinute[viewersByMinute.length - 1].minute : 0
+      // Fill blank minutes for smooth curve and find peak/dropoff up to durationMinutes
       const filled: ViewersByMinute[] = []
       let peak = 0
       let peakMin = 0
       let prevViewers = 0
       let maxDrop = 0
       let maxDropMin = 0
-      for (let i = 0; i <= maxMin; i++) {
+      for (let i = 0; i <= durationMinutes; i++) {
         const point = viewersByMinute.find(v => v.minute === i)
         const v = point ? point.viewers : 0
         if (v > peak) { peak = v; peakMin = i }
@@ -108,22 +127,24 @@ export default function AnalyticsPage() {
         utmSourceBreakdown: apiRes.utm_source_breakdown || {},
         pitchPerformance: apiRes.pitch_performance || {},
         topChatters: apiRes.top_chatters || [],
-        clicksByMinute: apiRes.clicks_by_minute || []
+        clicksByMinute: filteredClicks
       })
       
       // Merge clicks with retention data for unified chart
       const mergedRetention = filled.map(f => {
-        const c = (apiRes.clicks_by_minute || []).find((ck: any) => ck.minute === f.minute)
+        const c = filteredClicks.find((ck: any) => ck.minute === f.minute)
         return { ...f, clicks: c ? c.clicks : 0 }
       })
 
       setRetentionData(mergedRetention)
       if (peak > 0) setPeakMinute(peakMin)
+      else setPeakMinute(null)
       if (maxDrop > 0) setMaxDropoffMinute({ minute: maxDropMin, dropoff: maxDrop })
+      else setMaxDropoffMinute(null)
       setLoading(false)
     }
     load()
-  }, [wid])
+  }, [wid, mode])
 
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
 
@@ -160,6 +181,113 @@ export default function AnalyticsPage() {
           <p className="page-subtitle">Métricas avançadas de retenção, conversão e engajamento</p>
         </div>
       </div>
+
+      {/* Tab Selector: Geral vs Live */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        background: 'var(--bg-card)',
+        padding: '6px',
+        borderRadius: 12,
+        border: '1px solid var(--border)',
+        marginBottom: 24,
+        gap: 12,
+        flexWrap: 'wrap'
+      }}>
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button
+            onClick={() => setMode('all')}
+            style={{
+              padding: '10px 20px',
+              fontSize: 14,
+              fontWeight: 700,
+              borderRadius: 10,
+              border: 'none',
+              background: mode === 'all' ? 'rgba(99,102,241,0.12)' : 'transparent',
+              color: mode === 'all' ? 'var(--brand-light)' : 'var(--text-muted)',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8
+            }}
+          >
+            <span>📊</span> Histórico Geral (Acumulado)
+          </button>
+          <button
+            onClick={() => setMode('live')}
+            style={{
+              padding: '10px 20px',
+              fontSize: 14,
+              fontWeight: 700,
+              borderRadius: 10,
+              border: 'none',
+              background: mode === 'live' ? 'rgba(34,197,94,0.12)' : 'transparent',
+              color: mode === 'live' ? '#22c55e' : 'var(--text-muted)',
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8
+            }}
+          >
+            <span style={{
+              width: 8, height: 8, borderRadius: '50%',
+              background: isLiveActive ? '#22c55e' : 'var(--text-muted)',
+              boxShadow: isLiveActive ? '0 0 6px #22c55e' : 'none',
+              animation: isLiveActive ? 'pulseActive 1.5s infinite' : 'none'
+            }} />
+            <span>🎬</span> Sessão ao Vivo (Live Atual)
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingRight: 12 }}>
+          <span style={{
+            fontSize: 11,
+            fontWeight: 700,
+            color: isLiveActive ? '#22c55e' : 'var(--text-muted)',
+            background: isLiveActive ? 'rgba(34,197,94,0.08)' : 'rgba(255,255,255,0.03)',
+            padding: '4px 10px',
+            borderRadius: 20,
+            border: isLiveActive ? '1px solid rgba(34,197,94,0.2)' : '1px solid var(--border)'
+          }}>
+            {isLiveActive ? '🔴 LIVE TRANSMITINDO' : '⚪ FORA DO AR'}
+          </span>
+        </div>
+      </div>
+
+      {/* Warning banner when Live Mode is selected but there is no active session */}
+      {mode === 'live' && !isLiveActive && (
+        <div style={{
+          background: 'rgba(234,179,8,0.05)',
+          border: '1px solid rgba(234,179,8,0.2)',
+          borderRadius: 12,
+          padding: '16px 20px',
+          marginBottom: 24,
+          color: '#eab308',
+          fontSize: 13,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12
+        }}>
+          <span style={{ fontSize: 20 }}>⚠️</span>
+          <div>
+            <strong>Nenhuma live ativa no momento.</strong> Para visualizar as métricas isoladas da transmissão, inicie a sessão no painel 
+            <Link href={`/admin/projects/${id}/webinars/${wid}/live`} style={{ color: '#facc15', textDecoration: 'underline', marginLeft: 6, fontWeight: 700 }}>
+              Controle de Live 🎬
+            </Link>. Exibindo dados acumulados como fallback.
+          </div>
+        </div>
+      )}
+
+      {/* Pulsing animation stylesheet */}
+      <style>{`
+        @keyframes pulseActive {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.4; }
+        }
+      `}</style>
 
       {/* Metric Cards */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
@@ -247,25 +375,83 @@ export default function AnalyticsPage() {
             </div>
           ) : (
             <ResponsiveContainer width="100%" height={320}>
-              <ComposedChart data={retentionData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
+              <ComposedChart data={retentionData} margin={{ top: 15, right: 10, left: -10, bottom: 0 }}>
                 <defs>
                   <linearGradient id="colorViewers" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#6366f1" stopOpacity={0.4}/>
-                    <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
+                    <stop offset="5%" stopColor="#818cf8" stopOpacity={0.45}/>
+                    <stop offset="95%" stopColor="#818cf8" stopOpacity={0.01}/>
+                  </linearGradient>
+                  <linearGradient id="colorClicks" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#fb923c" stopOpacity={0.95}/>
+                    <stop offset="95%" stopColor="#fb923c" stopOpacity={0.3}/>
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="minute" stroke="#6b7280" fontSize={12} tickFormatter={tick => `${tick}m`} />
-                <YAxis yAxisId="left" stroke="#6b7280" fontSize={12} />
-                <YAxis yAxisId="right" orientation="right" stroke="#ef4444" fontSize={12} hide />
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" vertical={false} />
+                <XAxis 
+                  dataKey="minute" 
+                  stroke="#4b5563" 
+                  fontSize={11} 
+                  fontWeight={500}
+                  tickLine={false} 
+                  axisLine={false} 
+                  dy={10}
+                  tickFormatter={tick => `${tick}m`} 
+                />
+                <YAxis 
+                  yAxisId="left" 
+                  stroke="#4b5563" 
+                  fontSize={11} 
+                  fontWeight={500}
+                  tickLine={false} 
+                  axisLine={false} 
+                  dx={-5}
+                />
+                <YAxis yAxisId="right" orientation="right" stroke="#ef4444" fontSize={11} hide />
+                <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" vertical={false} />
                 <Tooltip
-                  contentStyle={{ background: '#1e1b4b', border: '1px solid #4f46e5', borderRadius: 8, color: '#fff' }}
-                  labelFormatter={label => `Minuto ${label}`}
-                  formatter={(value: any, name: any) => {
-                    if (name === 'viewers') return [value, 'Espectadores']
-                    if (name === 'dropoff') return [value, 'Saíram neste minuto']
-                    if (name === 'clicks') return [value, 'Cliques no Pitch']
-                    return [value, name as string]
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length) {
+                      const viewers = payload.find(p => p.name === 'viewers')?.value || 0
+                      const dropoff = payload.find(p => p.name === 'dropoff')?.value || 0
+                      const clicks = payload.find(p => p.name === 'clicks')?.value || 0
+                      return (
+                        <div style={{
+                          background: 'rgba(17, 24, 39, 0.95)',
+                          backdropFilter: 'blur(12px)',
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                          borderRadius: '12px',
+                          padding: '12px 16px',
+                          boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.5), 0 8px 10px -6px rgba(0, 0, 0, 0.5)',
+                          color: '#fff',
+                          fontSize: 12
+                        }}>
+                          <div style={{ fontWeight: 700, marginBottom: 8, color: '#f3f4f6', borderBottom: '1px solid rgba(255, 255, 255, 0.06)', paddingBottom: 6 }}>
+                            ⏱️ Minuto {label}m
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#818cf8' }} />
+                              <span style={{ color: '#9ca3af' }}>Espectadores:</span>
+                              <strong style={{ color: '#f3f4f6', marginLeft: 'auto' }}>{viewers}</strong>
+                            </div>
+                            {Number(dropoff) > 0 && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#f87171' }} />
+                                <span style={{ color: '#9ca3af' }}>Saídas:</span>
+                                <strong style={{ color: '#f87171', marginLeft: 'auto' }}>{dropoff}</strong>
+                              </div>
+                            )}
+                            {Number(clicks) > 0 && (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#fb923c' }} />
+                                <span style={{ color: '#9ca3af' }}>Cliques no CTA:</span>
+                                <strong style={{ color: '#fb923c', marginLeft: 'auto' }}>{clicks}</strong>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    }
+                    return null
                   }}
                 />
                 {peakMinute !== null && (
@@ -273,22 +459,38 @@ export default function AnalyticsPage() {
                     yAxisId="left"
                     x={peakMinute}
                     stroke="#a78bfa"
+                    strokeWidth={1.5}
                     strokeDasharray="4 4"
-                    label={{ value: '🔝 Pico', fill: '#a78bfa', fontSize: 11, position: 'top' }}
+                    label={{ 
+                      value: '🔝 Pico', 
+                      fill: '#a78bfa', 
+                      fontSize: 10, 
+                      fontWeight: 700,
+                      position: 'top',
+                      offset: 10
+                    }}
                   />
                 )}
                 {maxDropoffMinute !== null && (
                   <ReferenceLine
                     yAxisId="left"
                     x={maxDropoffMinute.minute}
-                    stroke="#ef4444"
+                    stroke="#f87171"
+                    strokeWidth={1.5}
                     strokeDasharray="3 3"
-                    label={{ value: '⚠️ Fuga', fill: '#ef4444', fontSize: 11, position: 'insideTopLeft' }}
+                    label={{ 
+                      value: '⚠️ Fuga', 
+                      fill: '#f87171', 
+                      fontSize: 10, 
+                      fontWeight: 700,
+                      position: 'insideTopLeft',
+                      offset: 10
+                    }}
                   />
                 )}
-                <Bar yAxisId="right" dataKey="dropoff" fill="#ef4444" barSize={10} opacity={0.6} radius={[4,4,0,0]} />
-                <Bar yAxisId="right" dataKey="clicks" fill="#f97316" barSize={14} opacity={0.9} radius={[4,4,0,0]} />
-                <Area yAxisId="left" type="monotone" dataKey="viewers" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorViewers)" dot={false} />
+                <Bar yAxisId="right" dataKey="dropoff" fill="#f87171" barSize={8} opacity={0.4} radius={[4,4,0,0]} />
+                <Bar yAxisId="right" dataKey="clicks" fill="url(#colorClicks)" barSize={12} radius={[4,4,0,0]} />
+                <Area yAxisId="left" type="monotone" dataKey="viewers" stroke="#818cf8" strokeWidth={3.5} fillOpacity={1} fill="url(#colorViewers)" dot={false} />
               </ComposedChart>
             </ResponsiveContainer>
           )}

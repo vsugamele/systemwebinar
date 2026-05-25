@@ -58,10 +58,13 @@ export default function LivePage() {
     total_joined: number
     recent_dropoffs: number
     recent_cta_clicks: number
+    recent_clicks_list?: { id: string; session_id: string; created_at: string; lead_name: string; lead_email: string }[]
     updated_at: string
   }
   const [realtime, setRealtime] = useState<RealtimeStats | null>(null)
   const [realtimeLoading, setRealtimeLoading] = useState(false)
+  const isFirstLoadRef = useRef(true)
+  const seenClicksRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     supabase
@@ -111,6 +114,28 @@ export default function LivePage() {
         if (res.ok) {
           const data = await res.json()
           setRealtime(data)
+
+          const clicks = data.recent_clicks_list || []
+          if (isFirstLoadRef.current) {
+            // Popula os cliques iniciais sem mostrar toasts
+            clicks.forEach((c: any) => seenClicksRef.current.add(c.id))
+            isFirstLoadRef.current = false
+          } else {
+            // Mostra toast para novos cliques (mais antigos primeiro se houver múltiplos)
+            const newClicks = [...clicks].reverse().filter((c: any) => !seenClicksRef.current.has(c.id))
+            newClicks.forEach((c: any) => {
+              seenClicksRef.current.add(c.id)
+              toast.success(`🎉 ${c.lead_name} clicou na oferta!`, {
+                duration: 8000,
+                icon: '💰',
+                style: {
+                  background: '#1e1b4b',
+                  color: '#fff',
+                  border: '1px solid #10b981',
+                }
+              })
+            })
+          }
         }
       } catch {}
       setRealtimeLoading(false)
@@ -475,6 +500,54 @@ export default function LivePage() {
           )}
         </div>
 
+        {/* RECENT CONVERSIONS FEED */}
+        <div className="card" style={{
+          border: '1px solid rgba(16,185,129,0.3)',
+          background: 'rgba(16,185,129,0.02)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 18 }}>💰</span>
+              <span style={{ fontWeight: 700, fontSize: 15, color: '#10b981' }}>Últimos Cliques na Oferta</span>
+            </div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Atualizado em tempo real</div>
+          </div>
+
+          {!realtime?.recent_clicks_list || realtime.recent_clicks_list.length === 0 ? (
+            <div style={{
+              textAlign: 'center', padding: '16px 0', fontSize: 12, color: 'var(--text-muted)',
+              background: 'var(--bg-elevated)', borderRadius: 8, border: '1px dashed var(--border)'
+            }}>
+              Aguardando os primeiros cliques da live... ⏳
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {realtime.recent_clicks_list.map((c) => (
+                <div key={c.id} style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                  background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 14px',
+                  border: '1px solid rgba(255,255,255,0.02)',
+                  animation: 'bounceIn 0.3s ease-out'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{
+                      width: 8, height: 8, borderRadius: '50%', background: '#10b981',
+                      boxShadow: '0 0 6px #10b981'
+                    }} />
+                    <div>
+                      <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>{c.lead_name}</strong>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.lead_email}</div>
+                    </div>
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#f97316', background: 'rgba(249,115,22,0.1)', padding: '2px 8px', borderRadius: 6 }}>
+                    Oferta Clicada 🛒
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {/* SCHEDULING */}
         <div className="card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
@@ -795,6 +868,10 @@ export default function LivePage() {
 
         <style>{`
           @keyframes livePulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+          @keyframes bounceIn {
+            0% { transform: scale(0.95); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+          }
         `}</style>
       </div>
     </>

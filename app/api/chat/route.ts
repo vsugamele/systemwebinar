@@ -16,7 +16,6 @@ export async function POST(req: NextRequest) {
 
     // 2. Save directly to the database via Admin/Service role
     const { error: dbError } = await supabase.from('webi_live_chat').insert({
-      id: message.id,
       webinar_id,
       session_id,
       author: message.author,
@@ -26,8 +25,8 @@ export async function POST(req: NextRequest) {
       is_broadcast: false,
     })
 
-    if (dbError && dbError.code !== '42P01') {
-      console.warn('Could not insert chat message to DB:', dbError.message)
+    if (dbError) {
+      console.error('Could not insert chat message to DB:', dbError.message, dbError.code)
     }
 
     // 3. Trigger Realtime Broadcast via REST
