@@ -29,6 +29,15 @@ export async function POST(req: NextRequest) {
       console.error('Could not insert chat message to DB:', dbError.message, dbError.code)
     }
 
+    // Trigger AI response in the background if the message is a question
+    const text = message.text || ''
+    const isQ = text.endsWith('?') || /como|quando|qual|quanto|posso|consigo|funciona|o que|por que|porque|dúvida|ajuda|não entendi/i.test(text)
+    if (isQ) {
+      respondWithAI(webinar_id, session_id, text).catch(err => {
+        console.error('Error initiating background AI response:', err)
+      })
+    }
+
     // 3. Trigger Realtime Broadcast via REST
     const channel = supabase.channel(`webinar-${webinar_id}`)
     
@@ -70,5 +79,89 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     console.error('Chat API Error:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+}
+
+// Background AI response helper function
+async function respondWithAI(webinarId: string, userSessionId: string, questionText: string) {
+  try {
+    const supabase = await createServiceClient()
+
+    // 1. Fetch webinar configuration
+    const { data: webinar } = await supabase
+      .from('webi_webinars')
+      .select('name, ai_enabled, ai_persona_name, ai_persona_avatar, ai_model, ai_knowledge_base, ai_system_prompt, project_id')
+      .eq('id', webinarId)
+      .single()
+
+    if (!webinar || !webinar.ai_enabled) return
+
+    // 2. Fetch project OpenRouter API key
+    const { data: project } = await supabase
+      .from('webi_projects')
+      .select('openrouter_api_key')
+      .eq('id', webinar.project_id)
+      .single()
+
+    const apiKey = project?.openrouter_api_key
+    if (!apiKey) return
+
+    // 3. Prepare AI system prompt and model
+    const model = webinar.ai_model || 'google/gemini-flash-1.5'
+    const knowledgeBase = webinar.ai_knowledge_base || ''
+    const systemPrompt = webinar.ai_system_prompt ||
+      `Você é um assistente inteligente do webinar "${webinar.name}". 
+Responda dúvidas dos participantes de forma concisa, simpática e direta (máximo 2-3 frases).
+Baseie suas respostas nas informações do produto/conteúdo abaixo. Se não souber, diga "Boa pergunta! Fiquem atentos que o apresentador vai abordar isso!" e não invente informações.
+
+INFORMAÇÕES DO PRODUTO/WEBINAR:
+${knowledgeBase || 'Webinar ao vivo. Sem informações adicionais configuradas.'}`
+
+    // 4. Request completion from OpenRouter
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://webinarflow.app',
+        'X-Title': 'WebinarFlow AI Chat',
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: questionText }
+        ],
+        max_tokens: 200,
+        temperature: 0.7,
+      }),
+    })
+
+    if (!response.ok) {
+      console.error('OpenRouter failed in background AI moderator:', await response.text())
+      return
+    }
+
+    const resData = await response.json()
+    const answer = resData.choices?.[0]?.message?.content?.trim()
+    if (!answer) return
+
+    const aiName = webinar.ai_persona_name || '🤖 Assistente'
+    const aiAvatar = webinar.ai_persona_avatar || ''
+
+    // 5. Insert AI response into the database
+    // Use session_id 'ai-moderator' so the sender receives it via Realtime as well
+    await supabase.from('webi_live_chat').insert({
+      webinar_id: webinarId,
+      session_id: 'ai-moderator',
+      author: aiName,
+      avatar: aiAvatar || null,
+      text: answer,
+      timestamp_video: 0,
+      is_simulated: true,
+      is_broadcast: false,
+    })
+  } catch (err) {
+    console.error('Error in background AI moderator:', err)
   }
 }

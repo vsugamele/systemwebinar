@@ -162,6 +162,10 @@ interface ChatPanelProps {
   onQuizVote?: (questionId: string, optionIdx: number) => void
   hasBottomBar?: boolean
   pinnedMessage?: { text: string; author?: string } | null
+  isAdmin?: boolean
+  isBanned?: boolean
+  onDeleteMessage?: (messageId: string) => void
+  onBanUser?: (leadEmail: string | null, sessionId: string) => void
 }
 
 export default function ChatPanel({
@@ -180,6 +184,10 @@ export default function ChatPanel({
   onQuizVote,
   hasBottomBar = false,
   pinnedMessage = null,
+  isAdmin = false,
+  isBanned = false,
+  onDeleteMessage,
+  onBanUser,
 }: ChatPanelProps) {
   const [chatTab, setChatTab] = useState<ChatTab>(defaultTab)
   const [chatInput, setChatInput] = useState('')
@@ -311,8 +319,68 @@ export default function ChatPanel({
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   {!isBroadcast && (
-                    <div className="chat-msg-author" style={isPitchCard ? { color: '#22c55e' } : isAi ? { color: 'var(--brand)' } : {}}>
-                      {msg.author}{isPitchCard && ' 🎯'}
+                    <div className="chat-msg-author" style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      flexWrap: 'wrap',
+                      ...(isPitchCard ? { color: '#22c55e' } : isAi ? { color: 'var(--brand)' } : {})
+                    }}>
+                      <span>{msg.author}{isPitchCard && ' 🎯'}</span>
+
+                      {/* Admin badges */}
+                      {isAdmin && !isPitchCard && (
+                        <span style={{
+                          fontSize: 9,
+                          fontWeight: 700,
+                          padding: '1px 5px',
+                          borderRadius: 4,
+                          background: msg.isSimulated ? 'rgba(167, 139, 250, 0.12)' : 'rgba(34, 197, 94, 0.12)',
+                          color: msg.isSimulated ? '#a78bfa' : '#22c55e',
+                          border: msg.isSimulated ? '1px solid rgba(167, 139, 250, 0.2)' : '1px solid rgba(34, 197, 94, 0.2)',
+                        }} title={msg.isSimulated ? 'Espectador simulado por agendamento' : `Usuário real do webinar`}>
+                          {msg.isSimulated ? '🤖 Simulado' : '👤 Real'}
+                        </span>
+                      )}
+
+                      {/* Admin actions */}
+                      {isAdmin && !isPitchCard && (
+                        <div style={{ display: 'flex', gap: 6, marginLeft: 'auto', alignItems: 'center' }}>
+                          <button
+                            title="Deletar comentário"
+                            onClick={() => msg.id && onDeleteMessage?.(msg.id)}
+                            style={{
+                              background: 'none', border: 'none', cursor: 'pointer',
+                              padding: 2, fontSize: 11, opacity: 0.6,
+                              transition: 'opacity 0.2s', outline: 'none'
+                            }}
+                            onMouseOver={e => e.currentTarget.style.opacity = '1'}
+                            onMouseOut={e => e.currentTarget.style.opacity = '0.6'}
+                          >
+                            🗑️
+                          </button>
+                          {!msg.isSimulated && (
+                            <button
+                              title="Banir usuário"
+                              onClick={() => {
+                                const confirmBan = confirm(`Tem certeza que deseja suspender ${msg.author} do chat?`)
+                                if (confirmBan) {
+                                  onBanUser?.((msg as any).lead_email || null, (msg as any).session_id || '')
+                                }
+                              }}
+                              style={{
+                                background: 'none', border: 'none', cursor: 'pointer',
+                                padding: 2, fontSize: 11, opacity: 0.6,
+                                transition: 'opacity 0.2s', outline: 'none'
+                              }}
+                              onMouseOver={e => e.currentTarget.style.opacity = '1'}
+                              onMouseOut={e => e.currentTarget.style.opacity = '0.6'}
+                            >
+                              🚫
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                   <div className="chat-msg-text" style={{
@@ -449,12 +517,13 @@ export default function ChatPanel({
             <input
               type="text"
               className="chat-input"
-              placeholder="Digite sua mensagem..."
+              placeholder={isBanned ? "Você foi suspenso deste chat." : "Digite sua mensagem..."}
+              disabled={isBanned}
               value={chatInput}
               onChange={e => setChatInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSendChat()}
             />
-            <button className="btn btn-primary btn-sm" onClick={handleSendChat}>→</button>
+            <button className="btn btn-primary btn-sm" disabled={isBanned} onClick={handleSendChat}>→</button>
           </>
         )}
         {chatTab === 'qa' && (
@@ -462,12 +531,13 @@ export default function ChatPanel({
             <input
               type="text"
               className="chat-input"
-              placeholder="Envie sua dúvida..."
+              placeholder={isBanned ? "Você foi suspenso deste chat." : "Envie sua dúvida..."}
+              disabled={isBanned}
               value={qaInput}
               onChange={e => setQaInput(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && handleSendQa()}
             />
-            <button className="btn btn-primary btn-sm" onClick={handleSendQa}>→</button>
+            <button className="btn btn-primary btn-sm" disabled={isBanned} onClick={handleSendQa}>→</button>
           </>
         )}
         {chatTab === 'materials' && (

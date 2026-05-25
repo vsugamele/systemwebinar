@@ -374,6 +374,41 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const channelRef = useRef<RealtimeChannel | null>(null)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [isBanned, setIsBanned] = useState(false)
+
+  useEffect(() => {
+    async function checkAdminAndBan() {
+      // 1. Check URL query parameter for admin mode
+      if (typeof window !== 'undefined') {
+        const urlParams = new URLSearchParams(window.location.search)
+        if (urlParams.get('admin') === '1' || urlParams.get('test') === '1') {
+          setIsAdmin(true)
+        }
+      }
+
+      // 2. Check Supabase session (admins are authenticated users)
+      const { data: { user } } = await supabaseRef.current.auth.getUser()
+      if (user) {
+        setIsAdmin(true)
+      }
+
+      // 3. Check if current lead is banned
+      const leadEmail = typeof window !== 'undefined' ? (localStorage.getItem(`webi_lead_email_${webinar.id}`) || '') : ''
+      if (leadEmail) {
+        const { data: ban } = await supabaseRef.current
+          .from('webi_banned_leads')
+          .select('id')
+          .eq('webinar_id', webinar.id)
+          .eq('lead_email', leadEmail.trim())
+          .maybeSingle()
+        if (ban) {
+          setIsBanned(true)
+        }
+      }
+    }
+    checkAdminAndBan()
+  }, [webinar.id])
 
   // ---- Live session start tracking ----
   // We keep session_started_at in state so the component re-renders when
@@ -1191,7 +1226,22 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           timestamp: ts,
           isSimulated: dbMsg.is_simulated || false,
           isBroadcast: dbMsg.is_broadcast || false,
-        }])
+          session_id: dbMsg.session_id,
+          lead_email: dbMsg.metadata?.lead_email || dbMsg.lead_email
+        } as any])
+      }
+    })
+
+    // Listen to Database deletes on webi_live_chat so deleted comments disappear for active clients
+    channel.on('postgres_changes', {
+      event: 'DELETE',
+      schema: 'public',
+      table: 'webi_live_chat',
+      filter: `webinar_id=eq.${webinar.id}`
+    }, (payload) => {
+      const dbMsg = payload.old
+      if (dbMsg && dbMsg.id) {
+        setMessages(prev => prev.filter(m => m.id !== dbMsg.id))
       }
     })
 
@@ -1219,8 +1269,14 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           appendMessages([{ ...msg, timestamp: (msg as ChatMessage).timestamp > 1_000_000_000 ? (msg as ChatMessage).timestamp : tsNow } as ChatMessage])
         }
       })
-      .on('broadcast', { event: 'reaction' }, () => {
-        // reactions removed
+      .on('broadcast', { event: 'delete-message' }, ({ payload }) => {
+        setMessages(prev => prev.filter(m => m.id !== payload.messageId))
+      })
+      .on('broadcast', { event: 'ban-user' }, ({ payload }) => {
+        const myLeadEmail = typeof window !== 'undefined' ? (localStorage.getItem(`webi_lead_email_${webinar.id}`) || '') : ''
+        if (sessionId.current === payload.sessionId || (payload.leadEmail && myLeadEmail.trim() === payload.leadEmail.trim())) {
+          setIsBanned(true)
+        }
       })
       .subscribe()
 
@@ -1869,8 +1925,63 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     })
   }, [webinar])
 
+  // ---- Chat moderation actions (called by ChatPanel) ----
+  async function deleteChatMessage(messageId: string) {
+    if (!isAdmin) return
+
+    try {
+      // 1. Delete from Supabase Database
+      await supabaseRef.current.from('webi_live_chat').delete().eq('id', messageId)
+
+      // 2. Broadcast deletion to all clients
+      if (channelRef.current) {
+        await channelRef.current.send({
+          type: 'broadcast',
+          event: 'delete-message',
+          payload: { messageId }
+        })
+      }
+
+      // 3. Remove locally
+      setMessages(prev => prev.filter(m => m.id !== messageId))
+    } catch (err) {
+      console.error('Failed to delete comment:', err)
+    }
+  }
+
+  async function banUser(leadEmail: string | null, messageSessionId: string) {
+    if (!isAdmin) return
+
+    try {
+      // 1. Insert into banned leads table
+      await supabaseRef.current.from('webi_banned_leads').insert({
+        webinar_id: webinar.id,
+        lead_email: leadEmail || null,
+        session_id: messageSessionId
+      })
+
+      // 2. Broadcast ban to all clients
+      if (channelRef.current) {
+        await channelRef.current.send({
+          type: 'broadcast',
+          event: 'ban-user',
+          payload: { sessionId: messageSessionId, leadEmail: leadEmail || null }
+        })
+      }
+
+      alert('Usuário suspenso do chat com sucesso.')
+    } catch (err) {
+      console.error('Failed to ban user:', err)
+    }
+  }
+
   // ---- Chat message sender (called by ChatPanel.onSendMessage) ----
   async function sendChatMessage(text: string) {
+    if (isBanned) {
+      alert("Você está suspenso deste chat.")
+      return
+    }
+
     let finalText = text
     if (webinar.bad_words_filter) {
       finalText = filterBadWords(finalText)
@@ -1961,37 +2072,6 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       })
     } catch (err) {
       console.warn('Failed to send message via API:', err)
-    }
-
-    // AI auto-response on questions
-    if (webinar.ai_enabled) {
-      const isQ = text.endsWith('?') || /como|quando|qual|quanto|posso|consigo|funciona|o que|por que|porque|dúvida|ajuda|não entendi/i.test(text)
-      if (isQ) {
-        const aiName = webinar.ai_persona_name || '🤖 Assistente'
-        const aiAvatar = webinar.ai_persona_avatar || ''
-        setAiTyping(true)
-        setTimeout(async () => {
-          try {
-            const res = await fetch('/api/ai-chat', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ question: text, webinar_id: webinar.id }),
-            })
-            const data = await res.json()
-            if (data.answer) {
-              appendMessages([{
-                id: `ai-${Date.now()}`,
-                author: aiName,
-                avatar: aiAvatar || undefined,
-                text: data.answer,
-                timestamp: Math.floor(Date.now() / 1000),
-                isSimulated: true,
-              }])
-            }
-          } catch {}
-          setAiTyping(false)
-        }, 1500 + Math.random() * 1000)
-      }
     }
   }
 
@@ -2689,6 +2769,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         onQuizVote={handleQuizVote}
         hasBottomBar={pitchVisible && !!pitchPayload}
         pinnedMessage={pinnedMessage}
+        isAdmin={isAdmin}
+        isBanned={isBanned}
+        onDeleteMessage={deleteChatMessage}
+        onBanUser={banUser}
       />
       {/* Mobile landscape chat toggle button */}
       <button
