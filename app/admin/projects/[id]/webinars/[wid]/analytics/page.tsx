@@ -41,17 +41,24 @@ interface AnalyticsSummary {
   ctaClicks: number
   popupSeen: number
   pageViews: number
+  uniquePageViews: number
   plays: number
+  uniquePlays: number
   playRate: number
   peakViewers: number
+  averageEngagementPct: number
   conversionRate: number
   joined: number
+  progress25: number
   progress50: number
+  progress75: number
+  progress90: number
   chatMessagesCount: number
   chatUniqueSenders: number
   quizResponsesCount: number
   quizAvgScore: number
   retentionAtPitch: number
+  audienceAtPitch: number
   pitchAtMinute: number | null
   utmSourceBreakdown: Record<string, { count: number; attended: number }>
   pitchPerformance: Record<string, { clicks: number; text?: string }>
@@ -172,11 +179,11 @@ export default function AnalyticsPage() {
 
   const [summary, setSummary] = useState<AnalyticsSummary>({
     totalLeads: 0, totalAttended: 0, ctaClicks: 0,
-    popupSeen: 0, pageViews: 0, plays: 0, playRate: 0,
-    peakViewers: 0,
-    conversionRate: 0, joined: 0, progress50: 0, chatMessagesCount: 0,
+    popupSeen: 0, pageViews: 0, uniquePageViews: 0, plays: 0, uniquePlays: 0, playRate: 0,
+    peakViewers: 0, averageEngagementPct: 0,
+    conversionRate: 0, joined: 0, progress25: 0, progress50: 0, progress75: 0, progress90: 0, chatMessagesCount: 0,
     chatUniqueSenders: 0, quizResponsesCount: 0, quizAvgScore: 0,
-    retentionAtPitch: 0, pitchAtMinute: null,
+    retentionAtPitch: 0, audienceAtPitch: 0, pitchAtMinute: null,
     utmSourceBreakdown: {}, pitchPerformance: {},
     topChatters: [], clicksByMinute: [], chatByMinute: [], sessions: [],
     devicesBreakdown: {}, browsersBreakdown: {}, osBreakdown: {}, countriesBreakdown: {},
@@ -241,16 +248,24 @@ export default function AnalyticsPage() {
       totalLeads, totalAttended, ctaClicks,
       popupSeen: apiRes.popup_seen || 0,
       pageViews: apiRes.page_views || 0,
+      uniquePageViews: apiRes.unique_page_views || 0,
       plays: apiRes.plays || 0,
+      uniquePlays: apiRes.unique_plays || 0,
       playRate: apiRes.play_rate || 0,
       peakViewers: apiRes.peak_viewers || 0,
+      averageEngagementPct: apiRes.average_engagement_pct || 0,
       conversionRate: joinedCount > 0 ? (ctaClicks / joinedCount) * 100 : 0,
-      joined: joinedCount, progress50: apiRes.progress_50 || 0,
+      joined: joinedCount,
+      progress25: apiRes.progress_25 || 0,
+      progress50: apiRes.progress_50 || 0,
+      progress75: apiRes.progress_75 || 0,
+      progress90: apiRes.progress_90 || 0,
       chatMessagesCount: apiRes.chat_messages_count || 0,
       chatUniqueSenders: apiRes.chat_unique_senders || 0,
       quizResponsesCount: apiRes.quiz_responses_count || 0,
       quizAvgScore: apiRes.quiz_avg_score || 0,
       retentionAtPitch: apiRes.retention_at_pitch || 0,
+      audienceAtPitch: apiRes.audience_at_pitch || 0,
       pitchAtMinute: apiRes.pitch_at_minute ?? null,
       utmSourceBreakdown: apiRes.utm_source_breakdown || {},
       pitchPerformance: apiRes.pitch_performance || {},
@@ -412,6 +427,61 @@ export default function AnalyticsPage() {
           </div>
         </div>
       )}
+
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+          <div>
+            <h2 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>Metricas de Video</h2>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+              Retencao, plays, pitch e engajamento no modelo de leitura de VSL.
+            </div>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Atualizado ao carregar a pagina</div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
+          {[
+            { label: 'Visualizacoes', value: summary.pageViews.toLocaleString(), sub: 'page views' },
+            { label: 'Visualizacoes Unicas', value: summary.uniquePageViews.toLocaleString(), sub: 'sessoes unicas' },
+            { label: 'Plays', value: summary.plays.toLocaleString(), sub: 'eventos de play' },
+            { label: 'Plays Unicos', value: summary.uniquePlays.toLocaleString(), sub: 'sessoes com play' },
+            { label: 'Play Rate', value: `${summary.playRate}%`, sub: 'plays / views' },
+            { label: 'Retencao ao Pitch', value: summary.retentionAtPitch > 0 ? `${summary.retentionAtPitch}%` : '--', sub: summary.pitchAtMinute !== null ? `min ${summary.pitchAtMinute}` : 'sem pitch' },
+            { label: 'Audiencia no Pitch', value: summary.audienceAtPitch.toLocaleString(), sub: 'presentes no minuto' },
+            { label: 'Engajamento', value: `${summary.averageEngagementPct}%`, sub: 'tempo medio assistido' },
+            { label: 'Cliques no Botao', value: summary.ctaClicks.toLocaleString(), sub: 'todos os CTAs' },
+            { label: 'Conversoes', value: '0', sub: 'pendente checkout' },
+            { label: 'Taxa de Conversao', value: '0,00%', sub: 'pendente checkout' },
+            { label: 'Receita', value: 'R$ 0,00', sub: 'pendente checkout' },
+          ].map(metric => (
+            <div key={metric.label} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 8, padding: '12px 14px', minHeight: 74 }}>
+              <div style={{ fontSize: 20, lineHeight: 1, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 8 }}>{metric.value}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 4 }}>{metric.label}</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{metric.sub}</div>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: 12, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10 }}>
+          {[
+            { label: '25%', value: summary.progress25, color: '#60a5fa' },
+            { label: '50%', value: summary.progress50, color: '#818cf8' },
+            { label: '75%', value: summary.progress75, color: '#a78bfa' },
+            { label: '90%', value: summary.progress90, color: '#22c55e' },
+          ].map(item => {
+            const pct = summary.uniquePlays > 0 ? Math.round((item.value / summary.uniquePlays) * 100) : 0
+            return (
+              <div key={item.label} style={{ background: 'var(--bg-elevated)', borderRadius: 8, padding: 10, border: '1px solid rgba(255,255,255,0.04)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 700, marginBottom: 8 }}>
+                  <span>{item.label} assistido</span>
+                  <span style={{ color: item.color }}>{pct}%</span>
+                </div>
+                <div style={{ height: 6, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden' }}>
+                  <div style={{ width: `${pct}%`, height: '100%', background: item.color, borderRadius: 99 }} />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
 
       {/* ── KPI Row (11 métricas) ── */}
       <div style={{

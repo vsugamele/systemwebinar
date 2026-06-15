@@ -6,6 +6,7 @@ import { EventEngine } from '@/lib/event-engine'
 import {
   getAnalyticsTimestamp,
   shouldEmitProgress50,
+  shouldEmitProgressMilestone,
   shouldEmitWatchSample,
 } from '@/lib/analytics-metrics.mjs'
 import { createClient } from '@/lib/supabase/client'
@@ -493,6 +494,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const lastVideoTimeRef = useRef(0)
   const joinedTrackedRef = useRef(false)
   const progress50FiredRef = useRef(false)
+  const progressMilestonesFiredRef = useRef<Set<number>>(new Set())
   const milestone30FiredRef = useRef(false)
   const sentWatchSecondsRef = useRef<Set<number>>(new Set())
   const supabaseRef = useRef(createClient())
@@ -821,6 +823,14 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     if (!shouldEmitProgress50(currentTick, durationOverride, progress50FiredRef.current)) return
     progress50FiredRef.current = true
     trackEvent('progress_50', currentTick)
+  }, [duration])
+
+  const trackProgressMilestones = useCallback((currentTick: number, durationOverride = duration) => {
+    ;([25, 75, 90] as const).forEach(milestone => {
+      if (shouldEmitProgressMilestone(currentTick, durationOverride, milestone, progressMilestonesFiredRef.current)) {
+        trackEvent(`progress_${milestone}`, currentTick)
+      }
+    })
   }, [duration])
 
   const trackPlayStartedOnce = useCallback(() => {
@@ -1286,6 +1296,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       if (!isNativeVideo) {
         trackWatchSample(currentTick, 30)
         trackProgress50Once(currentTick)
+        trackProgressMilestones(currentTick)
       }
       
       evaluateEmailTriggers(currentTick)
@@ -2127,6 +2138,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
       // Track progress_50 once when viewer watches past 50% of the video
       trackProgress50Once(t, video.duration)
+      trackProgressMilestones(t, video.duration)
     }
 
     const onSeeking = () => {

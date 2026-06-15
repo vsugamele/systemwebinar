@@ -4,6 +4,8 @@ import { imperioSend } from '@/lib/imperio'
 import { getResend } from '@/lib/resend'
 import {
   countUniqueSessions,
+  getAudienceAtMinute,
+  getAverageEngagementPct,
   getWatchDeltaSeconds,
   shouldMarkLeadAttended,
 } from '@/lib/analytics-metrics.mjs'
@@ -309,34 +311,62 @@ export async function GET(req: NextRequest) {
       .from('webi_session_events').select('session_id')
       .eq('webinar_id', webinarId).eq('event_type', 'joined')
 
+    let progress25Query = supabase
+      .from('webi_session_events').select('id', { count: 'exact', head: true })
+      .eq('webinar_id', webinarId).eq('event_type', 'progress_25')
+
     let progressQuery = supabase
       .from('webi_session_events').select('id', { count: 'exact', head: true })
       .eq('webinar_id', webinarId).eq('event_type', 'progress_50')
 
-    let pageViewQuery = supabase
+    let progress75Query = supabase
       .from('webi_session_events').select('id', { count: 'exact', head: true })
+      .eq('webinar_id', webinarId).eq('event_type', 'progress_75')
+
+    let progress90Query = supabase
+      .from('webi_session_events').select('id', { count: 'exact', head: true })
+      .eq('webinar_id', webinarId).eq('event_type', 'progress_90')
+
+    let pageViewQuery = supabase
+      .from('webi_session_events').select('session_id')
       .eq('webinar_id', webinarId).eq('event_type', 'page_view')
 
     let playStartedQuery = supabase
-      .from('webi_session_events').select('id', { count: 'exact', head: true })
+      .from('webi_session_events').select('session_id')
       .eq('webinar_id', webinarId).eq('event_type', 'play_started')
+
+    let pitchSeenQuery = supabase
+      .from('webi_session_events').select('timestamp_video, metadata')
+      .eq('webinar_id', webinarId).eq('event_type', 'popup_seen')
 
     if (sessionStart) {
       popupQuery = popupQuery.gte('created_at', sessionStart)
       joinedQuery = joinedQuery.gte('created_at', sessionStart)
+      progress25Query = progress25Query.gte('created_at', sessionStart)
       progressQuery = progressQuery.gte('created_at', sessionStart)
+      progress75Query = progress75Query.gte('created_at', sessionStart)
+      progress90Query = progress90Query.gte('created_at', sessionStart)
       pageViewQuery = pageViewQuery.gte('created_at', sessionStart)
       playStartedQuery = playStartedQuery.gte('created_at', sessionStart)
+      pitchSeenQuery = pitchSeenQuery.gte('created_at', sessionStart)
     }
 
     const { count: popupSeen } = await popupQuery
     const { data: joinedRows } = await joinedQuery
     const uniqueJoined = countUniqueSessions(joinedRows || [])
+    const { count: progress25 } = await progress25Query
     const { count: progress50 } = await progressQuery
-    const { count: pageViews } = await pageViewQuery
-    const { count: plays } = await playStartedQuery
+    const { count: progress75 } = await progress75Query
+    const { count: progress90 } = await progress90Query
+    const { data: pageViewRows } = await pageViewQuery
+    const { data: playRows } = await playStartedQuery
+    const { data: pitchSeenEvents } = await pitchSeenQuery
+    const pageViews = pageViewRows?.length || 0
+    const uniquePageViews = countUniqueSessions(pageViewRows || [])
+    const plays = playRows?.length || 0
+    const uniquePlays = countUniqueSessions(playRows || [])
 
-    const playRate = pageViews && pageViews > 0 ? ((plays || 0) / pageViews) * 100 : 0
+    const playRate = uniquePageViews > 0 ? (uniquePlays / uniquePageViews) * 100 : 0
 
     // Chat metrics
     let chatMessagesCount = 0
@@ -546,14 +576,21 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.watch_time - a.watch_time)
       .slice(0, 100)
 
-    // Pitch at minute (first CTA click minute)
-    const pitchAtMinute = clicksByMinuteArray.length > 0 ? clicksByMinuteArray[0].minute : null
-    const retentionAtPitch = pitchAtMinute !== null
-      ? (() => {
-          const atPitch = viewersByMinute.find(v => v.minute === pitchAtMinute)
-          return atPitch ? Math.round((atPitch.viewers / peakViewers) * 100) : 0
-        })()
-      : 0
+    // Pitch at minute (first pitch exposure, fallback to first CTA click for legacy data)
+    const pitchSeenMinutes = (pitchSeenEvents || [])
+      .filter(ev => {
+        const meta = (ev.metadata as Record<string, any>) || {}
+        return meta.type === 'pitch'
+      })
+      .map(ev => ev.timestamp_video)
+      .filter((timestamp): timestamp is number => typeof timestamp === 'number' && timestamp >= 0)
+      .map(timestamp => Math.floor(timestamp / 60))
+      .sort((a, b) => a - b)
+    const pitchAtMinute = pitchSeenMinutes[0] ?? (clicksByMinuteArray.length > 0 ? clicksByMinuteArray[0].minute : null)
+    const pitchAudience = pitchAtMinute !== null
+      ? getAudienceAtMinute(viewersByMinute, pitchAtMinute, peakViewers)
+      : { audience: 0, retention_pct: 0 }
+    const averageEngagementPct = getAverageEngagementPct(sessionsArray, webinar?.duration_seconds || 3600)
 
     return NextResponse.json({
       total_leads: totalLeads,
@@ -561,11 +598,17 @@ export async function GET(req: NextRequest) {
       joined: uniqueJoined || 0,
       cta_clicks: ctaClicks || 0,
       popup_seen: popupSeen || 0,
+      progress_25: progress25 || 0,
       progress_50: progress50 || 0,
+      progress_75: progress75 || 0,
+      progress_90: progress90 || 0,
       page_views: pageViews || 0,
+      unique_page_views: uniquePageViews || 0,
       plays: plays || 0,
+      unique_plays: uniquePlays || 0,
       play_rate: Math.round(playRate),
       peak_viewers: peakViewers,
+      average_engagement_pct: averageEngagementPct,
       chat_messages_count: chatMessagesCount,
       chat_unique_senders: chatUniqueSenders,
       top_chatters: topChatters,
@@ -578,7 +621,8 @@ export async function GET(req: NextRequest) {
       chat_by_minute: chatByMinuteArray,
       sessions: sessionsArray,
       pitch_at_minute: pitchAtMinute,
-      retention_at_pitch: retentionAtPitch,
+      retention_at_pitch: pitchAudience.retention_pct,
+      audience_at_pitch: pitchAudience.audience,
       devices_breakdown: devicesBreakdown,
       browsers_breakdown: browsersBreakdown,
       os_breakdown: osBreakdown,
