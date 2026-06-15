@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { EventEngine } from '@/lib/event-engine'
+import {
+  getAnalyticsTimestamp,
+  shouldEmitProgress50,
+  shouldEmitWatchSample,
+} from '@/lib/analytics-metrics.mjs'
 import { createClient } from '@/lib/supabase/client'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import type { Webinar, WebinarEvent, ChatMessage, ChatMessagePayload, OfferPopupPayload, PitchButtonPayload, ChatSegment, PollPayload, PinnedMessagePayload } from '@/types'
@@ -486,6 +491,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const elapsedRef = useRef(0) // seconds watched (for non-YouTube videos)
   const elapsedIntervalRef = useRef<NodeJS.Timeout | null>(null)
   const lastVideoTimeRef = useRef(0)
+  const joinedTrackedRef = useRef(false)
+  const progress50FiredRef = useRef(false)
+  const milestone30FiredRef = useRef(false)
+  const sentWatchSecondsRef = useRef<Set<number>>(new Set())
   const supabaseRef = useRef(createClient())
   const channelRef = useRef<RealtimeChannel | null>(null)
 
@@ -792,6 +801,27 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   const duration = actualDuration || webinar.duration_seconds || 14400
   const isSessionEnded = elapsedSeconds >= duration
+
+  const getCurrentAnalyticsTimestamp = useCallback(() => {
+    return getAnalyticsTimestamp(videoRef.current?.currentTime, elapsedRef.current)
+  }, [])
+
+  const trackJoinedOnce = useCallback((metadata: Record<string, unknown>) => {
+    if (joinedTrackedRef.current) return
+    joinedTrackedRef.current = true
+    trackEvent('joined', 0, metadata)
+  }, [])
+
+  const trackWatchSample = useCallback((currentTick: number, intervalSeconds: number) => {
+    if (!shouldEmitWatchSample(currentTick, intervalSeconds, sentWatchSecondsRef.current)) return
+    trackEvent('watch_second', currentTick, { watch_delta_seconds: intervalSeconds })
+  }, [])
+
+  const trackProgress50Once = useCallback((currentTick: number, durationOverride = duration) => {
+    if (!shouldEmitProgress50(currentTick, durationOverride, progress50FiredRef.current)) return
+    progress50FiredRef.current = true
+    trackEvent('progress_50', currentTick)
+  }, [duration])
 
   const trackPlayStartedOnce = useCallback(() => {
     if (playStartedRef.current) return
@@ -1253,14 +1283,16 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
       // For non-native videos (YouTube, Vimeo, VTurb), track watch_second every 30s
       // Native videos use onTimeUpdate (every 10s) in the video setup effect
-      if (!isNativeVideo && currentTick > 0 && currentTick % 30 === 0) {
-        trackEvent('watch_second', currentTick)
+      if (!isNativeVideo) {
+        trackWatchSample(currentTick, 30)
+        trackProgress50Once(currentTick)
       }
       
       evaluateEmailTriggers(currentTick)
 
       // 30-minute milestone (fire once)
-      if (currentTick === 1800) {
+      if (!milestone30FiredRef.current && currentTick >= 1800) {
+        milestone30FiredRef.current = true
         trackEvent('watch_milestone_30min', currentTick)
       }
     }, 1000)
@@ -1269,7 +1301,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
     const tz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : ''
     trackEvent('page_view', 0, { user_agent: ua, timezone: tz })
-    trackEvent('joined', 0, { user_agent: ua, timezone: tz })
+    trackJoinedOnce({ user_agent: ua, timezone: tz })
     return () => {
       if (elapsedIntervalRef.current) clearInterval(elapsedIntervalRef.current)
     }
@@ -2084,24 +2116,17 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       }
     }
 
-    const progress50FiredRef = { fired: false }
-
     const onTimeUpdate = () => {
       const t = Math.floor(video.currentTime)
       engineRef.current?.tick(t)
 
       // Track watch_second every 10s
-      if (t % 10 === 0 && t > 0) {
-        trackEvent('watch_second', t)
-      }
+      trackWatchSample(t, 10)
       
       evaluateEmailTriggers(t)
 
       // Track progress_50 once when viewer watches past 50% of the video
-      if (!progress50FiredRef.fired && video.duration > 0 && video.currentTime > video.duration * 0.5) {
-        progress50FiredRef.fired = true
-        trackEvent('progress_50', t)
-      }
+      trackProgress50Once(t, video.duration)
     }
 
     const onSeeking = () => {
@@ -2131,7 +2156,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     // Enrich joined with device fingerprint for analytics segmentation
     const ua2 = typeof navigator !== 'undefined' ? navigator.userAgent : ''
     const tz2 = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : ''
-    trackEvent('joined', 0, { user_agent: ua2, timezone: tz2 })
+    trackJoinedOnce({ user_agent: ua2, timezone: tz2 })
 
     return () => {
       video.removeEventListener('playing', onPlaying)
@@ -2363,7 +2388,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   function handleCTAClick() {
     if (!pitchPayload) return
-    trackEvent('cta_clicked', Math.floor(videoRef.current?.currentTime || 0), { 
+    trackEvent('cta_clicked', getCurrentAnalyticsTimestamp(), { 
       source: 'pitch_button',
       pitch_image: pitchPayload.image_url || 'sem-imagem',
       pitch_text: pitchPayload.cta_text 
@@ -2382,17 +2407,17 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     setPitchVisible(false)
     if (countdownRef.current) clearInterval(countdownRef.current)
     if (broadcastTimerRef.current) clearTimeout(broadcastTimerRef.current)
-    trackEvent('cta_dismissed', Math.floor(videoRef.current?.currentTime || 0))
+    trackEvent('cta_dismissed', getCurrentAnalyticsTimestamp())
   }
 
   function handlePopupDismiss() {
     setPopupVisible(false)
-    trackEvent('popup_dismissed', Math.floor(videoRef.current?.currentTime || 0))
+    trackEvent('popup_dismissed', getCurrentAnalyticsTimestamp())
   }
 
   function handlePopupCTA() {
     if (!popupPayload) return
-    trackEvent('cta_clicked', Math.floor(videoRef.current?.currentTime || 0), { source: 'popup' })
+    trackEvent('cta_clicked', getCurrentAnalyticsTimestamp(), { source: 'popup' })
     window.open(popupPayload.cta_url, '_blank')
   }
 

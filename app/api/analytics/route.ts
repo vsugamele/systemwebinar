@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import { imperioSend } from '@/lib/imperio'
 import { getResend } from '@/lib/resend'
+import {
+  countUniqueSessions,
+  getWatchDeltaSeconds,
+  shouldMarkLeadAttended,
+} from '@/lib/analytics-metrics.mjs'
 
 export async function POST(req: NextRequest) {
   try {
@@ -19,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     // Automatically mark lead as attended in the database
     const leadEmail = body.metadata?.lead_email as string | undefined
-    if (leadEmail && body.webinar_id) {
+    if (leadEmail && body.webinar_id && shouldMarkLeadAttended(body.event_type)) {
       await supabase
         .from('webi_leads')
         .update({ attended: true })
@@ -132,7 +137,7 @@ export async function GET(req: NextRequest) {
     // Aggregate viewers by minute
     let sessionsQuery = supabase
       .from('webi_session_events')
-      .select('session_id, event_type, timestamp_video')
+      .select('session_id, event_type, timestamp_video, metadata')
       .eq('webinar_id', webinarId)
       .eq('event_type', 'watch_second')
 
@@ -301,7 +306,7 @@ export async function GET(req: NextRequest) {
       .eq('webinar_id', webinarId).eq('event_type', 'popup_seen')
 
     let joinedQuery = supabase
-      .from('webi_session_events').select('id', { count: 'exact', head: true })
+      .from('webi_session_events').select('session_id')
       .eq('webinar_id', webinarId).eq('event_type', 'joined')
 
     let progressQuery = supabase
@@ -325,7 +330,8 @@ export async function GET(req: NextRequest) {
     }
 
     const { count: popupSeen } = await popupQuery
-    const { count: uniqueJoined } = await joinedQuery
+    const { data: joinedRows } = await joinedQuery
+    const uniqueJoined = countUniqueSessions(joinedRows || [])
     const { count: progress50 } = await progressQuery
     const { count: pageViews } = await pageViewQuery
     const { count: plays } = await playStartedQuery
@@ -467,7 +473,7 @@ export async function GET(req: NextRequest) {
       }
 
       if (ev.event_type === 'watch_second') {
-        entry.watch_time += 10
+        entry.watch_time += getWatchDeltaSeconds(ev)
       }
 
       if (ev.event_type === 'cta_clicked') {
