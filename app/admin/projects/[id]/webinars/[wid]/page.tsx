@@ -23,6 +23,7 @@ interface WebinarData {
   whatsapp_pitch_message?: string
   custom_background_url?: string | null
   video_orientation?: 'horizontal' | 'vertical'
+  is_evergreen?: boolean
 }
 
 // ── Collapsible section ────────────────────────────────────────────────────────
@@ -135,6 +136,7 @@ export default function WebinarOverviewPage() {
     waiting_room_enabled: false,
     waiting_delay_seconds: 120,
     custom_background_url: '',
+    is_evergreen: false,
   })
   const [integrations, setIntegrations] = useState({
     tracking_head_code: '',
@@ -163,6 +165,7 @@ export default function WebinarOverviewPage() {
           waiting_room_enabled: w.waiting_room_enabled || false,
           waiting_delay_seconds: w.waiting_delay_seconds ?? 120,
           custom_background_url: w.custom_background_url || '',
+          is_evergreen: w.is_evergreen || false,
         })
         setIntegrations({
           tracking_head_code: w.tracking_head_code || '',
@@ -201,6 +204,7 @@ export default function WebinarOverviewPage() {
       waiting_room_enabled: experience.waiting_room_enabled,
       waiting_delay_seconds: experience.waiting_delay_seconds,
       custom_background_url: experience.custom_background_url || null,
+      is_evergreen: experience.is_evergreen,
     }).eq('id', wid)
     setSavingExp(false)
     if (error) toast.error('Erro ao salvar.')
@@ -524,6 +528,22 @@ export default function WebinarOverviewPage() {
                   {uploading ? '⏳' : '📁 Upload'}
                 </button>
               </div>
+            </div>
+
+            {/* Evergreen Toggle */}
+            <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '16px 0' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>🎬 Experiência Evergreen (Replay Simulado)</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', maxWidth: 480, lineHeight: 1.5 }}>
+                  <span style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>💡 Como funciona:</span>{' '}
+                  O vídeo e o chat simulado recomeçam do zero (0s) para cada espectador que chega atrasado, simulando uma live cronológica perfeita e individualizada.
+                </div>
+              </div>
+              <Toggle
+                checked={experience.is_evergreen}
+                onChange={v => setExperience(f => ({ ...f, is_evergreen: v }))}
+              />
             </div>
 
             <SectionSaveBtn saving={savingExp} label="Salvar Experiência" />

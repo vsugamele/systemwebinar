@@ -39,4 +39,10 @@ export class EventEngine {
   reset() {
     this.events.forEach(e => (e.fired = false))
   }
+
+  seek(seconds: number) {
+    this.events.forEach(e => {
+      e.fired = e.timestamp_seconds < seconds
+    })
+  }
 }

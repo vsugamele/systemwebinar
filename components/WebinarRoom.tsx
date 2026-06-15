@@ -464,6 +464,23 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       document.exitFullscreen().catch(() => {})
     }
   }
+
+  function getPhrasesForSegment(seg: ChatSegment): string[] {
+    const w = webinar as any;
+    if (seg.phrases === 'elogios') {
+      const p = w.chat_phrases_elogios as string[];
+      return p?.length ? p : CHAT_PHRASES_ELOGIOS;
+    }
+    if (seg.phrases === 'vaga') {
+      const p = w.chat_phrases_vaga as string[];
+      return p?.length ? p : CHAT_PHRASES_VAGA;
+    }
+    if (seg.phrases === 'engajamento') {
+      const p = w.chat_phrases_engajamento as string[];
+      return p?.length ? p : CHAT_PHRASES_ENGAJAMENTO;
+    }
+    return webinar.chat_phrases?.length ? webinar.chat_phrases : GENERIC_CHAT_PHRASES;
+  }
   const broadcastTimerRef = useRef<NodeJS.Timeout | null>(null)
   const cpmTimerRef = useRef<NodeJS.Timeout | null>(null)
   const elapsedRef = useRef(0) // seconds watched (for non-YouTube videos)
@@ -518,10 +535,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   // Base time for converting relative video seconds into absolute UNIX timestamps for simulated messages.
   const sessionBaseTime = useMemo(() => {
+    if (webinar.is_evergreen) {
+      return Math.floor(Date.now() / 1000)
+    }
     return liveSessionStartedAt
       ? Math.floor(new Date(liveSessionStartedAt).getTime() / 1000)
       : Math.floor(Date.now() / 1000)
-  }, [liveSessionStartedAt])
+  }, [liveSessionStartedAt, webinar.is_evergreen])
   
   // ---- O(1) Deduplication and Fast-Forward Buffering ----
   const messageMapRef = useRef(new Map<string, boolean>())
@@ -654,10 +674,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     const tOff = t ? parseInt(t) : null
     const dtOff = dt ? parseInt(dt) * 60 : null
     const override = tOff !== null ? tOff : (dtOff !== null ? dtOff : 0)
-    return override > 0 ? override : getStartOffset(webinar.session_started_at)
+    if (override > 0) return override
+    if (webinar.is_evergreen) return 0
+    return getStartOffset(webinar.session_started_at)
   })
   const [actualDuration, setActualDuration] = useState<number | null>(null)
   const [aiTyping, setAiTyping] = useState(false)
+  const aiTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [saleToastActive, setSaleToastActive] = useState(false)
 
   // Pinned message state
@@ -699,7 +722,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // params always follow the normal scheduling logic.
   const isDevMode = tOffset !== null || devOffset !== null
   
-  const startOffset = startOffsetOverride > 0 ? startOffsetOverride : getStartOffset(webinar.session_started_at)
+  const startOffset = startOffsetOverride > 0
+    ? startOffsetOverride
+    : (webinar.is_evergreen ? 0 : getStartOffset(webinar.session_started_at))
   const waitDelay = webinar.waiting_delay_seconds ?? 120
   const waitEnabled = !!webinar.waiting_room_enabled && startOffset > 0 && startOffset < waitDelay
   const [waitingDone, setWaitingDone] = useState(!waitEnabled)
@@ -729,6 +754,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const [vimeoSrc, setVimeoSrc] = useState('')
   const sessionOnBgRef = useRef(false)
   const playStartedRef = useRef(false)
+  const vimeoTimeRef = useRef(0)
 
   // ---- Native Video state ----
   const [nativeMuted, setNativeMuted] = useState(true)
@@ -1101,46 +1127,129 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
       const videoEl = videoRef.current
       let currentTick = elapsedRef.current
+      let isPaused = true
 
-      if (videoEl) {
-        // Native video: sync with actual playback position
-        if (!videoEl.paused) currentTick = Math.floor(videoEl.currentTime)
-        
-        // Auto-sync Native Video if it falls behind wall-clock time
-        const lsa = liveSessionStartedAtRef.current
-        if (lsa && !videoEl.paused) {
-          const wallClockTick = Math.floor((Date.now() - new Date(lsa).getTime()) / 1000)
-          if (Math.abs(videoEl.currentTime - wallClockTick) > 5) {
-            videoEl.currentTime = wallClockTick
-            currentTick = wallClockTick
+      if (isYouTubeUrl(webinar.video_url || '')) {
+        try {
+          const ytTime = ytPlayerRef.current?.getCurrentTime()
+          if (ytTime !== undefined) {
+            currentTick = Math.floor(ytTime)
           }
-        }
+          const state = ytPlayerRef.current?.getPlayerState()
+          isPaused = state !== 1 && state !== 3 // 1: playing, 3: buffering
+        } catch {}
+      } else if (isVimeoUrl(webinar.video_url || '')) {
+        currentTick = vimeoTimeRef.current
+        isPaused = !vimeoPlaying
+      } else if (videoEl) {
+        currentTick = Math.floor(videoEl.currentTime)
+        isPaused = videoEl.paused
       } else {
-        // Non-native videos (YouTube, Vimeo, VTurb, etc)
-        // Only advance the clock if the session has actually started.
-        // Use liveSessionStartedAtRef (not the state value) to avoid stale closure.
-        const lsa = liveSessionStartedAtRef.current
-        if (lsa) {
-          const wallClockTick = Math.floor((Date.now() - new Date(lsa).getTime()) / 1000)
-          currentTick = Math.max(elapsedRef.current, wallClockTick)
-          
-          // Auto-sync YouTube if it falls behind (e.g. mobile backgrounding or lock screen)
-          if (isYouTubeUrl(webinar.video_url || '')) {
-            try {
-              const ytTime = ytPlayerRef.current?.getCurrentTime()
-              if (ytTime !== undefined && Math.abs(ytTime - wallClockTick) > 5) {
-                ytPlayerRef.current?.seekTo(wallClockTick, true)
-                if (!ytPlayingRef.current) ytPlayerRef.current?.playVideo()
-              }
-            } catch {}
-          }
+        isPaused = !hasStartedRef.current
+        if (!isPaused) {
+          currentTick = elapsedRef.current + 1
         }
-        // else: no session started yet → keep elapsed frozen at 0
       }
 
+      if (webinar.is_evergreen) {
+        if (isPaused) {
+          // Freeze ticking when the player is paused
+          return
+        }
+
+        // Detect seeking (large delta change in current tick)
+        const oldTick = elapsedRef.current
+        if (Math.abs(currentTick - oldTick) > 3) {
+          // Clear simulated chat logs
+          setMessages(prev => prev.filter(m => !m.isSimulated))
+          // Seek/reset EventEngine
+          engineRef.current?.seek(currentTick)
+
+          // Clear active overlays on seek
+          setPitchVisible(false)
+          setPitchPayload(null)
+          setPopupVisible(false)
+          setPopupPayload(null)
+          setPinnedMessage(null)
+        }
+      } else {
+        // Original non-evergreen logic
+        if (videoEl) {
+          if (!videoEl.paused) currentTick = Math.floor(videoEl.currentTime)
+          const lsa = liveSessionStartedAtRef.current
+          if (lsa && !videoEl.paused) {
+            const wallClockTick = Math.floor((Date.now() - new Date(lsa).getTime()) / 1000)
+            if (Math.abs(videoEl.currentTime - wallClockTick) > 5) {
+              videoEl.currentTime = wallClockTick
+              currentTick = wallClockTick
+            }
+          }
+        } else {
+          const lsa = liveSessionStartedAtRef.current
+          if (lsa) {
+            const wallClockTick = Math.floor((Date.now() - new Date(lsa).getTime()) / 1000)
+            currentTick = Math.max(elapsedRef.current, wallClockTick)
+            
+            if (isYouTubeUrl(webinar.video_url || '')) {
+              try {
+                const ytTime = ytPlayerRef.current?.getCurrentTime()
+                if (ytTime !== undefined && Math.abs(ytTime - wallClockTick) > 5) {
+                  ytPlayerRef.current?.seekTo(wallClockTick, true)
+                  if (!ytPlayingRef.current) ytPlayerRef.current?.playVideo()
+                }
+              } catch {}
+            }
+          }
+        }
+      }
+
+      const timeAdvanced = currentTick !== elapsedRef.current
       elapsedRef.current = currentTick
       setElapsedSeconds(currentTick)
       engineRef.current?.tick(currentTick)
+
+      // Geração Orgânica de Chat Dirigida pelo Player (Evergreen Ticker)
+      if (webinar.is_evergreen && timeAdvanced) {
+        const segments = webinar.chat_segments
+        let currentCpm = webinar.chat_cpm || 0
+        let phrases = webinar.chat_phrases?.length ? webinar.chat_phrases : GENERIC_CHAT_PHRASES
+
+        if (segments && segments.length > 0) {
+          const seg = findActiveSegment(segments, currentTick)
+          if (seg) {
+            currentCpm = seg.cpm
+            phrases = getPhrasesForSegment(seg)
+          } else {
+            currentCpm = 0
+          }
+        } else {
+          const mode = webinar.chat_mode ?? 'cpm'
+          const startSec = webinar.chat_start_seconds ?? 0
+          const endSec = webinar.chat_end_seconds ?? Infinity
+          
+          if (currentTick < startSec || currentTick > endSec) {
+            currentCpm = 0
+          } else if (mode === 'interval') {
+            const intervalMin = webinar.chat_interval_minutes ?? 5
+            const intervalMsgs = (webinar as any).chat_interval_messages as number || 1
+            currentCpm = intervalMin > 0 ? (intervalMsgs / intervalMin) : 0
+          }
+        }
+
+        if (currentCpm > 0 && Math.random() < currentCpm / 60) {
+          const poolNames = webinar.chat_names?.length ? webinar.chat_names : DEFAULT_NAMES
+          const name = poolNames[Math.floor(Math.random() * poolNames.length)]
+          const text = phrases[Math.floor(Math.random() * phrases.length)]
+          
+          appendMessages([{
+            id: Math.random().toString(36),
+            author: name,
+            text,
+            timestamp: sessionBaseTime + Math.floor(currentTick),
+            isSimulated: true,
+          }])
+        }
+      }
 
       // For non-native videos (YouTube, Vimeo, VTurb), track watch_second every 30s
       // Native videos use onTimeUpdate (every 10s) in the video setup effect
@@ -1222,25 +1331,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   // ---- CPM-based chat simulation (supports segments + global mode) ----
   useEffect(() => {
+    if (webinar.is_evergreen) {
+      return
+    }
+
     const poolNames = webinar.chat_names?.length ? webinar.chat_names : DEFAULT_NAMES
     const segments = webinar.chat_segments?.length ? webinar.chat_segments : null
-
-    function getPhrasesForSegment(seg: ChatSegment): string[] {
-      const w = webinar as any;
-      if (seg.phrases === 'elogios') {
-        const p = w.chat_phrases_elogios as string[];
-        return p?.length ? p : CHAT_PHRASES_ELOGIOS;
-      }
-      if (seg.phrases === 'vaga') {
-        const p = w.chat_phrases_vaga as string[];
-        return p?.length ? p : CHAT_PHRASES_VAGA;
-      }
-      if (seg.phrases === 'engajamento') {
-        const p = w.chat_phrases_engajamento as string[];
-        return p?.length ? p : CHAT_PHRASES_ENGAJAMENTO;
-      }
-      return webinar.chat_phrases?.length ? webinar.chat_phrases : GENERIC_CHAT_PHRASES;
-    }
 
     if (segments) {
       // ---- Segment-based mode ----
@@ -1356,6 +1452,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       filter: `webinar_id=eq.${webinar.id}`
     }, (payload) => {
       const dbMsg = payload.new
+      if (dbMsg.session_id === 'ai-moderator') {
+        setAiTyping(false)
+        if (aiTypingTimeoutRef.current) {
+          clearTimeout(aiTypingTimeoutRef.current)
+          aiTypingTimeoutRef.current = null
+        }
+      }
       if (dbMsg.session_id !== sessionId.current) {
         // Use created_at (absolute Unix epoch) so real messages sort correctly with simulated ones
         const ts = dbMsg.created_at
@@ -1908,6 +2011,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             setVimeoPlaying(true)
             setVimeoBuffering(false)
             trackPlayStartedOnce()
+            if (data.data?.seconds !== undefined) {
+              vimeoTimeRef.current = Math.floor(data.data.seconds)
+            }
           }
           if (data.event === 'loaded' && data.data?.duration) {
             setActualDuration(Math.floor(data.data.duration))
@@ -2242,6 +2348,16 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       })
     } catch (err) {
       console.warn('Failed to send message via API:', err)
+    }
+
+    // If AI is enabled and it is a question, show typing indicator
+    const isQ = finalText.endsWith('?') || /como|quando|qual|quanto|posso|consigo|funciona|o que|por que|porque|dúvida|ajuda|não entendi/i.test(finalText)
+    if (isQ && webinar.ai_enabled) {
+      setAiTyping(true)
+      if (aiTypingTimeoutRef.current) clearTimeout(aiTypingTimeoutRef.current)
+      aiTypingTimeoutRef.current = setTimeout(() => {
+        setAiTyping(false)
+      }, 12000)
     }
   }
 

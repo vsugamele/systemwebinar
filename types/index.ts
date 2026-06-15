@@ -68,6 +68,7 @@ export interface Webinar {
   theme?: 'dark' | 'light' | 'youtube'
   display_name?: string
   disable_qa?: boolean
+  is_evergreen?: boolean
   // AI Config
   ai_model?: string
   // Integrations (013)
