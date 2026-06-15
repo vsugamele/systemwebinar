@@ -9,10 +9,20 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine, Legend,
   BarChart, LabelList, Line,
 } from 'recharts'
+import { getMetricDelta } from '@/lib/analytics-metrics.mjs'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type SegTab = 'retention' | 'countries' | 'devices' | 'os' | 'browsers' | 'utm' | 'leads'
+type AnalyticsMode = 'all' | 'live' | 'replay' | 'evergreen'
+
+interface ComparisonDelta {
+  label: string
+  current: number
+  previous: number
+  absolute: number
+  pct: number | null
+}
 
 interface SessionEventDetail {
   type: string
@@ -167,10 +177,18 @@ export default function AnalyticsPage() {
   const supabase = createClient()
 
   const [loading, setLoading] = useState(true)
-  const [mode, setMode] = useState<'all' | 'live'>('all')
+  const [mode, setMode] = useState<AnalyticsMode>('all')
   const [isLiveActive, setIsLiveActive] = useState(false)
   const [webinarName, setWebinarName] = useState('')
   const [durationSeconds, setDurationSeconds] = useState(3600)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [campaign, setCampaign] = useState('')
+  const [compareEnabled, setCompareEnabled] = useState(false)
+  const [compareDateFrom, setCompareDateFrom] = useState('')
+  const [compareDateTo, setCompareDateTo] = useState('')
+  const [compareCampaign, setCompareCampaign] = useState('')
+  const [comparison, setComparison] = useState<ComparisonDelta[]>([])
   const [activeTab, setActiveTab] = useState<SegTab>('retention')
   const [peakMinute, setPeakMinute] = useState<number | null>(null)
   const [maxDropoffMinute, setMaxDropoffMinute] = useState<{ minute: number; dropoff: number } | null>(null)
@@ -189,12 +207,58 @@ export default function AnalyticsPage() {
     devicesBreakdown: {}, browsersBreakdown: {}, osBreakdown: {}, countriesBreakdown: {},
   })
 
+  const buildAnalyticsUrl = useCallback((range?: { from?: string; to?: string; campaign?: string }) => {
+    const params = new URLSearchParams({
+      webinar_id: wid,
+      session_mode: mode,
+    })
+    const from = range?.from ?? dateFrom
+    const to = range?.to ?? dateTo
+    if (from) params.set('date_from', from)
+    if (to) params.set('date_to', to)
+    const campaignValue = range?.campaign ?? campaign
+    if (campaignValue.trim()) params.set('campaign', campaignValue.trim())
+    return `/api/analytics?${params.toString()}`
+  }, [wid, mode, dateFrom, dateTo, campaign])
+
+  const buildComparison = useCallback((current: any, previous: any): ComparisonDelta[] => {
+    return [
+      { key: 'unique_page_views', label: 'Views unicas' },
+      { key: 'unique_plays', label: 'Plays unicos' },
+      { key: 'play_rate', label: 'Play rate' },
+      { key: 'retention_at_pitch', label: 'Retencao pitch' },
+      { key: 'cta_clicks', label: 'Cliques CTA' },
+      { key: 'average_engagement_pct', label: 'Engajamento' },
+    ].map(metric => {
+      const currentValue = Number(current?.[metric.key]) || 0
+      const previousValue = Number(previous?.[metric.key]) || 0
+      const delta = getMetricDelta(currentValue, previousValue)
+      return {
+        label: metric.label,
+        current: currentValue,
+        previous: previousValue,
+        absolute: delta.absolute,
+        pct: delta.pct,
+      }
+    })
+  }, [])
+
   const load = useCallback(async () => {
     setLoading(true)
     const { data: webinar } = await supabase.from('webi_webinars').select('name').eq('id', wid).single()
     if (webinar) setWebinarName(webinar.name)
 
-    const apiRes = await fetch(`/api/analytics?webinar_id=${wid}&mode=${mode}`).then(r => r.json())
+    const apiRes = await fetch(buildAnalyticsUrl()).then(r => r.json())
+    if (compareEnabled && ((compareDateFrom && compareDateTo) || compareCampaign.trim())) {
+      const compareRes = await fetch(buildAnalyticsUrl({
+        from: compareDateFrom,
+        to: compareDateTo,
+        campaign: compareCampaign.trim() || campaign,
+      })).then(r => r.json())
+      setComparison(buildComparison(apiRes, compareRes))
+    } else {
+      setComparison([])
+    }
     setIsLiveActive(!!apiRes.is_live_active)
 
     const durationSecondsVal = apiRes.duration_seconds || 3600
@@ -279,7 +343,7 @@ export default function AnalyticsPage() {
       countriesBreakdown: apiRes.countries_breakdown || {},
     })
     setLoading(false)
-  }, [wid, mode])
+  }, [wid, mode, buildAnalyticsUrl, buildComparison, compareEnabled, compareDateFrom, compareDateTo, compareCampaign, campaign])
 
   useEffect(() => { load() }, [load])
 
@@ -389,8 +453,10 @@ export default function AnalyticsPage() {
         borderRadius: 12, padding: 6, marginBottom: 28, width: 'fit-content',
       }}>
         {[
-          { val: 'all' as const, icon: '📊', label: 'Histórico Geral' },
-          { val: 'live' as const, icon: '🎬', label: 'Sessão ao Vivo' },
+          { val: 'all' as const, icon: '📊', label: 'Historico Geral' },
+          { val: 'live' as const, icon: '🎬', label: 'Live' },
+          { val: 'replay' as const, icon: '▶️', label: 'Replay' },
+          { val: 'evergreen' as const, icon: '🔁', label: 'Evergreen' },
         ].map(m => (
           <button key={m.val} onClick={() => setMode(m.val)} style={{
             padding: '9px 18px', fontSize: 13, fontWeight: 700, borderRadius: 8, border: 'none', cursor: 'pointer',
@@ -409,6 +475,62 @@ export default function AnalyticsPage() {
             <span>{m.icon}</span> {m.label}
           </button>
         ))}
+      </div>
+
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gap: 12,
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border)',
+        borderRadius: 12,
+        padding: 14,
+        marginBottom: 28,
+      }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
+          De
+          <input type="date" className="form-input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
+          Ate
+          <input type="date" className="form-input" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
+          Campanha / UTM
+          <input
+            type="text"
+            className="form-input"
+            value={campaign}
+            onChange={e => setCampaign(e.target.value)}
+            placeholder="utm_source ou campanha"
+          />
+        </label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--text-secondary)', fontWeight: 700, paddingTop: 20 }}>
+          <input type="checkbox" checked={compareEnabled} onChange={e => setCompareEnabled(e.target.checked)} />
+          Comparar periodo
+        </label>
+        {compareEnabled && (
+          <>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
+              Comparar de
+              <input type="date" className="form-input" value={compareDateFrom} onChange={e => setCompareDateFrom(e.target.value)} />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
+              Comparar ate
+              <input type="date" className="form-input" value={compareDateTo} onChange={e => setCompareDateTo(e.target.value)} />
+            </label>
+            <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
+              Campanha base
+              <input
+                type="text"
+                className="form-input"
+                value={compareCampaign}
+                onChange={e => setCompareCampaign(e.target.value)}
+                placeholder="opcional"
+              />
+            </label>
+          </>
+        )}
       </div>
 
       {mode === 'live' && !isLiveActive && (
@@ -438,6 +560,31 @@ export default function AnalyticsPage() {
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Atualizado ao carregar a pagina</div>
         </div>
+        {comparison.length > 0 && (
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+            {comparison.map(item => {
+              const positive = item.absolute >= 0
+              return (
+                <div
+                  key={item.label}
+                  title={`Atual ${item.current} vs anterior ${item.previous}`}
+                  style={{
+                    border: `1px solid ${positive ? 'rgba(34,197,94,0.24)' : 'rgba(239,68,68,0.24)'}`,
+                    background: positive ? 'rgba(34,197,94,0.07)' : 'rgba(239,68,68,0.07)',
+                    color: positive ? '#22c55e' : '#f87171',
+                    borderRadius: 8,
+                    padding: '6px 9px',
+                    fontSize: 11,
+                    fontWeight: 800,
+                  }}
+                >
+                  {item.label}: {positive ? '+' : ''}{item.absolute}
+                  {item.pct !== null ? ` (${positive ? '+' : ''}${item.pct}%)` : ''}
+                </div>
+              )
+            })}
+          </div>
+        )}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 10 }}>
           {[
             { label: 'Visualizacoes', value: summary.pageViews.toLocaleString(), sub: 'page views' },

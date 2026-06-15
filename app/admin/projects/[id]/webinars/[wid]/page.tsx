@@ -24,6 +24,7 @@ interface WebinarData {
   custom_background_url?: string | null
   video_orientation?: 'horizontal' | 'vertical'
   is_evergreen?: boolean
+  analytics_pitch_minute?: number | null
 }
 
 // ── Collapsible section ────────────────────────────────────────────────────────
@@ -137,6 +138,7 @@ export default function WebinarOverviewPage() {
     waiting_delay_seconds: 120,
     custom_background_url: '',
     is_evergreen: false,
+    analytics_pitch_minute: '' as number | '',
   })
   const [integrations, setIntegrations] = useState({
     tracking_head_code: '',
@@ -166,6 +168,7 @@ export default function WebinarOverviewPage() {
           waiting_delay_seconds: w.waiting_delay_seconds ?? 120,
           custom_background_url: w.custom_background_url || '',
           is_evergreen: w.is_evergreen || false,
+          analytics_pitch_minute: typeof w.analytics_pitch_minute === 'number' ? w.analytics_pitch_minute : '',
         })
         setIntegrations({
           tracking_head_code: w.tracking_head_code || '',
@@ -205,6 +208,7 @@ export default function WebinarOverviewPage() {
       waiting_delay_seconds: experience.waiting_delay_seconds,
       custom_background_url: experience.custom_background_url || null,
       is_evergreen: experience.is_evergreen,
+      analytics_pitch_minute: experience.analytics_pitch_minute === '' ? null : Number(experience.analytics_pitch_minute),
     }).eq('id', wid)
     setSavingExp(false)
     if (error) toast.error('Erro ao salvar.')
@@ -544,6 +548,29 @@ export default function WebinarOverviewPage() {
                 checked={experience.is_evergreen}
                 onChange={v => setExperience(f => ({ ...f, is_evergreen: v }))}
               />
+            </div>
+
+            {/* Analytics Pitch Minute */}
+            <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '16px 0' }} />
+            <div style={{ maxWidth: 360 }}>
+              <FieldLabel hint="Usado para Retencao/Audiencia ao Pitch no dashboard. Se ficar vazio, o sistema usa o primeiro pitch detectado ou o primeiro CTA clicado.">
+                Minuto do Pitch para Analytics
+              </FieldLabel>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <input
+                  type="number"
+                  min={0}
+                  className="form-input"
+                  style={{ width: 120 }}
+                  value={experience.analytics_pitch_minute}
+                  onChange={e => setExperience(f => ({
+                    ...f,
+                    analytics_pitch_minute: e.target.value === '' ? '' : Math.max(0, Number(e.target.value)),
+                  }))}
+                  placeholder="Ex: 27"
+                />
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>minutos</span>
+              </div>
             </div>
 
             <SectionSaveBtn saving={savingExp} label="Salvar Experiência" />

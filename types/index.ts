@@ -69,6 +69,7 @@ export interface Webinar {
   display_name?: string
   disable_qa?: boolean
   is_evergreen?: boolean
+  analytics_pitch_minute?: number | null
   // AI Config
   ai_model?: string
   // Integrations (013)

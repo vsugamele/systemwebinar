@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { EventEngine } from '@/lib/event-engine'
 import {
   getAnalyticsTimestamp,
+  getSessionModeFromPath,
   shouldEmitProgress50,
   shouldEmitProgressMilestone,
   shouldEmitWatchSample,
@@ -2195,6 +2196,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       const leadPhone = typeof window !== 'undefined'
         ? (localStorage.getItem(`webi_lead_phone_${webinar.id}`) || localStorage.getItem('webi_lead_phone') || leadData?.phone || '')
         : (leadData?.phone || '')
+      const sessionMode = typeof window !== 'undefined'
+        ? getSessionModeFromPath(window.location.pathname, !!webinar.is_evergreen)
+        : (webinar.is_evergreen ? 'evergreen' : 'live')
 
       await fetch('/api/analytics', {
         method: 'POST',
@@ -2207,6 +2211,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           timestamp_video: timestampVideo,
           metadata: {
             ...metadata,
+            session_mode: sessionMode,
             lead_email: leadEmail || undefined,
             lead_name: leadName || undefined,
             lead_phone: leadPhone || undefined,
