@@ -15,17 +15,169 @@ export function getInitials(name: string) {
   return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
 }
 
+function getSuperChatColors(amount: string) {
+  const num = parseFloat(amount.replace(/[^0-9]/g, '')) || 20
+  if (num >= 100) {
+    return { headerBg: '#d00000', bodyBg: '#e53935', text: '#ffffff' } // Red
+  } else if (num >= 50) {
+    return { headerBg: '#e65100', bodyBg: '#f57c00', text: '#ffffff' } // Orange
+  } else if (num >= 20) {
+    return { headerBg: '#ffd600', bodyBg: '#ffea00', text: '#000000' } // Yellow
+  } else if (num >= 10) {
+    return { headerBg: '#00b0ff', bodyBg: '#00e5ff', text: '#000000' } // Cyan
+  } else {
+    return { headerBg: '#1565c0', bodyBg: '#1e88e5', text: '#ffffff' } // Blue
+  }
+}
+
+function parseMarkdownLinks(text: string) {
+  const parts: any[] = []
+  let lastIndex = 0
+  const regex = /\[([^\]]+)\]\(([^)]+)\)/g
+  let match
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      parts.push(text.substring(lastIndex, match.index))
+    }
+    parts.push(
+      <a
+        key={match.index}
+        href={match[2]}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          color: 'inherit',
+          textDecoration: 'underline',
+          fontWeight: 700,
+        }}
+      >
+        {match[1]}
+      </a>
+    )
+    lastIndex = regex.lastIndex
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.substring(lastIndex))
+  }
+  return parts.length > 0 ? parts : text
+}
+
 // ---- QuizCard inline component ----
 interface QuizCardProps {
   card: QuizCardData
   userAnswer: number | null
   voteCounts: number[]
   onVote: (optionIdx: number) => void
+  theme?: 'dark' | 'light' | 'youtube'
 }
 
-function QuizCard({ card, userAnswer, voteCounts, onVote }: QuizCardProps) {
+function QuizCard({ card, userAnswer, voteCounts, onVote, theme }: QuizCardProps) {
   const voted = userAnswer !== null
   const totalVotes = voteCounts.reduce((a, b) => a + b, 0)
+
+  if (theme === 'youtube') {
+    return (
+      <div style={{
+        background: '#212121',
+        border: '1px solid #303030',
+        borderRadius: 12,
+        padding: '12px 16px',
+        margin: '8px 0',
+        width: '100%',
+        boxSizing: 'border-box',
+      }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 11, color: '#aaaaaa', fontWeight: 600 }}>
+          <span>📊</span>
+          <span>Enquete do chat ao vivo</span>
+        </div>
+
+        {/* Question */}
+        <p style={{ fontSize: 13, fontWeight: 600, color: '#ffffff', marginBottom: 12, lineHeight: 1.45, marginTop: 0 }}>
+          {card.question}
+        </p>
+
+        {/* Options */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {card.options.map((opt, i) => {
+            const isSelected = userAnswer === i
+            const pct = totalVotes > 0 ? Math.round((voteCounts[i] || 0) / totalVotes * 100) : 0
+
+            if (voted) {
+              return (
+                <div
+                  key={i}
+                  style={{
+                    position: 'relative',
+                    height: 36,
+                    borderRadius: 4,
+                    background: '#3e3e3e',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '0 12px',
+                    fontSize: 12,
+                    fontWeight: isSelected ? 700 : 500,
+                    color: '#ffffff',
+                    border: isSelected ? '1px solid #3ea6ff' : '1px solid transparent',
+                  }}
+                >
+                  {/* progress bar */}
+                  <div style={{
+                    position: 'absolute', left: 0, top: 0, bottom: 0,
+                    width: `${pct}%`,
+                    background: isSelected ? '#3ea6ff' : '#606060',
+                    opacity: isSelected ? 0.35 : 0.2,
+                    transition: 'width 0.6s ease',
+                    zIndex: 0,
+                  }} />
+                  <span style={{ position: 'relative', zIndex: 1, flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {opt} {isSelected && <span>✓</span>}
+                  </span>
+                  <span style={{ position: 'relative', zIndex: 1, fontSize: 12, fontWeight: 700, color: isSelected ? '#3ea6ff' : '#aaaaaa' }}>
+                    {pct}%
+                  </span>
+                </div>
+              )
+            } else {
+              return (
+                <button
+                  key={i}
+                  onClick={() => onVote(i)}
+                  style={{
+                    background: 'none',
+                    border: '1px solid #3ea6ff',
+                    color: '#3ea6ff',
+                    borderRadius: 18,
+                    padding: '8px 16px',
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    width: '100%',
+                    transition: 'all 0.2s',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'rgba(62, 166, 255, 0.1)'
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'none'
+                  }}
+                >
+                  {opt}
+                </button>
+              )
+            }
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{ fontSize: 11, color: '#aaaaaa', marginTop: 10, fontWeight: 500 }}>
+          {totalVotes} {totalVotes === 1 ? 'voto' : 'votos'}
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{
@@ -168,6 +320,7 @@ interface ChatPanelProps {
   onBanUser?: (leadEmail: string | null, sessionId: string) => void
   theme?: 'dark' | 'light' | 'youtube'
   userName?: string
+  disableQa?: boolean
 }
 
 function formatYtHandle(name: string): string {
@@ -194,7 +347,7 @@ export default function ChatPanel({
   onSendQa,
   quizAnswers = {},
   quizVoteCounts = {},
-  onQuizVote,
+  onQuizVote = () => {},
   hasBottomBar = false,
   pinnedMessage = null,
   isAdmin = false,
@@ -203,6 +356,7 @@ export default function ChatPanel({
   onBanUser,
   theme,
   userName = 'Você',
+  disableQa = false,
 }: ChatPanelProps) {
   const [chatTab, setChatTab] = useState<ChatTab>(defaultTab)
   const [chatInput, setChatInput] = useState('')
@@ -213,6 +367,13 @@ export default function ChatPanel({
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Fallback from Q&A if disabled
+  useEffect(() => {
+    if (disableQa && chatTab === 'qa') {
+      setChatTab('chat')
+    }
+  }, [disableQa, chatTab])
 
   function handleSendChat() {
     if (!chatInput.trim()) return
@@ -265,11 +426,11 @@ export default function ChatPanel({
       }}>
         {([
           { id: 'chat', label: '💬 Chat', count: messages.filter(m => !m.isBroadcast).length },
-          { id: 'qa', label: '❓ Q&A', count: qaMessages.length },
+          ...(!disableQa ? [{ id: 'qa', label: '❓ Q&A', count: qaMessages.length }] : []),
           ...(visibleMaterials.length > 0 || materials.length > 0
-            ? [{ id: 'materials' as const, label: '📂 Materiais', count: visibleMaterials.length }]
+            ? [{ id: 'materials', label: '📂 Materiais', count: visibleMaterials.length }]
             : []),
-        ] as const).map(tab => {
+        ] as any[]).map(tab => {
           const isActive = chatTab === tab.id;
           return (
             <button
@@ -339,11 +500,74 @@ export default function ChatPanel({
                   userAnswer={quizAnswers[msg.quiz_card.question_id] ?? null}
                   voteCounts={quizVoteCounts[msg.quiz_card.question_id] || new Array(msg.quiz_card.options.length).fill(0)}
                   onVote={(optIdx) => onQuizVote?.(msg.quiz_card!.question_id, optIdx)}
+                  theme={theme}
                 />
               )
             }
 
+            // Super Chat message parsing
             const isBroadcast = msg.isBroadcast
+            const superChatMatch = !isBroadcast && msg.text ? msg.text.match(/^\[SUPERCHAT:([^\]]+)\]\s*([\s\S]*)/i) : null
+            if (superChatMatch) {
+              const amount = superChatMatch[1].trim()
+              const messageText = superChatMatch[2].trim()
+              const colors = getSuperChatColors(amount)
+              
+              return (
+                <div key={msg.id || i} style={{
+                  background: colors.headerBg,
+                  borderRadius: 8,
+                  margin: '8px 0',
+                  overflow: 'hidden',
+                  border: '1px solid rgba(255,255,255,0.06)',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  fontSize: 13,
+                  width: '100%',
+                }}>
+                  {/* Header */}
+                  <div style={{
+                    background: colors.headerBg,
+                    padding: '8px 12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    color: colors.text,
+                    fontWeight: 700,
+                  }}>
+                    <div
+                      style={{
+                        background: 'var(--brand)',
+                        backgroundImage: msg.avatar ? `url(${msg.avatar})` : undefined,
+                        backgroundSize: 'cover',
+                        width: 28, height: 28, borderRadius: '50%',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 11, fontWeight: 800, color: '#fff',
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                      }}
+                    >
+                      {!msg.avatar && getInitials(msg.author)}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                      <span style={{ fontSize: 12, opacity: 0.85, color: colors.text }}>{msg.author}</span>
+                      <span style={{ fontSize: 13, fontWeight: 800, color: colors.text }}>{amount}</span>
+                    </div>
+                  </div>
+                  {/* Body */}
+                  {messageText && (
+                    <div style={{
+                      background: colors.bodyBg,
+                      padding: '10px 12px',
+                      color: colors.text,
+                      lineHeight: 1.45,
+                      borderTop: '1px solid rgba(255,255,255,0.05)',
+                    }}>
+                      {parseMarkdownLinks(messageText)}
+                    </div>
+                  )}
+                </div>
+              )
+            }
+
             const isAi = msg.author?.startsWith('🤖')
             const isPitchCard = msg.id?.startsWith('pitch-chat-')
             return (

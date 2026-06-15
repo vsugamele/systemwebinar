@@ -51,6 +51,7 @@ interface WebinarConfig {
   is_panic_active?: boolean
   custom_background_url?: string | null
   video_orientation?: 'horizontal' | 'vertical'
+  disable_qa?: boolean
 }
 
 const PT_BAD_WORDS = [
@@ -131,6 +132,16 @@ function formatSubscriberCount(peak: number): string {
     return Math.round(subs / 1000) + ' mil';
   }
   return subs.toString();
+}
+
+function formatLikeCount(count: number): string {
+  if (count >= 1000000) {
+    return (count / 1000000).toFixed(1).replace('.', ',') + ' mi';
+  }
+  if (count >= 1000) {
+    return (count / 1000).toFixed(1).replace('.', ',') + ' mil';
+  }
+  return count.toString();
 }
 
 function formatCountdown(secs: number) {
@@ -601,6 +612,22 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // New feature state
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [descriptionExpanded, setDescriptionExpanded] = useState(false)
+  const [hasLiked, setHasLiked] = useState(false)
+  const [likeCount, setLikeCount] = useState(() => {
+    const vPeak = webinar.fake_viewers_peak ?? Math.max(50, webinar.peak_viewers_max || 50)
+    const base = vPeak * 2.4
+    return Math.floor(base + Math.random() * (base * 0.15))
+  })
+
+  const handleLike = () => {
+    if (hasLiked) {
+      setLikeCount(prev => prev - 1)
+      setHasLiked(false)
+    } else {
+      setLikeCount(prev => prev + 1)
+      setHasLiked(true)
+    }
+  }
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -1166,6 +1193,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         }
         return next
       })
+      setLikeCount(prev => prev + Math.floor(Math.random() * 4))
     }, 8000)
     return () => clearInterval(interval)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2959,6 +2987,57 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
               </div>
               
               <div className="yt-actions-right">
+                {/* Double button: Like / Dislike */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  background: '#272727',
+                  borderRadius: 18,
+                  overflow: 'hidden',
+                  height: 36,
+                }}>
+                  <button
+                    onClick={handleLike}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#fff',
+                      padding: '0 12px 0 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      cursor: 'pointer',
+                      height: '100%',
+                      fontSize: 12,
+                      fontWeight: 600,
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill={hasLiked ? '#3ea6ff' : 'currentColor'}>
+                      <path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z" />
+                    </svg>
+                    <span>{formatLikeCount(likeCount)}</span>
+                  </button>
+                  <div style={{ width: 1, height: 18, background: '#3f3f3f' }} />
+                  <button
+                    disabled
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#fff',
+                      padding: '0 12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      cursor: 'not-allowed',
+                      opacity: 0.6,
+                      height: '100%',
+                    }}
+                  >
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                      <path d="M23 3h-4v12h4V3zm-22 11c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2H6c-.83 0-1.54.5-1.84 1.22L1.14 11.27c-.09.23-.14.47-.14.73v-2z" />
+                    </svg>
+                  </button>
+                </div>
+
                 {!!(webinar as unknown as Record<string, unknown>).has_quiz && (
                   <button
                     className="yt-action-btn"
@@ -3035,6 +3114,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         onBanUser={banUser}
         theme={webinar.theme}
         userName={userName}
+        disableQa={!!webinar.disable_qa}
       />
       {/* Mobile landscape chat toggle button */}
       <button
