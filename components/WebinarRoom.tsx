@@ -118,6 +118,21 @@ function generateSessionId() {
 
 // getInitials moved to ChatPanel.tsx
 
+function getInitials(name: string) {
+  return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
+}
+
+function formatSubscriberCount(peak: number): string {
+  const subs = Math.max(12400, peak * 12);
+  if (subs >= 1000000) {
+    return (subs / 1000000).toFixed(1).replace('.', ',') + ' mi';
+  }
+  if (subs >= 1000) {
+    return Math.round(subs / 1000) + ' mil';
+  }
+  return subs.toString();
+}
+
 function formatCountdown(secs: number) {
   const m = Math.floor(secs / 60)
   const s = secs % 60
@@ -350,6 +365,79 @@ export const DEFAULT_NAMES = [
   'Floripes Correia', 'Godofredo Ramos', 'Preciliana Campos', 'Geraldo Ferreira', 'Geralda Farias',
 ]
 
+const YouTubeHeader = ({ userName }: { userName: string }) => {
+  return (
+    <header style={{
+      height: 56,
+      background: '#0f0f0f',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '0 16px',
+      color: '#fff',
+      userSelect: 'none',
+      flexShrink: 0,
+      zIndex: 100,
+    }}>
+      {/* Left: Logo */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+        <button style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4 }} disabled>
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+            <path d="M21 6H3V5h18v1zm0 5H3v1h18v-1zm0 6H3v1h18v-1z" />
+          </svg>
+        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 'bold', fontSize: 18, color: '#fff', letterSpacing: '-0.5px' }}>
+          <svg viewBox="0 0 24 24" width="28" height="28" fill="#FF0000" style={{ display: 'block' }}>
+            <path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.108C19.524 3.545 12 3.545 12 3.545s-7.524 0-9.388.51a3.002 3.002 0 0 0-2.11 2.108C0 8.029 0 12 0 12s0 3.971.502 5.837a3.003 3.003 0 0 0 2.11 2.108c1.864.51 9.388.51 9.388.51s7.524 0 9.388-.51a3.002 3.002 0 0 0 2.11-2.108c.502-1.866.502-5.837.502-5.837s0-3.971-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
+          </svg>
+          <span style={{ fontFamily: '"Roboto", sans-serif', fontWeight: 900, fontSize: 18, letterSpacing: '-0.8px' }}>YouTube</span>
+          <span style={{ fontSize: 10, color: '#aaaaaa', alignSelf: 'flex-start', marginTop: 2, marginLeft: 2, fontWeight: 400 }}>Premium</span>
+          <span style={{ fontSize: 9, background: '#FF0000', color: '#fff', padding: '1px 4px', borderRadius: 2, marginLeft: 6, fontWeight: 700, letterSpacing: '0px' }}>AO VIVO</span>
+        </div>
+      </div>
+
+      {/* Center: Search */}
+      <div className="hidden-mobile" style={{ display: 'flex', alignItems: 'center', width: '100%', maxWidth: 600, margin: '0 16px' }}>
+        <div style={{ display: 'flex', flex: 1, background: '#121212', borderRadius: '40px 0 0 40px', border: '1px solid #303030', borderRight: 'none', padding: '0 16px', height: 40, alignItems: 'center' }}>
+          <input
+            type="text"
+            placeholder="Pesquisar"
+            style={{ background: 'transparent', border: 'none', color: '#fff', width: '100%', outline: 'none', fontSize: 14 }}
+            disabled
+          />
+        </div>
+        <button style={{ width: 64, height: 40, background: '#222222', border: '1px solid #303030', borderRadius: '0 40px 40px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }} disabled>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+          </svg>
+        </button>
+        <button style={{ width: 40, height: 40, background: '#272727', border: 'none', borderRadius: '50%', marginLeft: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }} disabled>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
+            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z" />
+          </svg>
+        </button>
+      </div>
+
+      {/* Right: Actions */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <button style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 8, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Criar" disabled>
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+            <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4zM14 13h-3v3H9v-3H6v-2h3V8h2v3h3v2z" />
+          </svg>
+        </button>
+        <button style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 8, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Notificações" disabled>
+          <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
+            <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
+          </svg>
+        </button>
+        <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--brand)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 13, marginLeft: 8 }}>
+          {getInitials(userName)}
+        </div>
+      </div>
+    </header>
+  )
+}
+
 export default function WebinarRoom({ webinar, events, initialCountdownSeconds = 0, guestMode, leadData }: Props) {
   const router = useRouter()
   const videoRef = useRef<HTMLVideoElement>(null)
@@ -511,6 +599,21 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const [pollResults, setPollResults] = useState<Record<string, number>>({})
 
   // New feature state
+  const [isSubscribed, setIsSubscribed] = useState(false)
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsSubscribed(localStorage.getItem(`yt_subscribed_${webinar.id}`) === 'true')
+    }
+  }, [webinar.id])
+
+  const toggleSubscribe = () => {
+    const nextVal = !isSubscribed
+    setIsSubscribed(nextVal)
+    localStorage.setItem(`yt_subscribed_${webinar.id}`, nextVal ? 'true' : 'false')
+  }
+
   const [quizOpen, setQuizOpen] = useState(false)
   // Seed elapsedSeconds with the real start offset so isSessionEnded is correct
   // from the very first render. Without this, the video player initialises and
@@ -598,6 +701,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const [vimeoIframeLoaded, setVimeoIframeLoaded] = useState(false)
   const [vimeoSrc, setVimeoSrc] = useState('')
   const sessionOnBgRef = useRef(false)
+  const playStartedRef = useRef(false)
 
   // ---- Native Video state ----
   const [nativeMuted, setNativeMuted] = useState(true)
@@ -635,6 +739,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   const duration = actualDuration || webinar.duration_seconds || 14400
   const isSessionEnded = elapsedSeconds >= duration
+
+  const trackPlayStartedOnce = useCallback(() => {
+    if (playStartedRef.current) return
+    playStartedRef.current = true
+    trackEvent('play_started', Math.max(0, elapsedSeconds))
+  }, [elapsedSeconds])
 
   const isSessionEndedRef = useRef(isSessionEnded)
   useEffect(() => {
@@ -902,12 +1012,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           // Do NOT set ytMuted(false) here — the video starts playing while still muted.
           // ytMuted is only cleared when the user explicitly clicks "Clique para ativar o som".
           setYtPlaying(true)
+          trackPlayStartedOnce()
         }
       } catch { /* ignore non-JSON messages */ }
     }
     window.addEventListener('message', handler)
     return () => window.removeEventListener('message', handler)
-  }, [webinar.video_url])
+  }, [webinar.video_url, trackPlayStartedOnce])
 
   // ---- Mobile tip: keep tab open for background audio (once per session) ----
   useEffect(() => {
@@ -1018,7 +1129,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       }
     }, 1000)
     
-    trackEvent('joined', 0)
+    // Enrich joined with device fingerprint for analytics segmentation
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+    const tz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : ''
+    trackEvent('page_view', 0, { user_agent: ua, timezone: tz })
+    trackEvent('joined', 0, { user_agent: ua, timezone: tz })
     return () => {
       if (elapsedIntervalRef.current) clearInterval(elapsedIntervalRef.current)
     }
@@ -1744,7 +1859,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
         if (data?.player_id || data?.event) {
           // Vimeo Player API sends events like: { event: 'play' | 'pause' | 'bufferstart' | 'bufferend' }
-          if (data.event === 'play') { setVimeoPlaying(true); setVimeoBuffering(false) }
+          if (data.event === 'play') {
+            setVimeoPlaying(true)
+            setVimeoBuffering(false)
+            trackPlayStartedOnce()
+          }
           if (data.event === 'pause') {
             setVimeoPlaying(false)
             if (!isSessionEndedRef.current && vimeoIframeRef.current?.contentWindow) {
@@ -1758,7 +1877,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           if (data.event === 'bufferstart') setVimeoBuffering(true)
           if (data.event === 'bufferend') { setVimeoBuffering(false) }
           if (data.event === 'playProgress' || data.event === 'timeupdate') {
-            setVimeoPlaying(true); setVimeoBuffering(false)
+            setVimeoPlaying(true)
+            setVimeoBuffering(false)
+            trackPlayStartedOnce()
           }
           if (data.event === 'loaded' && data.data?.duration) {
             setActualDuration(Math.floor(data.data.duration))
@@ -1792,7 +1913,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
     // Fallback: if Vimeo never reports playing after 10s, consider it playing
     const fallback = setTimeout(() => {
-      setVimeoPlaying(prev => { if (!prev) return true; return prev })
+      setVimeoPlaying(prev => {
+        if (!prev) {
+          trackPlayStartedOnce()
+          return true
+        }
+        return prev
+      })
     }, 10000)
 
     return () => {
@@ -1801,7 +1928,14 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       clearTimeout(fallback)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webinar.video_url, vimeoIframeLoaded])
+  }, [webinar.video_url, vimeoIframeLoaded, trackPlayStartedOnce])
+
+  // ---- VTurb play started tracking ----
+  useEffect(() => {
+    if (isVturbUrl(webinar.video_url) && waitingDone) {
+      trackPlayStartedOnce()
+    }
+  }, [webinar.video_url, waitingDone, trackPlayStartedOnce])
 
   // ---- Video setup (evergreen offset + block controls) ----
   useEffect(() => {
@@ -1850,15 +1984,23 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       if (video.duration > 0) setActualDuration(Math.floor(video.duration))
     }
 
+    const onPlaying = () => {
+      trackPlayStartedOnce()
+    }
+    video.addEventListener('playing', onPlaying)
     video.addEventListener('loadeddata', onLoaded)
     video.addEventListener('loadedmetadata', onLoadedMetadata)
     video.addEventListener('timeupdate', onTimeUpdate)
     video.addEventListener('timeupdate', onTimeUpdateStore)
     video.addEventListener('seeking', onSeeking)
 
-    trackEvent('joined', 0)
+    // Enrich joined with device fingerprint for analytics segmentation
+    const ua2 = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+    const tz2 = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : ''
+    trackEvent('joined', 0, { user_agent: ua2, timezone: tz2 })
 
     return () => {
+      video.removeEventListener('playing', onPlaying)
       video.removeEventListener('loadeddata', onLoaded)
       video.removeEventListener('loadedmetadata', onLoadedMetadata)
       video.removeEventListener('timeupdate', onTimeUpdate)
@@ -1867,7 +2009,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       trackEvent('left', Math.floor(video.currentTime))
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [webinar.evergreen_offset_seconds])
+  }, [webinar.evergreen_offset_seconds, trackPlayStartedOnce])
 
   async function trackEvent(type: string, timestampVideo: number, metadata: Record<string, unknown> = {}) {
     try {
@@ -2300,9 +2442,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           backgroundAttachment: 'fixed'
         } : undefined}
       >
-      <div className="webinar-room">
+        {webinar.theme === 'youtube' && <YouTubeHeader userName={userName} />}
+        <div className="webinar-room">
       {/* VIDEO SECTION */}
       <div className="video-section" ref={sectionRef}>
+        {webinar.theme !== 'youtube' && (
         <div className="video-header">
           <div className="webinar-title-bar">
             {isSessionEnded ? (
@@ -2368,6 +2512,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             )}
           </div>
         </div>
+        )}
 
         <div className={`video-wrapper${(webinar.video_url && (isVimeoUrl(webinar.video_url) || isVturbUrl(webinar.video_url))) ? ' video-wrapper-cover' : ''}`} style={{ position: 'relative' }}>
           {/* OFFLINE screen — no session in the next 12h */}
@@ -2748,8 +2893,123 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             </div>
           ) : null}
 
+          {/* Live red progress bar */}
+          {webinar.theme === 'youtube' && (
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: 3,
+              background: '#cc0000',
+              zIndex: 10,
+              boxShadow: '0 0 8px rgba(204,0,0,0.8)',
+              pointerEvents: 'none'
+            }} />
+          )}
         </div>
 
+        {/* YOUTUBE THEME: VIDEO DETAILS */}
+        {webinar.theme === 'youtube' && (
+          <div className="yt-video-details-container">
+            <h1 className="yt-video-title">
+              {webinar.display_name || webinar.name}
+            </h1>
+            
+            <div className="yt-channel-actions-row">
+              <div className="yt-channel-left">
+                <div 
+                  className="yt-channel-avatar"
+                  style={{
+                    backgroundImage: webinar.ai_persona_avatar ? `url(${webinar.ai_persona_avatar})` : undefined,
+                    backgroundSize: 'cover',
+                  }}
+                >
+                  {!webinar.ai_persona_avatar && getInitials(webinar.display_name || webinar.name)}
+                </div>
+                <div className="yt-channel-info">
+                  <div className="yt-channel-name">
+                    <span>{webinar.display_name || webinar.name}</span>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="#aaa" style={{ marginLeft: 4 }}>
+                      <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zM10 17l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                    </svg>
+                  </div>
+                  <div className="yt-sub-count">
+                    {formatSubscriberCount(webinar.fake_viewers_peak || 25000)} de inscritos
+                  </div>
+                </div>
+                
+                <button className="yt-btn-member" disabled style={{ cursor: 'not-allowed', opacity: 0.8 }}>
+                  Seja membro
+                </button>
+                
+                <button 
+                  className={`yt-btn-subscribe ${isSubscribed ? 'subscribed' : ''}`}
+                  onClick={toggleSubscribe}
+                >
+                  {isSubscribed ? (
+                    <>
+                      <span>Inscrito</span>
+                      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+                        <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
+                      </svg>
+                    </>
+                  ) : 'Inscrever-se'}
+                </button>
+              </div>
+              
+              <div className="yt-actions-right">
+                {!!(webinar as unknown as Record<string, unknown>).has_quiz && (
+                  <button
+                    className="yt-action-btn"
+                    onClick={() => setQuizOpen(true)}
+                    style={{ background: 'var(--brand-glow)', border: '1px solid var(--brand)', color: '#fff' }}
+                  >
+                    <span>📝 Quiz</span>
+                  </button>
+                )}
+                <button className="yt-action-btn" disabled style={{ cursor: 'not-allowed', opacity: 0.8 }}>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M14 9V5l7 7-7 7v-4.1c-5 0-8.5 1.6-11 5.1 1-5 4-10 11-11z" />
+                  </svg>
+                  <span>Compartilhar</span>
+                </button>
+                <button className="yt-action-btn" disabled style={{ cursor: 'not-allowed', opacity: 0.8 }}>
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                    <path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2z" />
+                  </svg>
+                  <span>Salvar</span>
+                </button>
+                <button className="yt-action-btn-more" disabled style={{ cursor: 'not-allowed', opacity: 0.8 }}>
+                  •••
+                </button>
+              </div>
+            </div>
+            
+            {/* Description Box */}
+            <div className="yt-description-box" onClick={() => setDescriptionExpanded(e => !e)} style={{ cursor: 'pointer' }}>
+              <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 14 }}>
+                {viewers.toLocaleString()} assistindo agora • Transmissão iniciada há {Math.max(1, Math.floor(elapsedSeconds / 60)) || 1} minutos
+              </div>
+              <p style={{
+                fontSize: 13,
+                lineHeight: 1.5,
+                whiteSpace: 'pre-wrap',
+                margin: 0,
+                display: '-webkit-box',
+                WebkitLineClamp: descriptionExpanded ? 'unset' : 2,
+                WebkitBoxOrient: 'vertical',
+                overflow: 'hidden',
+                color: '#f1f1f1'
+              }}>
+                {webinar.description || 'Assista a esta super transmissão ao vivo e tire todas as suas dúvidas no chat.'}
+              </p>
+              <div style={{ fontSize: 12, fontWeight: 'bold', marginTop: 8, color: '#aaa' }}>
+                {descriptionExpanded ? 'Mostrar menos' : '... mais'}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* CHAT SECTION — delegated to ChatPanel */}
@@ -2773,6 +3033,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         isBanned={isBanned}
         onDeleteMessage={deleteChatMessage}
         onBanUser={banUser}
+        theme={webinar.theme}
+        userName={userName}
       />
       {/* Mobile landscape chat toggle button */}
       <button

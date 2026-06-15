@@ -166,6 +166,19 @@ interface ChatPanelProps {
   isBanned?: boolean
   onDeleteMessage?: (messageId: string) => void
   onBanUser?: (leadEmail: string | null, sessionId: string) => void
+  theme?: 'dark' | 'light' | 'youtube'
+  userName?: string
+}
+
+function formatYtHandle(name: string): string {
+  if (name.startsWith('@')) return name
+  const clean = name
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove accents
+    .replace(/[^a-zA-Z0-9\s_]/g, '')
+    .replace(/\s+/g, '')
+    .toLowerCase()
+  return `@${clean}`
 }
 
 export default function ChatPanel({
@@ -188,6 +201,8 @@ export default function ChatPanel({
   isBanned = false,
   onDeleteMessage,
   onBanUser,
+  theme,
+  userName = 'Você',
 }: ChatPanelProps) {
   const [chatTab, setChatTab] = useState<ChatTab>(defaultTab)
   const [chatInput, setChatInput] = useState('')
@@ -213,8 +228,38 @@ export default function ChatPanel({
 
   return (
     <div className={`chat-section${mobileChatOpen ? ' mobile-chat-open' : ''}`}>
+      {/* YT CHAT HEADER */}
+      {theme === 'youtube' && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px 16px',
+          borderBottom: '1px solid #303030',
+          background: '#0f0f0f',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>Chat ao vivo</span>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="#fff">
+              <path d="M12 15.25L6 9.25L7.41 7.84L12 12.43L16.59 7.84L18 9.25L12 15.25Z" />
+            </svg>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <span style={{ fontSize: 11, color: '#aaaaaa' }}>Saiba mais</span>
+            <button style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 2 }} disabled>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
+                <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* TABS HEADER */}
-      <div style={{
+      <div style={theme === 'youtube' ? {
+        display: 'flex', gap: 8, padding: '12px 16px', borderBottom: '1px solid #303030',
+        background: '#0f0f0f',
+      } : {
         display: 'flex', borderBottom: '1px solid var(--border)',
         background: 'var(--bg-card)',
       }}>
@@ -224,30 +269,42 @@ export default function ChatPanel({
           ...(visibleMaterials.length > 0 || materials.length > 0
             ? [{ id: 'materials' as const, label: '📂 Materiais', count: visibleMaterials.length }]
             : []),
-        ] as const).map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setChatTab(tab.id)}
-            className={`chat-tab-btn ${chatTab === tab.id ? 'active' : ''}`}
-            style={{
-              flex: 1, padding: '10px 4px', fontSize: 12, fontWeight: 600,
-              background: 'none', border: 'none', cursor: 'pointer',
-              color: chatTab === tab.id ? 'var(--brand)' : 'var(--text-muted)',
-              borderBottom: chatTab === tab.id ? '2px solid var(--brand)' : '2px solid transparent',
-              transition: 'all 0.15s ease',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
-            }}
-          >
-            {tab.label}
-            {tab.count > 0 && (
-              <span style={{
-                background: chatTab === tab.id ? 'var(--brand)' : 'var(--border)',
-                color: chatTab === tab.id ? '#fff' : 'var(--text-muted)',
-                borderRadius: 99, padding: '0px 6px', fontSize: 10, fontWeight: 700,
-              }}>{tab.count}</span>
-            )}
-          </button>
-        ))}
+        ] as const).map(tab => {
+          const isActive = chatTab === tab.id;
+          return (
+            <button
+              key={tab.id}
+              onClick={() => setChatTab(tab.id)}
+              className={`chat-tab-btn ${isActive ? 'active' : ''}`}
+              style={theme === 'youtube' ? {
+                padding: '6px 12px', fontSize: 12, fontWeight: 600,
+                background: isActive ? '#ffffff' : '#272727',
+                color: isActive ? '#0f0f0f' : '#ffffff',
+                borderRadius: 100, border: 'none', cursor: 'pointer',
+                transition: 'all 0.15s ease',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+              } : {
+                flex: 1, padding: '10px 4px', fontSize: 12, fontWeight: 600,
+                background: 'none', border: 'none', cursor: 'pointer',
+                color: isActive ? 'var(--brand)' : 'var(--text-muted)',
+                borderBottom: isActive ? '2px solid var(--brand)' : '2px solid transparent',
+                transition: 'all 0.15s ease',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
+              }}
+            >
+              {theme === 'youtube' ? (
+                tab.id === 'chat' ? 'Chat' : tab.id === 'qa' ? 'Q&A' : 'Materiais'
+              ) : tab.label}
+              {tab.count > 0 && (
+                <span style={{
+                  background: isActive ? (theme === 'youtube' ? '#0f0f0f' : 'var(--brand)') : (theme === 'youtube' ? '#3e3e3e' : 'var(--border)'),
+                  color: isActive ? (theme === 'youtube' ? '#ffffff' : '#fff') : (theme === 'youtube' ? '#aaaaaa' : 'var(--text-muted)'),
+                  borderRadius: 99, padding: '0px 6px', fontSize: 10, fontWeight: 700,
+                }}>{tab.count}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* PINNED MESSAGE BANNER */}
@@ -312,13 +369,52 @@ export default function ChatPanel({
                           : 'var(--brand)',
                       backgroundImage: msg.avatar ? `url(${msg.avatar})` : undefined,
                       backgroundSize: 'cover',
+                      width: theme === 'youtube' ? 24 : undefined,
+                      height: theme === 'youtube' ? 24 : undefined,
                     }}
                   >
                     {!msg.avatar && (isPitchCard ? '🎁' : getInitials(msg.author))}
                   </div>
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {!isBroadcast && (
+                  {!isBroadcast && theme === 'youtube' ? (
+                    <div style={{ display: 'inline', alignItems: 'baseline', fontSize: 13, lineHeight: '1.4' }}>
+                      <span style={{
+                        fontWeight: 600,
+                        color: isPitchCard ? '#22c55e' : isAi ? '#3ea6ff' : (msg.author.charCodeAt(0) % 5 === 0 ? '#2ba640' : '#aaaaaa'),
+                        marginRight: 8,
+                        cursor: 'pointer'
+                      }}>
+                        {formatYtHandle(msg.author)}
+                      </span>
+                      <span style={{ color: '#f1f1f1', whiteSpace: 'pre-line' }}>{msg.text}</span>
+                      {isAdmin && !isPitchCard && (
+                        <span style={{ display: 'inline-flex', gap: 6, marginLeft: 8, verticalAlign: 'middle' }}>
+                          <button
+                            title="Deletar comentário"
+                            onClick={() => msg.id && onDeleteMessage?.(msg.id)}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 10, opacity: 0.6 }}
+                          >
+                            🗑️
+                          </button>
+                          {!msg.isSimulated && (
+                            <button
+                              title="Banir usuário"
+                              onClick={() => {
+                                const confirmBan = confirm(`Tem certeza que deseja suspender ${msg.author} do chat?`)
+                                if (confirmBan) {
+                                  onBanUser?.((msg as any).lead_email || null, (msg as any).session_id || '')
+                                }
+                              }}
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, fontSize: 10, opacity: 0.6 }}
+                            >
+                              🚫
+                            </button>
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  ) : !isBroadcast ? (
                     <div className="chat-msg-author" style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -382,13 +478,23 @@ export default function ChatPanel({
                         </div>
                       )}
                     </div>
+                  ) : null}
+
+                  {theme !== 'youtube' && (
+                    <div className="chat-msg-text" style={{
+                      ...(isBroadcast ? { color: 'var(--success)', fontWeight: 600 } : {}),
+                      whiteSpace: 'pre-line',
+                    }}>
+                      {msg.text}
+                    </div>
                   )}
-                  <div className="chat-msg-text" style={{
-                    ...(isBroadcast ? { color: 'var(--success)', fontWeight: 600 } : {}),
-                    whiteSpace: 'pre-line',
-                  }}>
-                    {msg.text}
-                  </div>
+
+                  {isBroadcast && theme === 'youtube' && (
+                    <div style={{ fontSize: 13, color: 'var(--success)', fontWeight: 600, whiteSpace: 'pre-line' }}>
+                      {msg.text}
+                    </div>
+                  )}
+
                   {msg.image_url && (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
@@ -511,34 +617,132 @@ export default function ChatPanel({
       )}
 
       {/* DYNAMIC INPUT BY TAB */}
-      <div className="chat-input-area" style={{ paddingBottom: hasBottomBar ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : undefined }}>
+      <div className="chat-input-area" style={{
+        paddingBottom: hasBottomBar ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : undefined,
+        borderTop: theme === 'youtube' ? '1px solid #303030' : undefined,
+        background: theme === 'youtube' ? '#0f0f0f' : undefined,
+      }}>
         {chatTab === 'chat' && (
-          <>
-            <input
-              type="text"
-              className="chat-input"
-              placeholder={isBanned ? "Você foi suspenso deste chat." : "Digite sua mensagem..."}
-              disabled={isBanned}
-              value={chatInput}
-              onChange={e => setChatInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSendChat()}
-            />
-            <button className="btn btn-primary btn-sm" disabled={isBanned} onClick={handleSendChat}>→</button>
-          </>
+          theme === 'youtube' ? (
+            <div style={{ display: 'flex', gap: 12, padding: '12px 16px', width: '100%', alignItems: 'center' }}>
+              <div style={{
+                width: 24, height: 24, borderRadius: '50%',
+                background: 'var(--brand)', color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 10, fontWeight: 'bold', flexShrink: 0
+              }}>
+                {getInitials(userName)}
+              </div>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: '#272727', borderRadius: 20, padding: '4px 12px' }}>
+                <input
+                  type="text"
+                  placeholder={isBanned ? "Você foi suspenso deste chat." : "Diga algo..."}
+                  disabled={isBanned}
+                  value={chatInput}
+                  onChange={e => setChatInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSendChat()}
+                  style={{
+                    flex: 1,
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#fff',
+                    outline: 'none',
+                    fontSize: 13,
+                    padding: '6px 0',
+                  }}
+                />
+                <button
+                  onClick={handleSendChat}
+                  disabled={isBanned || !chatInput.trim()}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: chatInput.trim() ? '#3ea6ff' : '#717171',
+                    cursor: chatInput.trim() ? 'pointer' : 'default',
+                    fontSize: 13,
+                    fontWeight: 'bold',
+                    padding: '4px 8px',
+                  }}
+                >
+                  Enviar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <input
+                type="text"
+                className="chat-input"
+                placeholder={isBanned ? "Você foi suspenso deste chat." : "Digite sua mensagem..."}
+                disabled={isBanned}
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSendChat()}
+              />
+              <button className="btn btn-primary btn-sm" disabled={isBanned} onClick={handleSendChat}>→</button>
+            </>
+          )
         )}
         {chatTab === 'qa' && (
-          <>
-            <input
-              type="text"
-              className="chat-input"
-              placeholder={isBanned ? "Você foi suspenso deste chat." : "Envie sua dúvida..."}
-              disabled={isBanned}
-              value={qaInput}
-              onChange={e => setQaInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleSendQa()}
-            />
-            <button className="btn btn-primary btn-sm" disabled={isBanned} onClick={handleSendQa}>→</button>
-          </>
+          theme === 'youtube' ? (
+            <div style={{ display: 'flex', gap: 12, padding: '12px 16px', width: '100%', alignItems: 'center' }}>
+              <div style={{
+                width: 24, height: 24, borderRadius: '50%',
+                background: 'var(--brand)', color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 10, fontWeight: 'bold', flexShrink: 0
+              }}>
+                {getInitials(userName)}
+              </div>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: '#272727', borderRadius: 20, padding: '4px 12px' }}>
+                <input
+                  type="text"
+                  placeholder={isBanned ? "Você foi suspenso deste chat." : "Envie sua dúvida..."}
+                  disabled={isBanned}
+                  value={qaInput}
+                  onChange={e => setQaInput(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSendQa()}
+                  style={{
+                    flex: 1,
+                    background: 'transparent',
+                    border: 'none',
+                    color: '#fff',
+                    outline: 'none',
+                    fontSize: 13,
+                    padding: '6px 0',
+                  }}
+                />
+                <button
+                  onClick={handleSendQa}
+                  disabled={isBanned || !qaInput.trim()}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: qaInput.trim() ? '#3ea6ff' : '#717171',
+                    cursor: qaInput.trim() ? 'pointer' : 'default',
+                    fontSize: 13,
+                    fontWeight: 'bold',
+                    padding: '4px 8px',
+                  }}
+                >
+                  Enviar
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <input
+                type="text"
+                className="chat-input"
+                placeholder={isBanned ? "Você foi suspenso deste chat." : "Envie sua dúvida..."}
+                disabled={isBanned}
+                value={qaInput}
+                onChange={e => setQaInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSendQa()}
+              />
+              <button className="btn btn-primary btn-sm" disabled={isBanned} onClick={handleSendQa}>→</button>
+            </>
+          )
         )}
         {chatTab === 'materials' && (
           <div style={{ padding: '8px 12px', fontSize: 12, color: 'var(--text-muted)', flex: 1 }}>
