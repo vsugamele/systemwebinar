@@ -14,18 +14,60 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const supabase = await createServiceClient()
+    const metadata = body.metadata || {}
 
-    await supabase.from('webi_session_events').insert({
-      session_id: body.session_id,
-      webinar_id: body.webinar_id,
-      project_id: body.project_id,
-      event_type: body.event_type,
-      timestamp_video: body.timestamp_video,
-      metadata: body.metadata || {},
-    })
+    if (body.event_type === 'watch_second') {
+      const timestampVideo = Number(body.timestamp_video)
+      const bucketSeconds = 5
+      const bucketStartSeconds = Number.isFinite(timestampVideo) && timestampVideo >= 0
+        ? Math.floor(timestampVideo / bucketSeconds) * bucketSeconds
+        : 0
+      const rawDelta = Number(metadata.watch_delta_seconds)
+      const watchDeltaSeconds = Number.isFinite(rawDelta) && rawDelta > 0
+        ? Math.round(rawDelta)
+        : bucketSeconds
+
+      const { error: retentionError } = await supabase
+        .from('webi_retention_buckets')
+        .upsert({
+          session_id: body.session_id,
+          webinar_id: body.webinar_id,
+          project_id: body.project_id,
+          bucket_seconds: bucketSeconds,
+          bucket_start_seconds: bucketStartSeconds,
+          watch_delta_seconds: watchDeltaSeconds,
+          sample_count: 1,
+          session_mode: typeof metadata.session_mode === 'string' ? metadata.session_mode : null,
+          lead_email: typeof metadata.lead_email === 'string' ? metadata.lead_email : null,
+          lead_name: typeof metadata.lead_name === 'string' ? metadata.lead_name : null,
+          lead_phone: typeof metadata.lead_phone === 'string' ? metadata.lead_phone : null,
+          user_agent: typeof metadata.user_agent === 'string' ? metadata.user_agent : null,
+          timezone: typeof metadata.timezone === 'string' ? metadata.timezone : null,
+          last_timestamp_video: Number.isFinite(timestampVideo) ? Math.round(timestampVideo) : null,
+          metadata,
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'webinar_id,session_id,bucket_seconds,bucket_start_seconds' })
+
+      if (retentionError) {
+        throw retentionError
+      }
+    } else {
+      const { error: eventError } = await supabase.from('webi_session_events').insert({
+        session_id: body.session_id,
+        webinar_id: body.webinar_id,
+        project_id: body.project_id,
+        event_type: body.event_type,
+        timestamp_video: body.timestamp_video,
+        metadata,
+      })
+
+      if (eventError) {
+        throw eventError
+      }
+    }
 
     // Automatically mark lead as attended in the database
-    const leadEmail = body.metadata?.lead_email as string | undefined
+    const leadEmail = metadata?.lead_email as string | undefined
     if (leadEmail && body.webinar_id && shouldMarkLeadAttended(body.event_type)) {
       await supabase
         .from('webi_leads')
@@ -35,11 +77,11 @@ export async function POST(req: NextRequest) {
     }
 
     // Imperio HQ — dispatch on key events (fire-and-forget, never block response)
-    const imperioProjectId = body.metadata?.imperio_project_id as string | undefined
+    const imperioProjectId = metadata?.imperio_project_id as string | undefined
     if (imperioProjectId) {
-      const leadEmail = body.metadata?.lead_email as string | undefined
-      const leadName = body.metadata?.lead_name as string | undefined
-      const leadPhone = body.metadata?.lead_phone as string | undefined
+      const leadEmail = metadata?.lead_email as string | undefined
+      const leadName = metadata?.lead_name as string | undefined
+      const leadPhone = metadata?.lead_phone as string | undefined
 
       if (body.event_type === 'joined' && leadEmail) {
         imperioSend({
@@ -71,12 +113,12 @@ export async function POST(req: NextRequest) {
 
     // Custom in-webinar emails via Resend
     if (body.event_type === 'trigger_in_webinar_email') {
-      const emailId = body.metadata?.email_id as string
-      const rawSubject = body.metadata?.subject as string
-      const rawBody = body.metadata?.body as string
-      const leadEmail = body.metadata?.lead_email as string
-      const leadName = body.metadata?.lead_name as string || 'Espectador'
-      const webinarName = body.metadata?.webinar_name as string || ''
+      const emailId = metadata?.email_id as string
+      const rawSubject = metadata?.subject as string
+      const rawBody = metadata?.body as string
+      const leadEmail = metadata?.lead_email as string
+      const leadName = metadata?.lead_name as string || 'Espectador'
+      const webinarName = metadata?.webinar_name as string || ''
 
       if (leadEmail && rawSubject && rawBody) {
         // Evaluate variables
@@ -179,6 +221,20 @@ export async function GET(req: NextRequest) {
       return filtered
     }
 
+    const applyRetentionFilters = (query: any) => {
+      let filtered = query
+      if (sessionStart) filtered = filtered.gte('updated_at', sessionStart)
+      if (dateFromIso) filtered = filtered.gte('updated_at', dateFromIso)
+      if (dateToIso) filtered = filtered.lte('updated_at', dateToIso)
+      if (mode === 'replay' || mode === 'evergreen') {
+        filtered = filtered.eq('session_mode', mode)
+      }
+      if (mode === 'live' && !sessionStart) {
+        filtered = filtered.eq('session_mode', 'live')
+      }
+      return filtered
+    }
+
     const applyLeadFilters = (query: any) => {
       let filtered = query
       if (dateFromIso) filtered = filtered.gte('registered_at', dateFromIso)
@@ -220,6 +276,20 @@ export async function GET(req: NextRequest) {
       })
     }
 
+    const filterRetentionRowsByCampaign = <T extends { metadata?: any; lead_email?: string | null }>(rows: T[] | null | undefined): T[] => {
+      const allRows = rows || []
+      if (!campaignLeadEmails) return allRows
+      return allRows.filter(row => {
+        const meta = (row.metadata as Record<string, any>) || {}
+        const email = typeof row.lead_email === 'string'
+          ? row.lead_email.trim().toLowerCase()
+          : typeof meta.lead_email === 'string'
+            ? meta.lead_email.trim().toLowerCase()
+            : ''
+        return !!email && campaignLeadEmails.has(email)
+      })
+    }
+
     // Aggregate viewers by minute
     let sessionsQuery = supabase
       .from('webi_session_events')
@@ -231,9 +301,19 @@ export async function GET(req: NextRequest) {
     const { data: sessionsRaw } = await sessionsQuery
     const sessionsEvents = filterEventRowsByCampaign(sessionsRaw)
 
+    let retentionQuery = supabase
+      .from('webi_retention_buckets')
+      .select('session_id, bucket_seconds, bucket_start_seconds, watch_delta_seconds, session_mode, lead_email, lead_name, lead_phone, user_agent, timezone, metadata, created_at, updated_at')
+      .eq('webinar_id', webinarId)
+
+    retentionQuery = applyRetentionFilters(retentionQuery)
+    const { data: retentionRaw } = await retentionQuery
+    const retentionBuckets = filterRetentionRowsByCampaign(retentionRaw)
+
     // Build viewers per minute and finer interval buckets for VTurb-style retention charts.
     const minuteMap = new Map<number, Set<string>>()
     const intervalMap = new Map<number, Set<string>>()
+    const legacyWatchBucketKeys = new Set<string>()
     sessionsEvents?.forEach(s => {
       if (s.timestamp_video !== null) {
         const minute = Math.floor(s.timestamp_video / 60)
@@ -243,7 +323,22 @@ export async function GET(req: NextRequest) {
         const bucketStart = Math.floor(s.timestamp_video / bucketSeconds) * bucketSeconds
         if (!intervalMap.has(bucketStart)) intervalMap.set(bucketStart, new Set())
         intervalMap.get(bucketStart)!.add(s.session_id)
+
+        const nativeBucketStart = Math.floor(s.timestamp_video / 5) * 5
+        legacyWatchBucketKeys.add(`${s.session_id}:${nativeBucketStart}`)
       }
+    })
+    retentionBuckets?.forEach(bucket => {
+      const timestampVideo = Number(bucket.bucket_start_seconds)
+      if (!Number.isFinite(timestampVideo) || timestampVideo < 0) return
+
+      const minute = Math.floor(timestampVideo / 60)
+      if (!minuteMap.has(minute)) minuteMap.set(minute, new Set())
+      minuteMap.get(minute)!.add(bucket.session_id)
+
+      const intervalBucketStart = Math.floor(timestampVideo / bucketSeconds) * bucketSeconds
+      if (!intervalMap.has(intervalBucketStart)) intervalMap.set(intervalBucketStart, new Set())
+      intervalMap.get(intervalBucketStart)!.add(bucket.session_id)
     })
 
     const viewersByMinute = Array.from(minuteMap.entries())
@@ -624,6 +719,53 @@ export async function GET(req: NextRequest) {
         created_at: ev.created_at,
         details: ev.event_type === 'cta_clicked' ? (meta.source || undefined) : undefined
       })
+    })
+
+    retentionBuckets?.forEach(bucket => {
+      const sid = bucket.session_id
+      const bucketStart = Number(bucket.bucket_start_seconds)
+      if (!sid || !Number.isFinite(bucketStart)) return
+      if (legacyWatchBucketKeys.has(`${sid}:${bucketStart}`)) return
+
+      if (!sessionMap.has(sid)) {
+        sessionMap.set(sid, {
+          session_id: sid,
+          lead_name: 'Visitante AnÃ´nimo',
+          lead_email: '',
+          lead_phone: null,
+          device: 'Desktop',
+          browser: 'Outro',
+          os: 'Outro',
+          country: 'Desconhecido',
+          watch_time: 0,
+          clicked_cta: false,
+          events: []
+        })
+      }
+
+      const entry = sessionMap.get(sid)!
+      const meta = (bucket.metadata as Record<string, any>) || {}
+      const leadName = bucket.lead_name || meta.lead_name
+      const leadEmail = bucket.lead_email || meta.lead_email
+      const leadPhone = bucket.lead_phone || meta.lead_phone
+      const ua = bucket.user_agent || meta.user_agent || ''
+      const tz = bucket.timezone || meta.timezone || ''
+      const watchDelta = Number(bucket.watch_delta_seconds)
+
+      if (ua) {
+        entry.device = parseDevice(ua)
+        entry.browser = parseBrowser(ua)
+        entry.os = parseOS(ua)
+      }
+      if (tz) {
+        entry.country = tzToCountry(tz)
+      }
+      if (leadName) entry.lead_name = leadName
+      if (leadEmail) entry.lead_email = leadEmail
+      if (leadPhone) entry.lead_phone = leadPhone
+      entry.watch_time += Number.isFinite(watchDelta) && watchDelta > 0
+        ? watchDelta
+        : Number(bucket.bucket_seconds) || 5
     })
 
     // 3. Process Chat Messages & Group by minute / finer interval

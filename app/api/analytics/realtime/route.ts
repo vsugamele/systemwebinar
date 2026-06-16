@@ -36,7 +36,16 @@ export async function GET(req: NextRequest) {
       .eq('event_type', 'watch_second')
       .gte('created_at', since)
 
-    const onlineNow = new Set(activeSessions?.map(s => s.session_id) ?? []).size
+    const { data: activeRetentionBuckets } = await supabase
+      .from('webi_retention_buckets')
+      .select('session_id')
+      .eq('webinar_id', webinarId)
+      .gte('updated_at', since)
+
+    const onlineSessions = new Set<string>()
+    activeSessions?.forEach(s => onlineSessions.add(s.session_id))
+    activeRetentionBuckets?.forEach(s => onlineSessions.add(s.session_id))
+    const onlineNow = onlineSessions.size
 
     // Pico de simultâneos (últimos 3 dias ou desde o início da sessão)
     let peakSince = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()
@@ -50,10 +59,21 @@ export async function GET(req: NextRequest) {
       .eq('event_type', 'watch_second')
       .gte('created_at', peakSince)
 
+    const { data: allRecentRetentionBuckets } = await supabase
+      .from('webi_retention_buckets')
+      .select('session_id, updated_at')
+      .eq('webinar_id', webinarId)
+      .gte('updated_at', peakSince)
+
     // Bucket por minuto, find max unique sessions
     const buckets = new Map<string, Set<string>>()
     for (const ev of allRecentEvents ?? []) {
       const minuteKey = ev.created_at.slice(0, 16) // "YYYY-MM-DDTHH:MM"
+      if (!buckets.has(minuteKey)) buckets.set(minuteKey, new Set())
+      buckets.get(minuteKey)!.add(ev.session_id)
+    }
+    for (const ev of allRecentRetentionBuckets ?? []) {
+      const minuteKey = ev.updated_at.slice(0, 16) // "YYYY-MM-DDTHH:MM"
       if (!buckets.has(minuteKey)) buckets.set(minuteKey, new Set())
       buckets.get(minuteKey)!.add(ev.session_id)
     }

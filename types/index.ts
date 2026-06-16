@@ -181,6 +181,27 @@ export interface SessionEvent {
   created_at: string
 }
 
+export interface RetentionBucket {
+  id: string
+  session_id: string
+  webinar_id: string
+  project_id: string
+  bucket_seconds: number
+  bucket_start_seconds: number
+  watch_delta_seconds: number
+  sample_count: number
+  session_mode: 'live' | 'replay' | 'evergreen' | string | null
+  lead_email: string | null
+  lead_name: string | null
+  lead_phone: string | null
+  user_agent: string | null
+  timezone: string | null
+  last_timestamp_video: number | null
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
 export interface QuizCardData {
   question_id: string
   question: string
