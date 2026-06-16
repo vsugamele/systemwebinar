@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import {
   ComposedChart, Area, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine, Legend,
+  Tooltip, ResponsiveContainer, ReferenceLine,
   BarChart, LabelList, Line,
 } from 'recharts'
 import { getMetricDelta } from '@/lib/analytics-metrics.mjs'
@@ -91,6 +91,17 @@ interface RetentionPoint {
   chatMessages?: number
 }
 
+interface FunnelLabelProps {
+  x?: number | string | null
+  y?: number | string | null
+  width?: number | string | null
+  value?: number | string | null
+  index?: number
+}
+
+type AnalyticsApiMetricMap = Record<string, number | string | null | undefined>
+type MinuteMessagePoint = { minute: number; messages: number }
+
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
 function KpiCard({
@@ -174,7 +185,7 @@ function SegmentTable({
 
 export default function AnalyticsPage() {
   const { id, wid } = useParams() as { id: string; wid: string }
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const [loading, setLoading] = useState(true)
   const [mode, setMode] = useState<AnalyticsMode>('all')
@@ -221,7 +232,7 @@ export default function AnalyticsPage() {
     return `/api/analytics?${params.toString()}`
   }, [wid, mode, dateFrom, dateTo, campaign])
 
-  const buildComparison = useCallback((current: any, previous: any): ComparisonDelta[] => {
+  const buildComparison = useCallback((current: AnalyticsApiMetricMap, previous: AnalyticsApiMetricMap): ComparisonDelta[] => {
     return [
       { key: 'unique_page_views', label: 'Views unicas' },
       { key: 'unique_plays', label: 'Plays unicos' },
@@ -283,7 +294,7 @@ export default function AnalyticsPage() {
     const chatByMinute = apiRes.chat_by_minute || []
     const filled: RetentionPoint[] = []
     let peakMin = 0, peakPct = 0, maxDrop = 0, maxDropMin = 0
-    let prevPct = 0, prevViewers = 0
+    let prevViewers = 0
     for (let i = 0; i <= durationMinutes; i++) {
       const point = viewersByMinute.find(v => v.minute === i)
       const v = point?.viewers || 0
@@ -292,7 +303,7 @@ export default function AnalyticsPage() {
       const dropoff = i > 0 && prevViewers > v ? prevViewers - v : 0
       if (dropoff > maxDrop) { maxDrop = dropoff; maxDropMin = i }
       const c = filteredClicks.find(ck => ck.minute === i)
-      const ch = chatByMinute.find((chat: any) => chat.minute === i)?.messages || 0
+      const ch = (chatByMinute as MinuteMessagePoint[]).find(chat => chat.minute === i)?.messages || 0
       filled.push({
         minute: i,
         viewers: v,
@@ -301,7 +312,7 @@ export default function AnalyticsPage() {
         clicks: c?.clicks || 0,
         chatMessages: ch
       })
-      prevViewers = v; prevPct = pct
+      prevViewers = v
     }
 
     setRetentionData(filled)
@@ -343,7 +354,7 @@ export default function AnalyticsPage() {
       countriesBreakdown: apiRes.countries_breakdown || {},
     })
     setLoading(false)
-  }, [wid, mode, buildAnalyticsUrl, buildComparison, compareEnabled, compareDateFrom, compareDateTo, compareCampaign, campaign])
+  }, [wid, buildAnalyticsUrl, buildComparison, compareEnabled, compareDateFrom, compareDateTo, compareCampaign, campaign, supabase])
 
   useEffect(() => { load() }, [load])
 
@@ -351,6 +362,30 @@ export default function AnalyticsPage() {
 
   const attendanceRate = summary.totalLeads > 0
     ? ((summary.joined / summary.totalLeads) * 100).toFixed(1) : '0.0'
+
+  const presentAtPitch = summary.audienceAtPitch || Math.round(summary.joined * (summary.retentionAtPitch / 100))
+  const funnelBase = summary.uniquePageViews || summary.joined || summary.uniquePlays
+  const playFunnelPct = funnelBase > 0 ? Math.round((summary.uniquePlays / funnelBase) * 100) : 0
+  const pitchFunnelPct = funnelBase > 0 ? Math.round((presentAtPitch / funnelBase) * 100) : 0
+  const offerClickPct = funnelBase > 0 ? Math.round((summary.ctaClicks / funnelBase) * 100) : 0
+  const watchHalfPct = summary.uniquePlays > 0 ? Math.round((summary.progress50 / summary.uniquePlays) * 100) : 0
+  const retentionHasData = retentionData.length > 0 && retentionData.some(d => d.viewers > 0)
+
+  const vturbFunnelData = [
+    { name: 'Visualizacoes unicas', pct: funnelBase > 0 ? 100 : 0, count: funnelBase, color: '#3b82f6' },
+    { name: 'Plays unicos', pct: playFunnelPct, count: summary.uniquePlays, color: '#22c55e' },
+    { name: 'Audiencia no pitch', pct: pitchFunnelPct, count: presentAtPitch, color: '#f59e0b' },
+    { name: 'Cliques no botao', pct: offerClickPct, count: summary.ctaClicks, color: '#f97316' },
+  ]
+
+  const keyMetrics = [
+    { label: 'Play Rate', value: `${summary.playRate}%`, sub: `${summary.uniquePlays} plays unicos / ${summary.uniquePageViews} views`, color: '#f0f0ff' },
+    { label: 'Retencao ao Pitch', value: summary.retentionAtPitch > 0 ? `${summary.retentionAtPitch}%` : '--', sub: summary.pitchAtMinute !== null ? `minuto ${summary.pitchAtMinute} - ${presentAtPitch} presentes` : 'pitch nao configurado', color: '#22c55e' },
+    { label: 'Taxa de Clique', value: `${offerClickPct}%`, sub: `${summary.ctaClicks} cliques / ${funnelBase} views`, color: '#f97316' },
+    { label: 'Engajamento Medio', value: `${summary.averageEngagementPct}%`, sub: 'tempo medio assistido', color: '#818cf8' },
+    { label: 'Assistiram 50%+', value: `${watchHalfPct}%`, sub: `${summary.progress50} pessoas passaram da metade`, color: '#a78bfa' },
+    { label: 'Chat', value: summary.chatMessagesCount.toLocaleString(), sub: `${summary.chatUniqueSenders} participantes unicos`, color: '#38bdf8' },
+  ]
 
   const funnelData = [
     { name: '1. Visualizações Únicas', pct: 100, count: summary.joined },
@@ -360,14 +395,17 @@ export default function AnalyticsPage() {
     { name: '5. Conversões', pct: 0, count: 0 }
   ]
 
-  const renderFunnelLabel = (props: any) => {
-    const { x, y, width, value, index } = props
+  const renderFunnelLabel = (props: unknown) => {
+    const { x = 0, y = 0, width = 0, value = 0, index = 0 } = props as FunnelLabelProps
+    const numericX = Number(x) || 0
+    const numericY = Number(y) || 0
+    const numericWidth = Number(width) || 0
     const count = funnelData[index]?.count || 0
     return (
       <g>
         <rect
-          x={x + width / 2 - 28}
-          y={y - 38}
+          x={numericX + numericWidth / 2 - 28}
+          y={numericY - 38}
           width={56}
           height={32}
           rx={6}
@@ -376,8 +414,8 @@ export default function AnalyticsPage() {
           strokeWidth={1}
         />
         <text
-          x={x + width / 2}
-          y={y - 25}
+          x={numericX + numericWidth / 2}
+          y={numericY - 25}
           fill="#fff"
           fontSize={10}
           fontWeight="bold"
@@ -386,8 +424,8 @@ export default function AnalyticsPage() {
           {Number(value).toFixed(1)}%
         </text>
         <text
-          x={x + width / 2}
-          y={y - 12}
+          x={numericX + numericWidth / 2}
+          y={numericY - 12}
           fill="#94a3b8"
           fontSize={9}
           fontWeight={600}
@@ -549,6 +587,112 @@ export default function AnalyticsPage() {
           </div>
         </div>
       )}
+
+      <div className="analytics-vturb-shell">
+        <div className="analytics-funnel-card">
+          <div className="analytics-section-kicker">Funil de Conversao</div>
+          <div className="analytics-funnel-grid">
+            {vturbFunnelData.map((stage, index) => (
+              <div className="analytics-funnel-stage" key={stage.name}>
+                <div className="analytics-funnel-stage-head">
+                  <span>{index + 1}</span>
+                  <strong style={{ color: stage.color }}>{stage.pct}%</strong>
+                </div>
+                <div className="analytics-funnel-value" style={{ color: stage.color }}>
+                  {stage.count.toLocaleString('pt-BR')}
+                </div>
+                <div className="analytics-funnel-label">{stage.name}</div>
+                <div className="analytics-funnel-bar">
+                  <div style={{ width: `${Math.min(100, stage.pct)}%`, background: stage.color }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="analytics-vturb-grid">
+          <div className="analytics-retention-panel">
+            <div className="analytics-panel-header">
+              <div>
+                <h2>Curva de Retencao</h2>
+                <p>% da audiencia por minuto, com pitch e cliques sobrepostos.</p>
+              </div>
+              <div className="analytics-chart-legend">
+                <span><i style={{ background: '#22c55e' }} />Retencao</span>
+                <span><i style={{ background: '#f59e0b' }} />Pitch</span>
+                <span><i style={{ background: '#f97316' }} />CTA</span>
+              </div>
+            </div>
+
+            {!retentionHasData ? (
+              <div className="analytics-empty-chart">
+                <strong>Dados aparecerao apos os primeiros plays.</strong>
+                <span>O tracker registra amostras de watch time durante a reproducao.</span>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={330}>
+                <ComposedChart data={retentionData} margin={{ top: 14, right: 8, left: -8, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="vturbRetentionFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#22c55e" stopOpacity={0.42} />
+                      <stop offset="70%" stopColor="#22c55e" stopOpacity={0.08} />
+                      <stop offset="100%" stopColor="#22c55e" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+                  <XAxis dataKey="minute" stroke="#6b7280" fontSize={11} tickLine={false} axisLine={false} tickFormatter={t => `${t}m`} />
+                  <YAxis yAxisId="left" domain={[0, 100]} stroke="#6b7280" fontSize={11} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
+                  <YAxis yAxisId="right" orientation="right" hide />
+                  <Tooltip
+                    content={({ active, payload, label }) => {
+                      if (!active || !payload?.length) return null
+                      const row = payload[0]?.payload as RetentionPoint
+                      return (
+                        <div className="analytics-chart-tooltip">
+                          <strong>{String(label).padStart(2, '0')}:00</strong>
+                          <span>Audiencia: <b>{row.viewers.toLocaleString('pt-BR')}</b></span>
+                          <span>Retencao: <b>{row.retention_pct}%</b></span>
+                          {row.clicks ? <span>Cliques CTA: <b>{row.clicks}</b></span> : null}
+                          {row.chatMessages ? <span>Chat: <b>{row.chatMessages} msgs</b></span> : null}
+                          {row.dropoff ? <span>Saidas: <b>{row.dropoff}</b></span> : null}
+                        </div>
+                      )
+                    }}
+                  />
+                  {summary.pitchAtMinute !== null && (
+                    <ReferenceLine yAxisId="left" x={summary.pitchAtMinute} stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 3" label={{ value: 'Pitch', fill: '#f59e0b', fontSize: 11, position: 'top' }} />
+                  )}
+                  {maxDropoffMinute && (
+                    <ReferenceLine yAxisId="left" x={maxDropoffMinute.minute} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="3 3" />
+                  )}
+                  <Bar yAxisId="right" dataKey="clicks" fill="#f97316" barSize={8} radius={[4, 4, 0, 0]} />
+                  <Bar yAxisId="right" dataKey="dropoff" fill="#ef4444" barSize={5} opacity={0.28} radius={[4, 4, 0, 0]} />
+                  <Area yAxisId="left" type="stepAfter" dataKey="retention_pct" stroke="#22c55e" strokeWidth={2.5} fill="url(#vturbRetentionFill)" dot={false} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            )}
+
+            <div className="analytics-insight-pills">
+              {peakMinute !== null && <span>Pico no min. {peakMinute}</span>}
+              {maxDropoffMinute && <span>Maior queda: min. {maxDropoffMinute.minute} ({maxDropoffMinute.dropoff})</span>}
+              {summary.pitchAtMinute !== null && <span>Pitch min. {summary.pitchAtMinute} - {summary.retentionAtPitch}%</span>}
+            </div>
+          </div>
+
+          <div className="analytics-key-metrics">
+            <div className="analytics-section-kicker">Metricas Chave</div>
+            {keyMetrics.map(metric => (
+              <div className="analytics-key-metric" key={metric.label}>
+                <div>
+                  <span>{metric.label}</span>
+                  <small>{metric.sub}</small>
+                </div>
+                <strong style={{ color: metric.color }}>{metric.value}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
 
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
@@ -1154,7 +1298,7 @@ export default function AnalyticsPage() {
                     </div>
                     {data.text && (
                       <div style={{ fontSize: 12, color: 'var(--text-secondary)', textAlign: 'center', fontStyle: 'italic', background: 'rgba(255,255,255,0.03)', padding: '6px 8px', borderRadius: 6 }}>
-                        "{data.text}"
+                        &quot;{data.text}&quot;
                       </div>
                     )}
                   </div>
