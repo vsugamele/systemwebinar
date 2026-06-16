@@ -130,6 +130,10 @@ export async function GET(req: NextRequest) {
     const dateFrom = searchParams.get('date_from')
     const dateTo = searchParams.get('date_to')
     const campaign = (searchParams.get('campaign') || '').trim().toLowerCase()
+    const requestedBucketSeconds = Number(searchParams.get('bucket_seconds') || 60)
+    const bucketSeconds = Number.isFinite(requestedBucketSeconds)
+      ? Math.min(300, Math.max(5, Math.round(requestedBucketSeconds)))
+      : 60
 
     const toDateStartIso = (value: string | null) => {
       if (!value) return null
@@ -227,13 +231,18 @@ export async function GET(req: NextRequest) {
     const { data: sessionsRaw } = await sessionsQuery
     const sessionsEvents = filterEventRowsByCampaign(sessionsRaw)
 
-    // Build viewers per minute
+    // Build viewers per minute and finer interval buckets for VTurb-style retention charts.
     const minuteMap = new Map<number, Set<string>>()
+    const intervalMap = new Map<number, Set<string>>()
     sessionsEvents?.forEach(s => {
       if (s.timestamp_video !== null) {
         const minute = Math.floor(s.timestamp_video / 60)
         if (!minuteMap.has(minute)) minuteMap.set(minute, new Set())
         minuteMap.get(minute)!.add(s.session_id)
+
+        const bucketStart = Math.floor(s.timestamp_video / bucketSeconds) * bucketSeconds
+        if (!intervalMap.has(bucketStart)) intervalMap.set(bucketStart, new Set())
+        intervalMap.get(bucketStart)!.add(s.session_id)
       }
     })
 
@@ -246,6 +255,18 @@ export async function GET(req: NextRequest) {
     const viewersByMinutePct = viewersByMinute.map(v => ({
       ...v,
       retention_pct: Math.round((v.viewers / peakViewers) * 100),
+    }))
+
+    const viewersByInterval = Array.from(intervalMap.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([timeSeconds, sessions]) => ({
+        time_seconds: timeSeconds,
+        viewers: sessions.size,
+      }))
+    const intervalPeakViewers = viewersByInterval.reduce((max, v) => Math.max(max, v.viewers), 1)
+    const viewersByIntervalPct = viewersByInterval.map(v => ({
+      ...v,
+      retention_pct: Math.round((v.viewers / intervalPeakViewers) * 100),
     }))
 
     const totalLeads = leadsData?.length || 0
@@ -350,6 +371,7 @@ export async function GET(req: NextRequest) {
     const ctaClicks = ctaClickEvents?.length || 0
     const pitchPerformance: Record<string, { clicks: number; text?: string }> = {}
     const clicksByMinute: Record<number, number> = {}
+    const clicksByInterval: Record<number, number> = {}
 
     ctaClickEvents?.forEach(ev => {
       // 1. A/B Testing Pitch
@@ -367,12 +389,19 @@ export async function GET(req: NextRequest) {
         const minute = Math.floor(ev.timestamp_video / 60)
         if (!clicksByMinute[minute]) clicksByMinute[minute] = 0
         clicksByMinute[minute]++
+
+        const bucketStart = Math.floor(ev.timestamp_video / bucketSeconds) * bucketSeconds
+        if (!clicksByInterval[bucketStart]) clicksByInterval[bucketStart] = 0
+        clicksByInterval[bucketStart]++
       }
     })
 
     const clicksByMinuteArray = Object.entries(clicksByMinute)
       .map(([minute, clicks]) => ({ minute: Number(minute), clicks }))
       .sort((a, b) => a.minute - b.minute)
+    const clicksByIntervalArray = Object.entries(clicksByInterval)
+      .map(([timeSeconds, clicks]) => ({ time_seconds: Number(timeSeconds), clicks }))
+      .sort((a, b) => a.time_seconds - b.time_seconds)
 
     let popupQuery = supabase
       .from('webi_session_events').select('session_id, metadata')
@@ -597,13 +626,16 @@ export async function GET(req: NextRequest) {
       })
     })
 
-    // 3. Process Chat Messages & Group by minute
+    // 3. Process Chat Messages & Group by minute / finer interval
     const chatMinuteMap = new Map<number, number>()
+    const chatIntervalMap = new Map<number, number>()
     chatMessagesRaw?.forEach(c => {
-      // Group by minute
       if (c.timestamp !== null && c.timestamp !== undefined) {
         const minute = Math.floor(c.timestamp / 60)
         chatMinuteMap.set(minute, (chatMinuteMap.get(minute) || 0) + 1)
+
+        const bucketStart = Math.floor(c.timestamp / bucketSeconds) * bucketSeconds
+        chatIntervalMap.set(bucketStart, (chatIntervalMap.get(bucketStart) || 0) + 1)
       }
 
       // Add to lead timeline
@@ -649,6 +681,9 @@ export async function GET(req: NextRequest) {
     const chatByMinuteArray = Array.from(chatMinuteMap.entries())
       .map(([minute, messages]) => ({ minute, messages }))
       .sort((a, b) => a.minute - b.minute)
+    const chatByIntervalArray = Array.from(chatIntervalMap.entries())
+      .map(([timeSeconds, messages]) => ({ time_seconds: timeSeconds, messages }))
+      .sort((a, b) => a.time_seconds - b.time_seconds)
 
     const sessionsArray = Array.from(sessionMap.values())
       .sort((a, b) => b.watch_time - a.watch_time)
@@ -698,8 +733,12 @@ export async function GET(req: NextRequest) {
       utm_source_breakdown: utmSourceBreakdown,
       pitch_performance: pitchPerformance,
       viewers_by_minute: viewersByMinutePct,
+      viewers_by_interval: viewersByIntervalPct,
       clicks_by_minute: clicksByMinuteArray,
+      clicks_by_interval: clicksByIntervalArray,
       chat_by_minute: chatByMinuteArray,
+      chat_by_interval: chatByIntervalArray,
+      retention_bucket_seconds: bucketSeconds,
       sessions: sessionsArray,
       pitch_at_minute: pitchAtMinute,
       retention_at_pitch: pitchAudience.retention_pct,

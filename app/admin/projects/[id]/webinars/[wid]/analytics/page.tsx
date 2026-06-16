@@ -84,6 +84,7 @@ interface AnalyticsSummary {
 
 interface RetentionPoint {
   minute: number
+  time_seconds: number
   viewers: number
   retention_pct: number
   dropoff?: number
@@ -100,7 +101,8 @@ interface FunnelLabelProps {
 }
 
 type AnalyticsApiMetricMap = Record<string, number | string | null | undefined>
-type MinuteMessagePoint = { minute: number; messages: number }
+type IntervalMessagePoint = { time_seconds: number; messages: number }
+type IntervalClickPoint = { time_seconds: number; clicks: number }
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -222,6 +224,7 @@ export default function AnalyticsPage() {
     const params = new URLSearchParams({
       webinar_id: wid,
       session_mode: mode,
+      bucket_seconds: '5',
     })
     const from = range?.from ?? dateFrom
     const to = range?.to ?? dateTo
@@ -274,16 +277,20 @@ export default function AnalyticsPage() {
 
     const durationSecondsVal = apiRes.duration_seconds || 3600
     setDurationSeconds(durationSecondsVal)
-    let durationMinutes = Math.ceil(durationSecondsVal / 60)
-    const rawViewers: RetentionPoint[] = apiRes.viewers_by_minute || []
-    if (durationMinutes <= 0) {
-      const dataMaxMin = rawViewers.length > 0 ? rawViewers[rawViewers.length - 1].minute : 60
-      durationMinutes = dataMaxMin > 0 ? dataMaxMin : 60
+    const bucketSeconds = Number(apiRes.retention_bucket_seconds) || 5
+    let durationForCurve = durationSecondsVal
+    const rawViewers: RetentionPoint[] = (apiRes.viewers_by_interval || []).map((point: RetentionPoint) => ({
+      ...point,
+      minute: Math.floor((point.time_seconds || 0) / 60),
+    }))
+    if (durationForCurve <= 0) {
+      const dataMaxSeconds = rawViewers.length > 0 ? rawViewers[rawViewers.length - 1].time_seconds : 3600
+      durationForCurve = dataMaxSeconds > 0 ? dataMaxSeconds : 3600
     }
 
-    const viewersByMinute = rawViewers.filter(v => v.minute <= durationMinutes)
-    const rawClicks: { minute: number; clicks: number }[] = apiRes.clicks_by_minute || []
-    const filteredClicks = rawClicks.filter(c => c.minute <= durationMinutes)
+    const viewersByInterval = rawViewers.filter(v => v.time_seconds <= durationForCurve)
+    const rawClicks: IntervalClickPoint[] = apiRes.clicks_by_interval || []
+    const filteredClicks = rawClicks.filter(c => c.time_seconds <= durationForCurve)
 
     const ctaClicks = apiRes.cta_clicks || 0
     const totalLeads = apiRes.total_leads || 0
@@ -291,21 +298,22 @@ export default function AnalyticsPage() {
     const joinedCount = apiRes.joined || 0
 
     // Fill curve & compute peak/dropoff
-    const chatByMinute = apiRes.chat_by_minute || []
+    const chatByInterval = apiRes.chat_by_interval || []
     const filled: RetentionPoint[] = []
-    let peakMin = 0, peakPct = 0, maxDrop = 0, maxDropMin = 0
+    let peakSecond = 0, peakPct = 0, maxDrop = 0, maxDropSecond = 0
     let prevViewers = 0
-    for (let i = 0; i <= durationMinutes; i++) {
-      const point = viewersByMinute.find(v => v.minute === i)
+    for (let second = 0; second <= durationForCurve; second += bucketSeconds) {
+      const point = viewersByInterval.find(v => v.time_seconds === second)
       const v = point?.viewers || 0
       const pct = point?.retention_pct || 0
-      if (pct > peakPct) { peakPct = pct; peakMin = i }
-      const dropoff = i > 0 && prevViewers > v ? prevViewers - v : 0
-      if (dropoff > maxDrop) { maxDrop = dropoff; maxDropMin = i }
-      const c = filteredClicks.find(ck => ck.minute === i)
-      const ch = (chatByMinute as MinuteMessagePoint[]).find(chat => chat.minute === i)?.messages || 0
+      if (pct > peakPct) { peakPct = pct; peakSecond = second }
+      const dropoff = second > 0 && prevViewers > v ? prevViewers - v : 0
+      if (dropoff > maxDrop) { maxDrop = dropoff; maxDropSecond = second }
+      const c = filteredClicks.find(ck => ck.time_seconds === second)
+      const ch = (chatByInterval as IntervalMessagePoint[]).find(chat => chat.time_seconds === second)?.messages || 0
       filled.push({
-        minute: i,
+        minute: Math.floor(second / 60),
+        time_seconds: second,
         viewers: v,
         retention_pct: pct,
         dropoff,
@@ -316,8 +324,8 @@ export default function AnalyticsPage() {
     }
 
     setRetentionData(filled)
-    setPeakMinute(peakPct > 0 ? peakMin : null)
-    setMaxDropoffMinute(maxDrop > 0 ? { minute: maxDropMin, dropoff: maxDrop } : null)
+    setPeakMinute(peakPct > 0 ? peakSecond : null)
+    setMaxDropoffMinute(maxDrop > 0 ? { minute: maxDropSecond, dropoff: maxDrop } : null)
 
     setSummary({
       totalLeads, totalAttended, ctaClicks,
@@ -345,8 +353,8 @@ export default function AnalyticsPage() {
       utmSourceBreakdown: apiRes.utm_source_breakdown || {},
       pitchPerformance: apiRes.pitch_performance || {},
       topChatters: apiRes.top_chatters || [],
-      clicksByMinute: filteredClicks,
-      chatByMinute,
+      clicksByMinute: apiRes.clicks_by_minute || [],
+      chatByMinute: apiRes.chat_by_minute || [],
       sessions: apiRes.sessions || [],
       devicesBreakdown: apiRes.devices_breakdown || {},
       browsersBreakdown: apiRes.browsers_breakdown || {},
@@ -448,6 +456,13 @@ export default function AnalyticsPage() {
   ]
 
   const totalJoined = summary.joined || 1
+  const formatChartTime = (seconds: number | string) => {
+    const totalSeconds = Math.max(0, Math.floor(Number(seconds) || 0))
+    const minutes = Math.floor(totalSeconds / 60)
+    const remainder = totalSeconds % 60
+    return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
+  }
+  const pitchSecond = summary.pitchAtMinute !== null ? summary.pitchAtMinute * 60 : null
 
   return (
     <div style={{ maxWidth: 1160, margin: '0 auto', padding: '32px 24px' }}>
@@ -615,7 +630,7 @@ export default function AnalyticsPage() {
             <div className="analytics-panel-header">
               <div>
                 <h2>Curva de Retencao</h2>
-                <p>% da audiencia por minuto, com pitch e cliques sobrepostos.</p>
+                <p>% da audiencia em buckets de 5s, com pitch e cliques sobrepostos.</p>
               </div>
               <div className="analytics-chart-legend">
                 <span><i style={{ background: '#22c55e' }} />Retencao</span>
@@ -640,7 +655,7 @@ export default function AnalyticsPage() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-                  <XAxis dataKey="minute" stroke="#6b7280" fontSize={11} tickLine={false} axisLine={false} tickFormatter={t => `${t}m`} />
+                  <XAxis dataKey="time_seconds" stroke="#6b7280" fontSize={11} tickLine={false} axisLine={false} tickFormatter={formatChartTime} minTickGap={28} />
                   <YAxis yAxisId="left" domain={[0, 100]} stroke="#6b7280" fontSize={11} tickLine={false} axisLine={false} tickFormatter={v => `${v}%`} />
                   <YAxis yAxisId="right" orientation="right" hide />
                   <Tooltip
@@ -649,7 +664,7 @@ export default function AnalyticsPage() {
                       const row = payload[0]?.payload as RetentionPoint
                       return (
                         <div className="analytics-chart-tooltip">
-                          <strong>{String(label).padStart(2, '0')}:00</strong>
+                          <strong>{formatChartTime(label ?? 0)}</strong>
                           <span>Audiencia: <b>{row.viewers.toLocaleString('pt-BR')}</b></span>
                           <span>Retencao: <b>{row.retention_pct}%</b></span>
                           {row.clicks ? <span>Cliques CTA: <b>{row.clicks}</b></span> : null}
@@ -659,8 +674,8 @@ export default function AnalyticsPage() {
                       )
                     }}
                   />
-                  {summary.pitchAtMinute !== null && (
-                    <ReferenceLine yAxisId="left" x={summary.pitchAtMinute} stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 3" label={{ value: 'Pitch', fill: '#f59e0b', fontSize: 11, position: 'top' }} />
+                  {pitchSecond !== null && (
+                    <ReferenceLine yAxisId="left" x={pitchSecond} stroke="#f59e0b" strokeWidth={2} strokeDasharray="5 3" label={{ value: 'Pitch', fill: '#f59e0b', fontSize: 11, position: 'top' }} />
                   )}
                   {maxDropoffMinute && (
                     <ReferenceLine yAxisId="left" x={maxDropoffMinute.minute} stroke="#ef4444" strokeWidth={1.5} strokeDasharray="3 3" />
@@ -673,9 +688,9 @@ export default function AnalyticsPage() {
             )}
 
             <div className="analytics-insight-pills">
-              {peakMinute !== null && <span>Pico no min. {peakMinute}</span>}
-              {maxDropoffMinute && <span>Maior queda: min. {maxDropoffMinute.minute} ({maxDropoffMinute.dropoff})</span>}
-              {summary.pitchAtMinute !== null && <span>Pitch min. {summary.pitchAtMinute} - {summary.retentionAtPitch}%</span>}
+              {peakMinute !== null && <span>Pico em {formatChartTime(peakMinute)}</span>}
+              {maxDropoffMinute && <span>Maior queda: {formatChartTime(maxDropoffMinute.minute)} ({maxDropoffMinute.dropoff})</span>}
+              {pitchSecond !== null && <span>Pitch em {formatChartTime(pitchSecond)} - {summary.retentionAtPitch}%</span>}
             </div>
           </div>
 
