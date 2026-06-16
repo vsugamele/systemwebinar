@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useRef, startTransition } from 'react'
+import { useEffect, useMemo, useState, useRef, startTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -18,9 +18,27 @@ function elapsedLabel(iso: string | null): string {
   return `${s}s rodando`
 }
 
+interface RecentClick {
+  id: string
+  session_id: string
+  created_at: string
+  lead_name: string
+  lead_email: string
+}
+
+interface RealtimeStats {
+  online_now: number
+  peak_simultaneous: number
+  total_joined: number
+  recent_dropoffs: number
+  recent_cta_clicks: number
+  recent_clicks_list?: RecentClick[]
+  updated_at: string
+}
+
 export default function LivePage() {
   const { id, wid } = useParams() as { id: string; wid: string }
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
   const tickRef = useRef<NodeJS.Timeout | null>(null)
 
   const [loading, setLoading] = useState(true)
@@ -52,15 +70,6 @@ export default function LivePage() {
   })
 
   // Realtime audience stats
-  interface RealtimeStats {
-    online_now: number
-    peak_simultaneous: number
-    total_joined: number
-    recent_dropoffs: number
-    recent_cta_clicks: number
-    recent_clicks_list?: { id: string; session_id: string; created_at: string; lead_name: string; lead_email: string }[]
-    updated_at: string
-  }
   const [realtime, setRealtime] = useState<RealtimeStats | null>(null)
   const [realtimeLoading, setRealtimeLoading] = useState(false)
   const isFirstLoadRef = useRef(true)
@@ -98,12 +107,13 @@ export default function LivePage() {
             fake_viewers_peak_at_pct: data.fake_viewers_peak_at_pct ?? 30,
           })
           if (data.webi_projects && typeof data.webi_projects === 'object') {
-            setProjectTimezone((data.webi_projects as any).timezone || 'America/Sao_Paulo')
+            const project = data.webi_projects as { timezone?: string }
+            setProjectTimezone(project.timezone || 'America/Sao_Paulo')
           }
         }
         setLoading(false)
       })
-  }, [wid])
+  }, [supabase, wid])
 
   // Poll realtime stats every 30s
   useEffect(() => {
@@ -112,18 +122,18 @@ export default function LivePage() {
       try {
         const res = await fetch(`/api/analytics/realtime?webinar_id=${wid}`)
         if (res.ok) {
-          const data = await res.json()
+          const data = await res.json() as RealtimeStats
           setRealtime(data)
 
           const clicks = data.recent_clicks_list || []
           if (isFirstLoadRef.current) {
             // Popula os cliques iniciais sem mostrar toasts
-            clicks.forEach((c: any) => seenClicksRef.current.add(c.id))
+            clicks.forEach((c) => seenClicksRef.current.add(c.id))
             isFirstLoadRef.current = false
           } else {
             // Mostra toast para novos cliques (mais antigos primeiro se houver múltiplos)
-            const newClicks = [...clicks].reverse().filter((c: any) => !seenClicksRef.current.has(c.id))
-            newClicks.forEach((c: any) => {
+            const newClicks = [...clicks].reverse().filter((c) => !seenClicksRef.current.has(c.id))
+            newClicks.forEach((c) => {
               seenClicksRef.current.add(c.id)
               toast.success(`🎉 ${c.lead_name} clicou na oferta!`, {
                 duration: 8000,
@@ -295,8 +305,8 @@ export default function LivePage() {
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 4 }}>
             <Link href={`/admin/projects/${id}/webinars`} style={{ color: 'var(--brand-light)' }}>Webinars</Link> / {webinarName}
           </div>
-          <h1 className="page-title">🎬 Ao Vivo</h1>
-          <p className="page-subtitle">Controle a sessão e a audiência da sua live</p>
+          <h1 className="page-title">🔴 Control Room</h1>
+          <p className="page-subtitle">Comando operacional da live, audiência e contingência</p>
         </div>
 
         <Link
@@ -309,7 +319,7 @@ export default function LivePage() {
         </Link>
       </div>
 
-      <div className="page-body" style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 700 }}>
+      <div className="page-body live-control-room" style={{ maxWidth: 1180 }}>
 
         {/* SESSION CLOCK — primary action */}
         <div className="card" style={{
@@ -379,6 +389,41 @@ export default function LivePage() {
           )}
         </div>
 
+        <div className="card" style={{
+          border: isLive ? '1px solid rgba(239,68,68,0.28)' : '1px solid var(--border)',
+          background: isLive ? 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(17,17,24,0.9))' : 'var(--bg-card)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+            <div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Status da transmissao</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: isLive ? '#fca5a5' : 'var(--text-primary)', marginTop: 3 }}>
+                {isLive ? 'Ao vivo' : 'Pronta'}
+              </div>
+            </div>
+            <span style={{
+              width: 12,
+              height: 12,
+              borderRadius: '50%',
+              background: isLive ? '#ef4444' : 'var(--border)',
+              boxShadow: isLive ? '0 0 14px rgba(239,68,68,0.8)' : 'none',
+              flexShrink: 0,
+            }} />
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+            {[
+              { label: 'Online', value: realtime?.online_now ?? '—', color: '#22c55e' },
+              { label: 'Pico', value: realtime?.peak_simultaneous ?? '—', color: '#a78bfa' },
+              { label: 'Entraram', value: realtime?.total_joined ?? '—', color: '#60a5fa' },
+              { label: 'Cliques', value: realtime?.recent_cta_clicks ?? '—', color: '#f97316' },
+            ].map(item => (
+              <div key={item.label} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
+                <div style={{ fontSize: 20, fontWeight: 900, color: item.color, lineHeight: 1 }}>{item.value}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 800, marginTop: 5 }}>{item.label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
         {/* REALTIME AUDIENCE WIDGET */}
         <div className="card" style={{
           border: '1px solid rgba(99,102,241,0.3)',
@@ -401,7 +446,7 @@ export default function LivePage() {
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(105px, 1fr))',
             gap: 12,
           }}>
             {/* Online Agora */}
@@ -567,7 +612,7 @@ export default function LivePage() {
               border: '1px solid var(--border)', marginBottom: 16, fontSize: 12, color: 'var(--text-secondary)' 
             }}>
               <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <li><strong>Modo Manual (Uma vez):</strong> O vídeo só começa quando você clica em "Iniciar Sessão". Antes disso, os alunos veem a tela "Fora do Ar".</li>
+                <li><strong>Modo Manual (Uma vez):</strong> O vídeo só começa quando você clica em &quot;Iniciar Sessão&quot;. Antes disso, os alunos veem a tela &quot;Fora do Ar&quot;.</li>
                 <li><strong>Piloto Automático (Evergreen):</strong> O botão Iniciar some. O sistema calcula automaticamente o tempo de vídeo baseado no horário configurado.</li>
                 <li><strong>Sincronização Perfeita:</strong> Quem entra atrasado assiste o vídeo a partir do momento atual (ex: se entrar 10 min atrasado, o vídeo inicia aos 10 min). Os eventos de chat acompanham.</li>
                 <li><strong>Fuso Horário:</strong> Os horários são baseados no timezone do Projeto. Todos os alunos assistirão simultaneamente.</li>
