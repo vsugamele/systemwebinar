@@ -40,6 +40,7 @@ export interface Webinar {
   updated_at: string
   // Session clock (004)
   session_started_at: string | null
+  current_run_id?: string | null
   // Viewer curve (004)
   fake_viewers_start: number
   fake_viewers_peak: number
@@ -174,6 +175,7 @@ export interface SessionEvent {
   session_id: string
   webinar_id: string
   project_id: string
+  run_id?: string | null
   lead_id: string | null
   event_type: SessionEventType
   timestamp_video: number | null
@@ -186,6 +188,7 @@ export interface RetentionBucket {
   session_id: string
   webinar_id: string
   project_id: string
+  run_id?: string | null
   bucket_seconds: number
   bucket_start_seconds: number
   watch_delta_seconds: number
@@ -197,6 +200,19 @@ export interface RetentionBucket {
   user_agent: string | null
   timezone: string | null
   last_timestamp_video: number | null
+  metadata: Record<string, unknown>
+  created_at: string
+  updated_at: string
+}
+
+export interface WebinarRun {
+  id: string
+  webinar_id: string
+  project_id: string
+  title: string | null
+  status: 'active' | 'ended' | 'cancelled'
+  started_at: string
+  ended_at: string | null
   metadata: Record<string, unknown>
   created_at: string
   updated_at: string

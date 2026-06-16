@@ -16,11 +16,12 @@ export async function GET(req: NextRequest) {
     // 1. Obter início da sessão ativa para filtrar testes
     const { data: webinar } = await supabase
       .from('webi_webinars')
-      .select('session_started_at')
+      .select('session_started_at, current_run_id')
       .eq('id', webinarId)
       .single()
 
     const sessionStart = webinar?.session_started_at
+    const currentRunId = webinar?.current_run_id as string | null | undefined
 
     // "Online agora" = sessões únicas que enviaram watch_second nos últimos 90s
     const windowSeconds = 90
@@ -29,18 +30,22 @@ export async function GET(req: NextRequest) {
       since = sessionStart
     }
 
-    const { data: activeSessions } = await supabase
+    let activeSessionsQuery = supabase
       .from('webi_session_events')
       .select('session_id')
       .eq('webinar_id', webinarId)
       .eq('event_type', 'watch_second')
       .gte('created_at', since)
+    if (currentRunId) activeSessionsQuery = activeSessionsQuery.eq('run_id', currentRunId)
+    const { data: activeSessions } = await activeSessionsQuery
 
-    const { data: activeRetentionBuckets } = await supabase
+    let activeRetentionQuery = supabase
       .from('webi_retention_buckets')
       .select('session_id')
       .eq('webinar_id', webinarId)
       .gte('updated_at', since)
+    if (currentRunId) activeRetentionQuery = activeRetentionQuery.eq('run_id', currentRunId)
+    const { data: activeRetentionBuckets } = await activeRetentionQuery
 
     const onlineSessions = new Set<string>()
     activeSessions?.forEach(s => onlineSessions.add(s.session_id))
@@ -52,18 +57,22 @@ export async function GET(req: NextRequest) {
     if (sessionStart) {
       peakSince = sessionStart
     }
-    const { data: allRecentEvents } = await supabase
+    let allRecentEventsQuery = supabase
       .from('webi_session_events')
       .select('session_id, created_at')
       .eq('webinar_id', webinarId)
       .eq('event_type', 'watch_second')
       .gte('created_at', peakSince)
+    if (currentRunId) allRecentEventsQuery = allRecentEventsQuery.eq('run_id', currentRunId)
+    const { data: allRecentEvents } = await allRecentEventsQuery
 
-    const { data: allRecentRetentionBuckets } = await supabase
+    let allRecentRetentionQuery = supabase
       .from('webi_retention_buckets')
       .select('session_id, updated_at')
       .eq('webinar_id', webinarId)
       .gte('updated_at', peakSince)
+    if (currentRunId) allRecentRetentionQuery = allRecentRetentionQuery.eq('run_id', currentRunId)
+    const { data: allRecentRetentionBuckets } = await allRecentRetentionQuery
 
     // Bucket por minuto, find max unique sessions
     const buckets = new Map<string, Set<string>>()
@@ -91,6 +100,7 @@ export async function GET(req: NextRequest) {
     if (sessionStart) {
       joinedQuery = joinedQuery.gte('created_at', sessionStart)
     }
+    if (currentRunId) joinedQuery = joinedQuery.eq('run_id', currentRunId)
     const { data: joinedSessions } = await joinedQuery
 
     const totalJoined = new Set(joinedSessions?.map(s => s.session_id) ?? []).size
@@ -100,12 +110,14 @@ export async function GET(req: NextRequest) {
     if (sessionStart && sessionStart > dropoffSince) {
       dropoffSince = sessionStart
     }
-    const { data: recentLeft } = await supabase
+    let recentLeftQuery = supabase
       .from('webi_session_events')
       .select('session_id')
       .eq('webinar_id', webinarId)
       .eq('event_type', 'left')
       .gte('created_at', dropoffSince)
+    if (currentRunId) recentLeftQuery = recentLeftQuery.eq('run_id', currentRunId)
+    const { data: recentLeft } = await recentLeftQuery
 
     const recentDropoffs = new Set(recentLeft?.map(s => s.session_id) ?? []).size
 
@@ -114,12 +126,14 @@ export async function GET(req: NextRequest) {
     if (sessionStart) {
       ctaSince = sessionStart
     }
-    const { data: recentCTAs } = await supabase
+    let recentCtasQuery = supabase
       .from('webi_session_events')
       .select('session_id')
       .eq('webinar_id', webinarId)
       .eq('event_type', 'cta_clicked')
       .gte('created_at', ctaSince)
+    if (currentRunId) recentCtasQuery = recentCtasQuery.eq('run_id', currentRunId)
+    const { data: recentCTAs } = await recentCtasQuery
 
     const recentCTAClicks = new Set(recentCTAs?.map(s => s.session_id) ?? []).size
 
@@ -134,6 +148,9 @@ export async function GET(req: NextRequest) {
 
     if (sessionStart) {
       recentClicksQuery = recentClicksQuery.gte('created_at', sessionStart)
+    }
+    if (currentRunId) {
+      recentClicksQuery = recentClicksQuery.eq('run_id', currentRunId)
     }
     const { data: clicksList } = await recentClicksQuery
     const recentClicksList = (clicksList || []).map((c: any) => ({

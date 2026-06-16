@@ -47,6 +47,7 @@ export default function LivePage() {
   const [webinarName, setWebinarName] = useState('')
   const [webinarSlug, setWebinarSlug] = useState('')
   const [sessionStartedAt, setSessionStartedAt] = useState<string | null>(null)
+  const [currentRunId, setCurrentRunId] = useState<string | null>(null)
   const [displayName, setDisplayName] = useState('')
   const [elapsed, setElapsed] = useState('')
   const [scheduledAt, setScheduledAt] = useState('')
@@ -78,7 +79,7 @@ export default function LivePage() {
   useEffect(() => {
     supabase
       .from('webi_webinars')
-      .select('name, slug, display_name, session_started_at, scheduled_start_at, schedule_recurrence, schedule_time, schedule_days, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct, is_panic_active, fallback_url, webi_projects(timezone)')
+      .select('name, slug, display_name, session_started_at, current_run_id, scheduled_start_at, schedule_recurrence, schedule_time, schedule_days, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct, is_panic_active, fallback_url, webi_projects(timezone)')
       .eq('id', wid)
       .single()
       .then(({ data, error }) => {
@@ -88,6 +89,7 @@ export default function LivePage() {
           setWebinarSlug(data.slug)
           setDisplayName(data.display_name || '')
           setSessionStartedAt(data.session_started_at ?? null)
+          setCurrentRunId(data.current_run_id ?? null)
           setScheduleRecurrence((data.schedule_recurrence as 'once' | 'daily' | 'weekly' | 'monthly') || 'once')
           setScheduleTime(data.schedule_time || '20:00')
           setScheduleDays((data.schedule_days as number[]) || [])
@@ -218,9 +220,11 @@ export default function LivePage() {
         schedule_time: null,
         schedule_days: null,
         session_started_at: null,
+        current_run_id: null,
       }).eq('id', wid)
       if (error) throw error
       setSessionStartedAt(null)
+      setCurrentRunId(null)
     } catch {
       toast.error('Erro ao limpar agendamento.')
     }
@@ -238,10 +242,16 @@ export default function LivePage() {
   async function startSession() {
     setRestarting(true)
     try {
-      const now = new Date().toISOString()
-      const { error } = await supabase.from('webi_webinars').update({ session_started_at: now }).eq('id', wid)
-      if (error) throw error
-      setSessionStartedAt(now)
+      const res = await fetch('/api/webinar-runs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webinar_id: wid, action: 'start' }),
+      })
+      if (!res.ok) throw new Error('run_start_failed')
+      const data = await res.json()
+      setSessionStartedAt(data.session_started_at)
+      setCurrentRunId(data.run?.id || null)
+      toast.success(isLive ? 'Nova execucao iniciada.' : 'Sessao iniciada.')
     } catch {
       toast.error('Erro ao iniciar sessão.')
     } finally {
@@ -251,9 +261,15 @@ export default function LivePage() {
 
   async function stopSession() {
     try {
-      const { error } = await supabase.from('webi_webinars').update({ session_started_at: null }).eq('id', wid)
-      if (error) throw error
+      const res = await fetch('/api/webinar-runs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ webinar_id: wid, action: 'stop', run_id: currentRunId }),
+      })
+      if (!res.ok) throw new Error('run_stop_failed')
       setSessionStartedAt(null)
+      setCurrentRunId(null)
+      toast.success('Execucao encerrada.')
     } catch {
       toast.error('Erro ao encerrar sessão.')
     }

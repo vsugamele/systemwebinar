@@ -4,7 +4,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { webinar_id, session_id, ...message } = body
+    const { webinar_id, session_id, run_id, ...message } = body
 
     if (!webinar_id) {
       return NextResponse.json({ error: 'Missing webinar_id' }, { status: 400 })
@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     // 2. Save directly to the database via Admin/Service role
     const { error: dbError } = await supabase.from('webi_live_chat').insert({
       webinar_id,
+      run_id: typeof run_id === 'string' ? run_id : null,
       session_id,
       author: message.author,
       text: message.text,

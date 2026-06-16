@@ -46,6 +46,7 @@ interface WebinarConfig {
   waiting_delay_seconds?: number
   // 004
   session_started_at?: string | null
+  current_run_id?: string | null
   fake_viewers_start?: number
   fake_viewers_peak?: number
   fake_viewers_end?: number
@@ -544,6 +545,9 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const [liveSessionStartedAt, setLiveSessionStartedAt] = useState<string | null>(
     webinar.session_started_at ?? null
   )
+  const [currentRunId, setCurrentRunId] = useState<string | null>(
+    webinar.current_run_id ?? null
+  )
 
   // Base time for converting relative video seconds into absolute UNIX timestamps for simulated messages.
   const sessionBaseTime = useMemo(() => {
@@ -913,9 +917,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     const pollInterval = setInterval(async () => {
       const { data } = await supabase
         .from('webi_webinars')
-        .select('session_started_at')
+        .select('session_started_at, current_run_id')
         .eq('id', webinar.id)
         .single()
+      if (data?.current_run_id !== undefined && data.current_run_id !== currentRunId) {
+        setCurrentRunId(data.current_run_id ?? null)
+      }
       if (data?.session_started_at && data.session_started_at !== liveSessionStartedAt) {
         setLiveSessionStartedAt(data.session_started_at)
         // Re-seed elapsedRef so CPM starts from the correct wall-clock offset
@@ -928,7 +935,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       }
     }, 10000)
     return () => clearInterval(pollInterval)
-  }, [hasStarted, webinar.id, liveSessionStartedAt])
+  }, [hasStarted, webinar.id, liveSessionStartedAt, currentRunId])
 
   // ---- Scheduled start countdown ticker ----
   useEffect(() => {
@@ -2207,10 +2214,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           session_id: sessionId.current,
           webinar_id: webinar.id,
           project_id: webinar.project_id,
+          run_id: currentRunId || undefined,
           event_type: type,
           timestamp_video: timestampVideo,
           metadata: {
             ...metadata,
+            run_id: currentRunId || undefined,
             session_mode: sessionMode,
             lead_email: leadEmail || undefined,
             lead_name: leadName || undefined,
@@ -2386,7 +2395,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...msg, webinar_id: webinar.id, session_id: sessionId.current }),
+        body: JSON.stringify({ ...msg, webinar_id: webinar.id, session_id: sessionId.current, run_id: currentRunId || undefined }),
       })
     } catch (err) {
       console.warn('Failed to send message via API:', err)

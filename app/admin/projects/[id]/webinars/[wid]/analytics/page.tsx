@@ -24,6 +24,14 @@ interface ComparisonDelta {
   pct: number | null
 }
 
+interface WebinarRun {
+  id: string
+  title: string | null
+  status: 'active' | 'ended' | 'cancelled'
+  started_at: string
+  ended_at: string | null
+}
+
 interface SessionEventDetail {
   type: string
   timestamp: number | null
@@ -210,6 +218,9 @@ export default function AnalyticsPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [campaign, setCampaign] = useState('')
+  const [runs, setRuns] = useState<WebinarRun[]>([])
+  const [selectedRunId, setSelectedRunId] = useState('all')
+  const [compareRunId, setCompareRunId] = useState('')
   const [compareEnabled, setCompareEnabled] = useState(false)
   const [compareDateFrom, setCompareDateFrom] = useState('')
   const [compareDateTo, setCompareDateTo] = useState('')
@@ -234,12 +245,14 @@ export default function AnalyticsPage() {
     devicesBreakdown: {}, browsersBreakdown: {}, osBreakdown: {}, countriesBreakdown: {},
   })
 
-  const buildAnalyticsUrl = useCallback((range?: { from?: string; to?: string; campaign?: string }) => {
+  const buildAnalyticsUrl = useCallback((range?: { from?: string; to?: string; campaign?: string; runId?: string }) => {
     const params = new URLSearchParams({
       webinar_id: wid,
       session_mode: mode,
       bucket_seconds: '5',
     })
+    const runValue = range?.runId ?? selectedRunId
+    if (runValue && runValue !== 'all') params.set('run_id', runValue)
     const from = range?.from ?? dateFrom
     const to = range?.to ?? dateTo
     if (from) params.set('date_from', from)
@@ -247,7 +260,7 @@ export default function AnalyticsPage() {
     const campaignValue = range?.campaign ?? campaign
     if (campaignValue.trim()) params.set('campaign', campaignValue.trim())
     return `/api/analytics?${params.toString()}`
-  }, [wid, mode, dateFrom, dateTo, campaign])
+  }, [wid, mode, selectedRunId, dateFrom, dateTo, campaign])
 
   const buildComparison = useCallback((current: AnalyticsApiMetricMap, previous: AnalyticsApiMetricMap): ComparisonDelta[] => {
     return [
@@ -350,14 +363,27 @@ export default function AnalyticsPage() {
     setLoading(true)
     const { data: webinar } = await supabase.from('webi_webinars').select('name').eq('id', wid).single()
     if (webinar) setWebinarName(webinar.name)
+    const runsRes = await fetch(`/api/webinar-runs?webinar_id=${wid}`).then(r => r.json()).catch(() => ({ runs: [] }))
+    const loadedRuns = (runsRes.runs || []) as WebinarRun[]
+    setRuns(loadedRuns)
 
     const apiRes = await fetch(buildAnalyticsUrl()).then(r => r.json())
     let compareRes: any = null
-    if (compareEnabled && ((compareDateFrom && compareDateTo) || compareCampaign.trim())) {
+    const currentRunIndex = loadedRuns.findIndex(run => run.id === selectedRunId)
+    const fallbackPreviousRunId = selectedRunId !== 'all' && currentRunIndex >= 0
+      ? loadedRuns[currentRunIndex + 1]?.id
+      : ''
+    const comparisonRunId = compareRunId || fallbackPreviousRunId
+
+    if (compareEnabled && selectedRunId !== 'all' && comparisonRunId) {
+      compareRes = await fetch(buildAnalyticsUrl({ runId: comparisonRunId })).then(r => r.json())
+      setComparison(buildComparison(apiRes, compareRes))
+    } else if (compareEnabled && ((compareDateFrom && compareDateTo) || compareCampaign.trim())) {
       compareRes = await fetch(buildAnalyticsUrl({
         from: compareDateFrom,
         to: compareDateTo,
         campaign: compareCampaign.trim() || campaign,
+        runId: 'all',
       })).then(r => r.json())
       setComparison(buildComparison(apiRes, compareRes))
     } else {
@@ -440,7 +466,7 @@ export default function AnalyticsPage() {
       countriesBreakdown: apiRes.countries_breakdown || {},
     })
     setLoading(false)
-  }, [wid, buildAnalyticsUrl, buildComparison, buildFilledRetention, compareEnabled, compareDateFrom, compareDateTo, compareCampaign, campaign, supabase])
+  }, [wid, buildAnalyticsUrl, buildComparison, buildFilledRetention, compareEnabled, selectedRunId, compareRunId, compareDateFrom, compareDateTo, compareCampaign, campaign, supabase])
 
   useEffect(() => { load() }, [load])
 
@@ -456,6 +482,16 @@ export default function AnalyticsPage() {
   const offerClickPct = funnelBase > 0 ? Math.round((summary.ctaClicks / funnelBase) * 100) : 0
   const watchHalfPct = summary.uniquePlays > 0 ? Math.round((summary.progress50 / summary.uniquePlays) * 100) : 0
   const retentionHasData = retentionData.length > 0 && retentionData.some(d => d.viewers > 0)
+  const formatRunLabel = (run: WebinarRun) => {
+    const date = new Date(run.started_at).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+    return `${run.status === 'active' ? 'Ao vivo - ' : ''}${run.title || date}`
+  }
 
   const vturbFunnelData = [
     { name: 'Visualizacoes unicas', pct: funnelBase > 0 ? 100 : 0, count: funnelBase, color: '#3b82f6' },
@@ -673,6 +709,22 @@ export default function AnalyticsPage() {
         marginBottom: 28,
       }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
+          Execucao
+          <select
+            className="form-input form-select"
+            value={selectedRunId}
+            onChange={e => {
+              setSelectedRunId(e.target.value)
+              setCompareRunId('')
+            }}
+          >
+            <option value="all">Todas as execucoes</option>
+            {runs.map(run => (
+              <option key={run.id} value={run.id}>{formatRunLabel(run)}</option>
+            ))}
+          </select>
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
           De
           <input type="date" className="form-input" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
         </label>
@@ -692,28 +744,46 @@ export default function AnalyticsPage() {
         </label>
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--text-secondary)', fontWeight: 700, paddingTop: 20 }}>
           <input type="checkbox" checked={compareEnabled} onChange={e => setCompareEnabled(e.target.checked)} />
-          Comparar periodo
+          {selectedRunId !== 'all' ? 'Comparar execucao' : 'Comparar periodo'}
         </label>
         {compareEnabled && (
           <>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
-              Comparar de
-              <input type="date" className="form-input" value={compareDateFrom} onChange={e => setCompareDateFrom(e.target.value)} />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
-              Comparar ate
-              <input type="date" className="form-input" value={compareDateTo} onChange={e => setCompareDateTo(e.target.value)} />
-            </label>
-            <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
-              Campanha base
-              <input
-                type="text"
-                className="form-input"
-                value={compareCampaign}
-                onChange={e => setCompareCampaign(e.target.value)}
-                placeholder="opcional"
-              />
-            </label>
+            {selectedRunId !== 'all' ? (
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
+                Execucao base
+                <select
+                  className="form-input form-select"
+                  value={compareRunId}
+                  onChange={e => setCompareRunId(e.target.value)}
+                >
+                  <option value="">Execucao anterior automaticamente</option>
+                  {runs.filter(run => run.id !== selectedRunId).map(run => (
+                    <option key={run.id} value={run.id}>{formatRunLabel(run)}</option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
+                  Comparar de
+                  <input type="date" className="form-input" value={compareDateFrom} onChange={e => setCompareDateFrom(e.target.value)} />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
+                  Comparar ate
+                  <input type="date" className="form-input" value={compareDateTo} onChange={e => setCompareDateTo(e.target.value)} />
+                </label>
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
+                  Campanha base
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={compareCampaign}
+                    onChange={e => setCompareCampaign(e.target.value)}
+                    placeholder="opcional"
+                  />
+                </label>
+              </>
+            )}
           </>
         )}
       </div>

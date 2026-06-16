@@ -15,6 +15,20 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     const supabase = await createServiceClient()
     const metadata = body.metadata || {}
+    let runId = typeof body.run_id === 'string'
+      ? body.run_id
+      : typeof metadata.run_id === 'string'
+        ? metadata.run_id
+        : null
+
+    if (!runId && body.webinar_id) {
+      const { data: webinarRun } = await supabase
+        .from('webi_webinars')
+        .select('current_run_id')
+        .eq('id', body.webinar_id)
+        .single()
+      runId = webinarRun?.current_run_id || null
+    }
 
     if (body.event_type === 'watch_second') {
       const timestampVideo = Number(body.timestamp_video)
@@ -33,6 +47,7 @@ export async function POST(req: NextRequest) {
           session_id: body.session_id,
           webinar_id: body.webinar_id,
           project_id: body.project_id,
+          run_id: runId,
           bucket_seconds: bucketSeconds,
           bucket_start_seconds: bucketStartSeconds,
           watch_delta_seconds: watchDeltaSeconds,
@@ -56,6 +71,7 @@ export async function POST(req: NextRequest) {
         session_id: body.session_id,
         webinar_id: body.webinar_id,
         project_id: body.project_id,
+        run_id: runId,
         event_type: body.event_type,
         timestamp_video: body.timestamp_video,
         metadata,
@@ -169,6 +185,7 @@ export async function GET(req: NextRequest) {
 
     const rawMode = searchParams.get('session_mode') || searchParams.get('mode') || 'all'
     const mode = ['all', 'live', 'replay', 'evergreen'].includes(rawMode) ? rawMode : 'all'
+    const runId = searchParams.get('run_id')
     const dateFrom = searchParams.get('date_from')
     const dateTo = searchParams.get('date_to')
     const campaign = (searchParams.get('campaign') || '').trim().toLowerCase()
@@ -197,10 +214,11 @@ export async function GET(req: NextRequest) {
       .eq('id', webinarId)
       .single()
 
-    const sessionStart = mode === 'live' ? webinar?.session_started_at : null
+    const sessionStart = mode === 'live' && (!runId || runId === 'all') ? webinar?.session_started_at : null
 
     const applyEventFilters = (query: any) => {
       let filtered = query
+      if (runId && runId !== 'all') filtered = filtered.eq('run_id', runId)
       if (sessionStart) filtered = filtered.gte('created_at', sessionStart)
       if (dateFromIso) filtered = filtered.gte('created_at', dateFromIso)
       if (dateToIso) filtered = filtered.lte('created_at', dateToIso)
@@ -215,6 +233,7 @@ export async function GET(req: NextRequest) {
 
     const applyCreatedAtFilters = (query: any) => {
       let filtered = query
+      if (runId && runId !== 'all') filtered = filtered.eq('run_id', runId)
       if (sessionStart) filtered = filtered.gte('created_at', sessionStart)
       if (dateFromIso) filtered = filtered.gte('created_at', dateFromIso)
       if (dateToIso) filtered = filtered.lte('created_at', dateToIso)
@@ -223,6 +242,7 @@ export async function GET(req: NextRequest) {
 
     const applyRetentionFilters = (query: any) => {
       let filtered = query
+      if (runId && runId !== 'all') filtered = filtered.eq('run_id', runId)
       if (sessionStart) filtered = filtered.gte('updated_at', sessionStart)
       if (dateFromIso) filtered = filtered.gte('updated_at', dateFromIso)
       if (dateToIso) filtered = filtered.lte('updated_at', dateToIso)
@@ -850,9 +870,12 @@ export async function GET(req: NextRequest) {
       : { audience: 0, retention_pct: 0 }
     const averageEngagementPct = getAverageEngagementPct(sessionsArray, webinar?.duration_seconds || 3600)
 
+    const scopedTotalLeads = runId && runId !== 'all' ? uniquePageViews : totalLeads
+    const scopedTotalAttended = runId && runId !== 'all' ? uniqueJoined : totalAttended
+
     return NextResponse.json({
-      total_leads: totalLeads,
-      total_attended: totalAttended,
+      total_leads: scopedTotalLeads,
+      total_attended: scopedTotalAttended,
       joined: uniqueJoined || 0,
       cta_clicks: ctaClicks || 0,
       popup_seen: popupSeen || 0,
