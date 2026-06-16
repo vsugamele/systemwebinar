@@ -90,6 +90,9 @@ interface RetentionPoint {
   dropoff?: number
   clicks?: number
   chatMessages?: number
+  compare_retention_pct?: number
+  compare_viewers?: number
+  retention_delta?: number
 }
 
 interface FunnelLabelProps {
@@ -103,6 +106,16 @@ interface FunnelLabelProps {
 type AnalyticsApiMetricMap = Record<string, number | string | null | undefined>
 type IntervalMessagePoint = { time_seconds: number; messages: number }
 type IntervalClickPoint = { time_seconds: number; clicks: number }
+type CriticalDropoff = {
+  time_seconds: number
+  previous_viewers: number
+  viewers: number
+  dropoff: number
+  dropoff_pct: number
+  retention_pct: number
+  clicks: number
+  chatMessages: number
+}
 
 // ─── Sub-components ──────────────────────────────────────────────────────────
 
@@ -206,6 +219,7 @@ export default function AnalyticsPage() {
   const [peakMinute, setPeakMinute] = useState<number | null>(null)
   const [maxDropoffMinute, setMaxDropoffMinute] = useState<{ minute: number; dropoff: number } | null>(null)
   const [retentionData, setRetentionData] = useState<RetentionPoint[]>([])
+  const [criticalDropoffs, setCriticalDropoffs] = useState<CriticalDropoff[]>([])
   const [selectedSession, setSelectedSession] = useState<SessionDetail | null>(null)
 
   const [summary, setSummary] = useState<AnalyticsSummary>({
@@ -257,14 +271,90 @@ export default function AnalyticsPage() {
     })
   }, [])
 
+  const buildFilledRetention = useCallback((
+    apiRes: any,
+    durationForCurve: number,
+    bucketSeconds: number,
+    includeActivity: boolean,
+  ) => {
+    const rawViewers: RetentionPoint[] = (apiRes.viewers_by_interval || []).map((point: RetentionPoint) => ({
+      ...point,
+      minute: Math.floor((point.time_seconds || 0) / 60),
+    }))
+    const viewersByInterval = rawViewers.filter(v => v.time_seconds <= durationForCurve)
+    const rawClicks: IntervalClickPoint[] = apiRes.clicks_by_interval || []
+    const filteredClicks = rawClicks.filter(c => c.time_seconds <= durationForCurve)
+    const chatByInterval: IntervalMessagePoint[] = apiRes.chat_by_interval || []
+
+    const filled: RetentionPoint[] = []
+    let peakSecond = 0
+    let peakPct = 0
+    let maxDrop = 0
+    let maxDropSecond = 0
+    const dropoffs: CriticalDropoff[] = []
+    let prevViewers = 0
+
+    for (let second = 0; second <= durationForCurve; second += bucketSeconds) {
+      const point = viewersByInterval.find(v => v.time_seconds === second)
+      const viewers = point?.viewers || 0
+      const pct = point?.retention_pct || 0
+      if (pct > peakPct) {
+        peakPct = pct
+        peakSecond = second
+      }
+
+      const dropoff = second > 0 && prevViewers > viewers ? prevViewers - viewers : 0
+      if (dropoff > maxDrop) {
+        maxDrop = dropoff
+        maxDropSecond = second
+      }
+
+      const clicks = includeActivity ? filteredClicks.find(ck => ck.time_seconds === second)?.clicks || 0 : 0
+      const chatMessages = includeActivity ? chatByInterval.find(chat => chat.time_seconds === second)?.messages || 0 : 0
+      if (dropoff > 0 && prevViewers > 0) {
+        dropoffs.push({
+          time_seconds: second,
+          previous_viewers: prevViewers,
+          viewers,
+          dropoff,
+          dropoff_pct: Math.round((dropoff / prevViewers) * 100),
+          retention_pct: pct,
+          clicks,
+          chatMessages,
+        })
+      }
+
+      filled.push({
+        minute: Math.floor(second / 60),
+        time_seconds: second,
+        viewers,
+        retention_pct: pct,
+        dropoff,
+        clicks,
+        chatMessages,
+      })
+      prevViewers = viewers
+    }
+
+    return {
+      data: filled,
+      peakSecond: peakPct > 0 ? peakSecond : null,
+      maxDropoff: maxDrop > 0 ? { minute: maxDropSecond, dropoff: maxDrop } : null,
+      criticalDropoffs: dropoffs
+        .sort((a, b) => b.dropoff - a.dropoff || b.dropoff_pct - a.dropoff_pct)
+        .slice(0, 5),
+    }
+  }, [])
+
   const load = useCallback(async () => {
     setLoading(true)
     const { data: webinar } = await supabase.from('webi_webinars').select('name').eq('id', wid).single()
     if (webinar) setWebinarName(webinar.name)
 
     const apiRes = await fetch(buildAnalyticsUrl()).then(r => r.json())
+    let compareRes: any = null
     if (compareEnabled && ((compareDateFrom && compareDateTo) || compareCampaign.trim())) {
-      const compareRes = await fetch(buildAnalyticsUrl({
+      compareRes = await fetch(buildAnalyticsUrl({
         from: compareDateFrom,
         to: compareDateTo,
         campaign: compareCampaign.trim() || campaign,
@@ -288,44 +378,32 @@ export default function AnalyticsPage() {
       durationForCurve = dataMaxSeconds > 0 ? dataMaxSeconds : 3600
     }
 
-    const viewersByInterval = rawViewers.filter(v => v.time_seconds <= durationForCurve)
-    const rawClicks: IntervalClickPoint[] = apiRes.clicks_by_interval || []
-    const filteredClicks = rawClicks.filter(c => c.time_seconds <= durationForCurve)
-
     const ctaClicks = apiRes.cta_clicks || 0
     const totalLeads = apiRes.total_leads || 0
     const totalAttended = apiRes.total_attended || 0
     const joinedCount = apiRes.joined || 0
 
-    // Fill curve & compute peak/dropoff
-    const chatByInterval = apiRes.chat_by_interval || []
-    const filled: RetentionPoint[] = []
-    let peakSecond = 0, peakPct = 0, maxDrop = 0, maxDropSecond = 0
-    let prevViewers = 0
-    for (let second = 0; second <= durationForCurve; second += bucketSeconds) {
-      const point = viewersByInterval.find(v => v.time_seconds === second)
-      const v = point?.viewers || 0
-      const pct = point?.retention_pct || 0
-      if (pct > peakPct) { peakPct = pct; peakSecond = second }
-      const dropoff = second > 0 && prevViewers > v ? prevViewers - v : 0
-      if (dropoff > maxDrop) { maxDrop = dropoff; maxDropSecond = second }
-      const c = filteredClicks.find(ck => ck.time_seconds === second)
-      const ch = (chatByInterval as IntervalMessagePoint[]).find(chat => chat.time_seconds === second)?.messages || 0
-      filled.push({
-        minute: Math.floor(second / 60),
-        time_seconds: second,
-        viewers: v,
-        retention_pct: pct,
-        dropoff,
-        clicks: c?.clicks || 0,
-        chatMessages: ch
+    const currentRetention = buildFilledRetention(apiRes, durationForCurve, bucketSeconds, true)
+    let filled = currentRetention.data
+    if (compareRes) {
+      const compareRetention = buildFilledRetention(compareRes, durationForCurve, bucketSeconds, false)
+      const compareBySecond = new Map(compareRetention.data.map(point => [point.time_seconds, point]))
+      filled = filled.map(point => {
+        const comparePoint = compareBySecond.get(point.time_seconds)
+        const comparePct = comparePoint?.retention_pct
+        return {
+          ...point,
+          compare_retention_pct: comparePct,
+          compare_viewers: comparePoint?.viewers,
+          retention_delta: typeof comparePct === 'number' ? point.retention_pct - comparePct : undefined,
+        }
       })
-      prevViewers = v
     }
 
     setRetentionData(filled)
-    setPeakMinute(peakPct > 0 ? peakSecond : null)
-    setMaxDropoffMinute(maxDrop > 0 ? { minute: maxDropSecond, dropoff: maxDrop } : null)
+    setPeakMinute(currentRetention.peakSecond)
+    setMaxDropoffMinute(currentRetention.maxDropoff)
+    setCriticalDropoffs(currentRetention.criticalDropoffs)
 
     setSummary({
       totalLeads, totalAttended, ctaClicks,
@@ -362,7 +440,7 @@ export default function AnalyticsPage() {
       countriesBreakdown: apiRes.countries_breakdown || {},
     })
     setLoading(false)
-  }, [wid, buildAnalyticsUrl, buildComparison, compareEnabled, compareDateFrom, compareDateTo, compareCampaign, campaign, supabase])
+  }, [wid, buildAnalyticsUrl, buildComparison, buildFilledRetention, compareEnabled, compareDateFrom, compareDateTo, compareCampaign, campaign, supabase])
 
   useEffect(() => { load() }, [load])
 
@@ -463,6 +541,60 @@ export default function AnalyticsPage() {
     return `${String(minutes).padStart(2, '0')}:${String(remainder).padStart(2, '0')}`
   }
   const pitchSecond = summary.pitchAtMinute !== null ? summary.pitchAtMinute * 60 : null
+  const hasCompareCurve = retentionData.some(point => typeof point.compare_retention_pct === 'number')
+  const criticalDropoffTotal = criticalDropoffs.reduce((sum, item) => sum + item.dropoff, 0)
+  const worstDropoff = criticalDropoffs[0] || null
+  const exportAnalyticsCsv = () => {
+    const rows = [
+      ['tipo', 'tempo', 'retencao_atual_pct', 'retencao_comparada_pct', 'delta_retencao_pp', 'audiencia', 'audiencia_comparada', 'saidas', 'cliques_cta', 'mensagens_chat'],
+      ...retentionData.map(point => [
+        'retencao',
+        formatChartTime(point.time_seconds),
+        point.retention_pct,
+        point.compare_retention_pct ?? '',
+        point.retention_delta ?? '',
+        point.viewers,
+        point.compare_viewers ?? '',
+        point.dropoff ?? 0,
+        point.clicks ?? 0,
+        point.chatMessages ?? 0,
+      ]),
+      [],
+      ['tipo', 'tempo', 'saidas', 'queda_pct', 'audiencia_antes', 'audiencia_depois', 'retencao_pct', 'cliques_cta', 'mensagens_chat'],
+      ...criticalDropoffs.map(item => [
+        'queda_critica',
+        formatChartTime(item.time_seconds),
+        item.dropoff,
+        item.dropoff_pct,
+        item.previous_viewers,
+        item.viewers,
+        item.retention_pct,
+        item.clicks,
+        item.chatMessages,
+      ]),
+      [],
+      ['metrica', 'valor'],
+      ['visualizacoes_unicas', summary.uniquePageViews],
+      ['plays_unicos', summary.uniquePlays],
+      ['play_rate_pct', summary.playRate],
+      ['retencao_pitch_pct', summary.retentionAtPitch],
+      ['audiencia_pitch', summary.audienceAtPitch],
+      ['cliques_cta', summary.ctaClicks],
+      ['engajamento_medio_pct', summary.averageEngagementPct],
+    ]
+    const csv = rows
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n')
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `analytics-${webinarName || wid}-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div style={{ maxWidth: 1160, margin: '0 auto', padding: '32px 24px' }}>
@@ -634,6 +766,7 @@ export default function AnalyticsPage() {
               </div>
               <div className="analytics-chart-legend">
                 <span><i style={{ background: '#22c55e' }} />Retencao</span>
+                {hasCompareCurve && <span><i style={{ background: '#60a5fa' }} />Comparativo</span>}
                 <span><i style={{ background: '#f59e0b' }} />Pitch</span>
                 <span><i style={{ background: '#f97316' }} />CTA</span>
               </div>
@@ -667,6 +800,9 @@ export default function AnalyticsPage() {
                           <strong>{formatChartTime(label ?? 0)}</strong>
                           <span>Audiencia: <b>{row.viewers.toLocaleString('pt-BR')}</b></span>
                           <span>Retencao: <b>{row.retention_pct}%</b></span>
+                          {typeof row.compare_retention_pct === 'number' ? (
+                            <span>Comparativo: <b>{row.compare_retention_pct}%</b>{typeof row.retention_delta === 'number' ? ` (${row.retention_delta >= 0 ? '+' : ''}${row.retention_delta} pp)` : ''}</span>
+                          ) : null}
                           {row.clicks ? <span>Cliques CTA: <b>{row.clicks}</b></span> : null}
                           {row.chatMessages ? <span>Chat: <b>{row.chatMessages} msgs</b></span> : null}
                           {row.dropoff ? <span>Saidas: <b>{row.dropoff}</b></span> : null}
@@ -682,6 +818,9 @@ export default function AnalyticsPage() {
                   )}
                   <Bar yAxisId="right" dataKey="clicks" fill="#f97316" barSize={8} radius={[4, 4, 0, 0]} />
                   <Bar yAxisId="right" dataKey="dropoff" fill="#ef4444" barSize={5} opacity={0.28} radius={[4, 4, 0, 0]} />
+                  {hasCompareCurve && (
+                    <Line yAxisId="left" type="stepAfter" dataKey="compare_retention_pct" stroke="#60a5fa" strokeWidth={2} strokeDasharray="5 4" dot={false} />
+                  )}
                   <Area yAxisId="left" type="stepAfter" dataKey="retention_pct" stroke="#22c55e" strokeWidth={2.5} fill="url(#vturbRetentionFill)" dot={false} />
                 </ComposedChart>
               </ResponsiveContainer>
@@ -717,7 +856,27 @@ export default function AnalyticsPage() {
               Retencao, plays, pitch e engajamento no modelo de leitura de VSL.
             </div>
           </div>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Atualizado ao carregar a pagina</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Atualizado ao carregar a pagina</div>
+            <button
+              type="button"
+              onClick={exportAnalyticsCsv}
+              disabled={!retentionHasData && summary.sessions.length === 0}
+              style={{
+                border: '1px solid rgba(96,165,250,0.28)',
+                background: 'rgba(96,165,250,0.1)',
+                color: '#93c5fd',
+                borderRadius: 8,
+                padding: '7px 11px',
+                fontSize: 12,
+                fontWeight: 800,
+                cursor: (!retentionHasData && summary.sessions.length === 0) ? 'not-allowed' : 'pointer',
+                opacity: (!retentionHasData && summary.sessions.length === 0) ? 0.5 : 1,
+              }}
+            >
+              Baixar CSV
+            </button>
+          </div>
         </div>
         {comparison.length > 0 && (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
@@ -902,7 +1061,7 @@ export default function AnalyticsPage() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="minute" stroke="#4b5563" fontSize={11} tickLine={false} axisLine={false} dy={10} tickFormatter={t => `${t}m`} />
+                  <XAxis dataKey="time_seconds" stroke="#4b5563" fontSize={11} tickLine={false} axisLine={false} dy={10} tickFormatter={formatChartTime} minTickGap={28} />
                   <YAxis yAxisId="left" domain={[0, 100]} stroke="#4b5563" fontSize={11} tickLine={false} axisLine={false} dx={-5} tickFormatter={v => `${v}%`} />
                   <YAxis yAxisId="right" orientation="right" stroke="#ef4444" fontSize={11} hide />
                   <Tooltip
@@ -912,8 +1071,9 @@ export default function AnalyticsPage() {
                       const dropoff = payload.find(p => p.dataKey === 'dropoff')?.value || 0
                       const clicks = payload.find(p => p.dataKey === 'clicks')?.value || 0
                       const chatVal = payload.find(p => p.dataKey === 'chatMessages')?.value || 0
+                      const comparePct = payload.find(p => p.dataKey === 'compare_retention_pct')?.value
                       const viewers = payload[0]?.payload?.viewers || 0
-                      const progressPct = durationSeconds > 0 ? Math.min(100, Math.round(((Number(label) * 60) / durationSeconds) * 100)) : 0
+                      const progressPct = durationSeconds > 0 ? Math.min(100, Math.round((Number(label) / durationSeconds) * 100)) : 0
                       
                       return (
                         <div style={{
@@ -923,7 +1083,7 @@ export default function AnalyticsPage() {
                           boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
                         }}>
                           <div style={{ fontWeight: 700, marginBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 6 }}>
-                            {String(label).padStart(2, '0')}:00 - {progressPct}%
+                            {formatChartTime(label ?? 0)} - {progressPct}%
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
                             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -936,6 +1096,13 @@ export default function AnalyticsPage() {
                               <span style={{ color: '#9ca3af' }}>Retenção:</span>
                               <strong style={{ marginLeft: 'auto' }}>{pct}%</strong>
                             </div>
+                            {typeof comparePct === 'number' && (
+                              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#60a5fa' }} />
+                                <span style={{ color: '#9ca3af' }}>Comparativo:</span>
+                                <strong style={{ color: '#93c5fd', marginLeft: 'auto' }}>{comparePct}%</strong>
+                              </div>
+                            )}
                             {Number(chatVal) > 0 && (
                               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                                 <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#c084fc' }} />
@@ -970,17 +1137,87 @@ export default function AnalyticsPage() {
                     <ReferenceLine yAxisId="left" x={maxDropoffMinute.minute} stroke="#f87171" strokeWidth={1.5} strokeDasharray="3 3"
                       label={{ value: '⚠️', fill: '#f87171', fontSize: 12, position: 'insideTopLeft', offset: 6 }} />
                   )}
-                  {summary.pitchAtMinute !== null && (
-                    <ReferenceLine yAxisId="left" x={summary.pitchAtMinute} stroke="#fb923c" strokeWidth={2} strokeDasharray="5 3"
+                  {pitchSecond !== null && (
+                    <ReferenceLine yAxisId="left" x={pitchSecond} stroke="#fb923c" strokeWidth={2} strokeDasharray="5 3"
                       label={{ value: '🎯', fill: '#fb923c', fontSize: 12, position: 'top', offset: 6 }} />
                   )}
                   <Bar yAxisId="right" dataKey="dropoff" fill="#f87171" barSize={6} opacity={0.35} radius={[4, 4, 0, 0]} />
                   <Bar yAxisId="right" dataKey="clicks" fill="#fb923c" barSize={10} radius={[4, 4, 0, 0]} />
                   <Line yAxisId="right" type="monotone" dataKey="chatMessages" stroke="#c084fc" strokeWidth={2} dot={false} name="Mensagens Chat" />
+                  {hasCompareCurve && (
+                    <Line yAxisId="left" type="monotone" dataKey="compare_retention_pct" stroke="#60a5fa" strokeWidth={2} strokeDasharray="5 4" dot={false} name="Comparativo" />
+                  )}
                   <Area yAxisId="left" type="monotone" dataKey="retention_pct" stroke="#818cf8" strokeWidth={3}
                     fillOpacity={1} fill="url(#gradViewers)" dot={false} />
                 </ComposedChart>
               </ResponsiveContainer>
+            )}
+            {criticalDropoffs.length > 0 && (
+              <div style={{
+                marginTop: 18,
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
+                gap: 14,
+              }}>
+                <div style={{
+                  border: '1px solid rgba(248,113,113,0.22)',
+                  background: 'rgba(248,113,113,0.06)',
+                  borderRadius: 12,
+                  padding: 16,
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 800, color: '#f87171', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 8 }}>
+                    Ponto critico
+                  </div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: '#fca5a5', marginBottom: 4 }}>
+                    {worstDropoff ? formatChartTime(worstDropoff.time_seconds) : '--'}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                    {worstDropoff
+                      ? `${worstDropoff.dropoff} pessoas sairam nesse intervalo (${worstDropoff.dropoff_pct}% da audiencia anterior).`
+                      : 'Sem queda relevante no intervalo filtrado.'}
+                  </div>
+                  <div style={{ marginTop: 12, fontSize: 11, color: 'var(--text-muted)' }}>
+                    Top 5 quedas somam {criticalDropoffTotal.toLocaleString('pt-BR')} saidas.
+                  </div>
+                </div>
+                <div style={{
+                  border: '1px solid var(--border)',
+                  background: 'var(--bg-elevated)',
+                  borderRadius: 12,
+                  padding: 16,
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 10 }}>
+                    Trechos para revisar no video
+                  </div>
+                  <div style={{ display: 'grid', gap: 8 }}>
+                    {criticalDropoffs.map((item, index) => (
+                      <div
+                        key={`${item.time_seconds}-${index}`}
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '74px 1fr auto',
+                          gap: 10,
+                          alignItems: 'center',
+                          padding: '9px 10px',
+                          borderRadius: 9,
+                          background: 'rgba(255,255,255,0.025)',
+                          border: '1px solid rgba(255,255,255,0.04)',
+                        }}
+                      >
+                        <strong style={{ color: '#fca5a5', fontSize: 13 }}>{formatChartTime(item.time_seconds)}</strong>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
+                          {item.previous_viewers} -&gt; {item.viewers} espectadores
+                          {item.clicks > 0 ? ` | ${item.clicks} cliques no CTA` : ''}
+                          {item.chatMessages > 0 ? ` | ${item.chatMessages} msgs no chat` : ''}
+                        </span>
+                        <span style={{ color: '#f87171', fontWeight: 900, fontSize: 12 }}>
+                          -{item.dropoff} ({item.dropoff_pct}%)
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             )}
           </>
         )}
