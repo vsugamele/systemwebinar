@@ -1292,10 +1292,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         }
       }
 
-      // For non-native videos (YouTube, Vimeo, VTurb), track watch_second every 30s
-      // Native videos use onTimeUpdate (every 10s) in the video setup effect
+      // For non-native videos (YouTube, Vimeo, VTurb), track watch_second every 10s.
+      // Native videos use onTimeUpdate (every 5s) in the video setup effect.
       if (!isNativeVideo) {
-        trackWatchSample(currentTick, 30)
+        trackWatchSample(currentTick, 10)
         trackProgress50Once(currentTick)
         trackProgressMilestones(currentTick)
       }
@@ -2132,8 +2132,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       const t = Math.floor(video.currentTime)
       engineRef.current?.tick(t)
 
-      // Track watch_second every 10s
-      trackWatchSample(t, 10)
+      // Track watch_second every 5s for finer retention buckets without duplicating ticks.
+      trackWatchSample(t, 5)
       
       evaluateEmailTriggers(t)
 
