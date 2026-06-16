@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, startTransition, useMemo } from 'react'
+import { useState, useEffect, startTransition, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -28,7 +28,11 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
   const supabase = useMemo(() => createClient(), [])
   const [userEmail, setUserEmail] = useState('')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [commandOpen, setCommandOpen] = useState(false)
+  const [insightsOpen, setInsightsOpen] = useState(false)
+  const [commandQuery, setCommandQuery] = useState('')
   const [activeWebinars, setActiveWebinars] = useState<ActiveWebinarContext[]>([])
+  const commandInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -46,7 +50,30 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
   // Close mobile menu on route change
   useEffect(() => {
     startTransition(() => setMobileMenuOpen(false))
+    setCommandOpen(false)
+    setInsightsOpen(false)
   }, [pathname])
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        setCommandOpen(open => !open)
+      }
+      if (event.key === 'Escape') {
+        setCommandOpen(false)
+        setInsightsOpen(false)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
+  useEffect(() => {
+    if (!commandOpen) return
+    const timer = window.setTimeout(() => commandInputRef.current?.focus(), 40)
+    return () => window.clearTimeout(timer)
+  }, [commandOpen])
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -76,6 +103,75 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
       { href: `${webinarBase}/analytics`, label: 'Analytics' },
     ] : []),
   ]
+
+  const commandActions = [
+    { href: '/admin', icon: '📊', label: 'Dashboard', hint: 'Visao geral da conta' },
+    { href: '/admin/projects', icon: '🗂️', label: 'Projetos', hint: 'Todos os projetos' },
+    { href: '/admin/registrants', icon: '👥', label: 'Registrantes', hint: 'Leads globais' },
+    { href: '/admin/analytics', icon: '📈', label: 'Analytics Global', hint: 'Metricas consolidadas' },
+    { href: '/admin/emails', icon: '✉️', label: 'E-mails', hint: 'Templates e retencao' },
+    ...(webinarBase ? [
+      { href: webinarBase, icon: '🧭', label: 'Hub do Webinar', hint: 'Configuracao principal' },
+      { href: `${webinarBase}/registration`, icon: '🧲', label: 'Pagina de Captura', hint: 'Cadastro e copy' },
+      { href: `${webinarBase}/events`, icon: '⚡', label: 'Timeline', hint: 'Chat, pitch e popups' },
+      { href: `${webinarBase}/live`, icon: '🔴', label: 'Control Room', hint: 'Operacao da live' },
+      { href: `${webinarBase}/analytics`, icon: '📊', label: 'Analytics do Webinar', hint: 'Retencao e funil' },
+      { href: `${webinarBase}/leads`, icon: '📇', label: 'Leads do Webinar', hint: 'CRM e exportacao' },
+      { href: `${webinarBase}/materials`, icon: '📂', label: 'Materiais', hint: 'Arquivos e links' },
+      { href: `${webinarBase}/quiz`, icon: '📝', label: 'Quiz', hint: 'Perguntas e certificados' },
+    ] : []),
+    ...activeWebinars.flatMap(webinar => {
+      const base = `/admin/projects/${webinar.project_id}/webinars/${webinar.id}`
+      return [
+        { href: base, icon: '🎬', label: webinar.name, hint: 'Abrir hub do webinar ativo' },
+        { href: `${base}/live`, icon: '🔴', label: `${webinar.name} - Control Room`, hint: 'Entrar na operacao ao vivo' },
+        { href: `${base}/analytics`, icon: '📊', label: `${webinar.name} - Analytics`, hint: 'Ver metricas do webinar' },
+      ]
+    }),
+  ]
+  const normalizedCommandQuery = commandQuery.trim().toLowerCase()
+  const filteredCommandActions = commandActions
+    .filter(action => {
+      if (!normalizedCommandQuery) return true
+      return `${action.label} ${action.hint}`.toLowerCase().includes(normalizedCommandQuery)
+    })
+    .slice(0, 12)
+
+  const insightItems = [
+    {
+      scope: 'Metricas',
+      title: 'Validar agregacao de retencao',
+      body: 'Depois da migration, confirme se novos plays alimentam os buckets de 5s.',
+      href: webinarBase ? `${webinarBase}/analytics` : '/admin/analytics',
+    },
+    {
+      scope: 'Operacao',
+      title: activeWebinars.length > 1 ? `${activeWebinars.length} webinars ativos` : 'Webinar ativo em destaque',
+      body: activeWebinars.length > 1
+        ? 'Use busca ou sidebar para alternar entre Control Rooms sem depender do primeiro ativo.'
+        : 'Mantenha Control Room e Analytics proximos durante validacao ao vivo.',
+      href: webinarBase ? `${webinarBase}/live` : '/admin/projects',
+    },
+    {
+      scope: 'Setup',
+      title: 'Completar timeline antes do trafego',
+      body: 'Pitch, popups, chat e e-mails devem estar revisados antes de escalar campanha.',
+      href: webinarBase ? `${webinarBase}/events` : '/admin/projects',
+    },
+    {
+      scope: 'CRM',
+      title: 'Priorizar follow-up quente',
+      body: 'Leads com tempo assistido alto e clique no CTA devem ir primeiro para contato.',
+      href: webinarBase ? `${webinarBase}/leads` : '/admin/registrants',
+    },
+  ]
+
+  function navigateTo(href: string) {
+    setCommandOpen(false)
+    setInsightsOpen(false)
+    setCommandQuery('')
+    router.push(href)
+  }
 
   return (
     <div className="admin-layout">
@@ -171,12 +267,73 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
             ))}
           </div>
           <div className="admin-topbar-actions">
-            <span className="admin-shortcut">⌘K</span>
-            <span className="admin-insight">💡 Melhorias</span>
+            <button type="button" className="admin-shortcut" onClick={() => setCommandOpen(true)}>⌘K</button>
+            <button type="button" className="admin-insight" onClick={() => setInsightsOpen(open => !open)}>💡 Melhorias</button>
           </div>
         </div>
         {children}
       </main>
+      {commandOpen && (
+        <div className="admin-command-overlay" onClick={() => setCommandOpen(false)}>
+          <div className="admin-command-modal" onClick={event => event.stopPropagation()}>
+            <div className="admin-command-search">
+              <span>🔍</span>
+              <input
+                ref={commandInputRef}
+                value={commandQuery}
+                onChange={event => setCommandQuery(event.target.value)}
+                placeholder="Buscar tela, webinar ou acao..."
+              />
+              <kbd>ESC</kbd>
+            </div>
+            <div className="admin-command-list">
+              {filteredCommandActions.length === 0 ? (
+                <div className="admin-command-empty">Nenhum atalho encontrado.</div>
+              ) : (
+                filteredCommandActions.map(action => (
+                  <button
+                    type="button"
+                    key={`${action.href}-${action.label}`}
+                    className="admin-command-item"
+                    onClick={() => navigateTo(action.href)}
+                  >
+                    <span className="admin-command-icon">{action.icon}</span>
+                    <span>
+                      <strong>{action.label}</strong>
+                      <small>{action.hint}</small>
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {insightsOpen && (
+        <aside className="admin-insights-panel">
+          <div className="admin-insights-header">
+            <div>
+              <strong>Melhorias sugeridas</strong>
+              <span>{insightItems.length} prioridades para revisar</span>
+            </div>
+            <button type="button" onClick={() => setInsightsOpen(false)}>✕</button>
+          </div>
+          <div className="admin-insights-list">
+            {insightItems.map(item => (
+              <button
+                type="button"
+                className="admin-insight-card"
+                key={`${item.scope}-${item.title}`}
+                onClick={() => navigateTo(item.href)}
+              >
+                <span>{item.scope}</span>
+                <strong>{item.title}</strong>
+                <small>{item.body}</small>
+              </button>
+            ))}
+          </div>
+        </aside>
+      )}
       <nav className="mobile-bottom-nav">
         {[
           { href: '/admin', icon: '📊', label: 'Dashboard', exact: true },
