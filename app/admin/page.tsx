@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
 import type { Webinar } from '@/types'
@@ -58,7 +58,7 @@ export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats>({ projects: 0, webinars: 0, webinarsActive: 0, leads: 0, ctaClicks: 0 })
   const [recentWebinars, setRecentWebinars] = useState<WebinarWithProject[]>([])
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     async function load() {
@@ -92,7 +92,7 @@ export default function AdminDashboard() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [supabase])
 
   if (loading) return (
     <div className="loading-screen">
@@ -102,13 +102,36 @@ export default function AdminDashboard() {
   )
 
   const cards = STAT_CARDS(stats)
+  const activeWebinar = recentWebinars.find(w => w.status === 'active')
+  const setupWebinars = recentWebinars.slice(0, 2).map(w => {
+    const checks = [
+      !!w.name,
+      !!w.video_url,
+      !!w.landing_headline,
+      !!w.landing_button_text,
+      !!w.webhook_url || !!w.whatsapp_api_url,
+      w.status === 'active',
+    ]
+    const done = checks.filter(Boolean).length
+    return {
+      webinar: w,
+      done,
+      total: checks.length,
+      pct: Math.round((done / checks.length) * 100),
+      missing: [
+        !w.video_url ? 'video' : '',
+        !w.landing_headline ? 'captura' : '',
+        w.status !== 'active' ? 'publicacao' : '',
+      ].filter(Boolean).join(', ') || 'pronto para revisar',
+    }
+  })
 
   return (
     <>
       {/* Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Dashboard</h1>
+          <h1 className="page-title">Bom dia</h1>
           <p className="page-subtitle">Visão geral da sua plataforma de webinars</p>
         </div>
         <Link href="/admin/projects" className="btn btn-primary">
@@ -117,6 +140,31 @@ export default function AdminDashboard() {
       </div>
 
       <div className="page-body">
+        {activeWebinar && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(239,68,68,0.16), rgba(239,68,68,0.05))',
+            border: '1px solid rgba(239,68,68,0.25)',
+            borderRadius: 12,
+            padding: '14px 16px',
+            marginBottom: 18,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 14,
+            flexWrap: 'wrap',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+              <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 12px rgba(239,68,68,0.8)', flexShrink: 0 }} />
+              <div style={{ minWidth: 0 }}>
+                <div style={{ color: '#fca5a5', fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Webinar ativo agora</div>
+                <div style={{ color: 'var(--text-primary)', fontSize: 14, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{activeWebinar.name}</div>
+              </div>
+            </div>
+            <Link href={`/admin/projects/${activeWebinar.project_id}/webinars/${activeWebinar.id}/live`} className="btn btn-primary btn-sm">
+              Control Room
+            </Link>
+          </div>
+        )}
         {/* Stat Cards */}
         <div style={{
           display: 'grid',
@@ -178,6 +226,41 @@ export default function AdminDashboard() {
             </div>
           ))}
         </div>
+
+        {setupWebinars.length > 0 && (
+          <div style={{ marginBottom: 34 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <h2 style={{ fontSize: 15, fontWeight: 800 }}>Continue Configurando</h2>
+              <Link href="/admin/projects" className="btn btn-ghost btn-sm">Ver projetos</Link>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+              {setupWebinars.map(item => (
+                <Link
+                  key={item.webinar.id}
+                  href={`/admin/projects/${item.webinar.project_id}/webinars/${item.webinar.id}`}
+                  style={{
+                    background: 'var(--bg-card)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 12,
+                    padding: 14,
+                    textDecoration: 'none',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.webinar.name}</div>
+                      <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 2 }}>{item.done} de {item.total} secoes · falta: {item.missing}</div>
+                    </div>
+                    <span style={{ color: item.pct >= 80 ? '#22c55e' : '#f59e0b', fontSize: 12, fontWeight: 800 }}>{item.pct}%</span>
+                  </div>
+                  <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden' }}>
+                    <div style={{ width: `${item.pct}%`, height: '100%', background: item.pct >= 80 ? '#22c55e' : '#6366f1', borderRadius: 99 }} />
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Recent Webinars */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>

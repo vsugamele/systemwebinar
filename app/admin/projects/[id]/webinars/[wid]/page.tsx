@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams, useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { toast } from 'react-hot-toast'
 
 interface WebinarData {
@@ -25,6 +26,8 @@ interface WebinarData {
   video_orientation?: 'horizontal' | 'vertical'
   is_evergreen?: boolean
   analytics_pitch_minute?: number | null
+  landing_headline?: string | null
+  landing_button_text?: string | null
 }
 
 // ── Collapsible section ────────────────────────────────────────────────────────
@@ -266,9 +269,22 @@ export default function WebinarOverviewPage() {
   const isActive = webinar.status === 'active'
   const hasVideo = !!essentials.video_url
   const hasIntegrations = !!(integrations.tracking_head_code || integrations.webhook_url || integrations.whatsapp_api_url)
+  const base = `/admin/projects/${id}/webinars/${wid}`
+  const hubCards = [
+    { href: base, title: 'Visao Geral', icon: '⚙️', desc: hasVideo ? 'Video e dados principais prontos' : 'Adicione o video principal', status: hasVideo ? 'ok' : 'warn' },
+    { href: `${base}/registration`, title: 'Pag. de Captura', icon: '🧲', desc: webinar.landing_headline ? 'Captura configurada' : 'Configure headline e CTA', status: webinar.landing_headline ? 'ok' : 'warn' },
+    { href: `${base}/events`, title: 'Timeline', icon: '⚡', desc: 'Pitch, popups e eventos do webinar', status: 'ok' },
+    { href: `${base}/chat`, title: 'Chat & IA', icon: '💬', desc: 'Mensagens simuladas e moderacao', status: 'ok' },
+    { href: `${base}/materials`, title: 'Materiais', icon: '📂', desc: 'Arquivos liberados durante a aula', status: 'empty' },
+    { href: `${base}/quiz`, title: 'Quiz', icon: '📝', desc: 'Perguntas e certificados', status: 'empty' },
+    { href: `${base}/leads`, title: 'Leads CRM', icon: '📇', desc: 'Lista de inscritos e presenca', status: 'ok' },
+    { href: `${base}/analytics`, title: 'Analytics', icon: '📊', desc: 'Retencao, pitch e conversao', status: 'ok' },
+  ]
+  const doneCards = hubCards.filter(card => card.status === 'ok').length
+  const hubPct = Math.round((doneCards / hubCards.length) * 100)
 
   return (
-    <div style={{ maxWidth: 860, margin: '0 auto', padding: '32px 24px' }}>
+    <div style={{ maxWidth: 1040, margin: '0 auto', padding: '32px 24px' }}>
 
       {/* ── HEADER ── */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 28 }}>
@@ -293,6 +309,61 @@ export default function WebinarOverviewPage() {
         >
           {isActive ? '⏸ Pausar Webinar' : '🚀 Publicar Webinar'}
         </button>
+      </div>
+
+      <div style={{
+        background: 'var(--bg-card)',
+        border: '1px solid var(--border)',
+        borderRadius: 14,
+        padding: 18,
+        marginBottom: 20,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap' }}>
+          <div>
+            <div style={{ fontSize: 16, fontWeight: 800, marginBottom: 4 }}>Hub do Webinar</div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Configure cada etapa e acompanhe o progresso antes de divulgar.</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 130 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, fontWeight: 800, marginBottom: 5 }}>
+                <span style={{ color: 'var(--text-muted)' }}>Progresso</span>
+                <span style={{ color: hubPct >= 80 ? '#22c55e' : '#f59e0b' }}>{doneCards}/{hubCards.length}</span>
+              </div>
+              <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden' }}>
+                <div style={{ width: `${hubPct}%`, height: '100%', background: hubPct >= 80 ? '#22c55e' : '#6366f1', borderRadius: 99 }} />
+              </div>
+            </div>
+            <Link href={`${base}/live`} className="btn btn-primary btn-sm">Control Room</Link>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
+          {hubCards.map(card => {
+            const color = card.status === 'ok' ? '#22c55e' : card.status === 'warn' ? '#f59e0b' : 'var(--text-muted)'
+            return (
+              <Link
+                key={card.href + card.title}
+                href={card.href}
+                style={{
+                  background: 'var(--bg-elevated)',
+                  border: `1px solid ${card.status === 'ok' ? 'rgba(34,197,94,0.16)' : card.status === 'warn' ? 'rgba(245,158,11,0.2)' : 'var(--border)'}`,
+                  borderRadius: 10,
+                  padding: 12,
+                  color: 'inherit',
+                  textDecoration: 'none',
+                  minHeight: 104,
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 9 }}>
+                  <span style={{ fontSize: 18 }}>{card.icon}</span>
+                  <span style={{ color, fontSize: 11, fontWeight: 900 }}>{card.status === 'ok' ? '✓' : card.status === 'warn' ? '!' : '–'}</span>
+                </div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 4 }}>{card.title}</div>
+                <div style={{ fontSize: 11, lineHeight: 1.35, color: 'var(--text-muted)' }}>{card.desc}</div>
+              </Link>
+            )
+          })}
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
