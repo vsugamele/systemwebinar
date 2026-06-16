@@ -57,6 +57,7 @@ const STAT_CARDS = (s: Stats) => [
 export default function AdminDashboard() {
   const [stats, setStats] = useState<Stats>({ projects: 0, webinars: 0, webinarsActive: 0, leads: 0, ctaClicks: 0 })
   const [recentWebinars, setRecentWebinars] = useState<WebinarWithProject[]>([])
+  const [activeWebinars, setActiveWebinars] = useState<WebinarWithProject[]>([])
   const [loading, setLoading] = useState(true)
   const supabase = useMemo(() => createClient(), [])
 
@@ -69,6 +70,7 @@ export default function AdminDashboard() {
         { count: leadsCount },
         { count: ctaCount },
         { data: recent },
+        { data: active },
       ] = await Promise.all([
         supabase.from('webi_projects').select('id'),
         supabase.from('webi_webinars').select('id'),
@@ -79,6 +81,11 @@ export default function AdminDashboard() {
           .select('*, webi_projects(name, brand_color)')
           .order('created_at', { ascending: false })
           .limit(8),
+        supabase.from('webi_webinars')
+          .select('*, webi_projects(name, brand_color)')
+          .eq('status', 'active')
+          .order('updated_at', { ascending: false })
+          .limit(6),
       ])
 
       setStats({
@@ -89,6 +96,7 @@ export default function AdminDashboard() {
         ctaClicks: ctaCount || 0,
       })
       setRecentWebinars((recent as WebinarWithProject[]) || [])
+      setActiveWebinars((active as WebinarWithProject[]) || [])
       setLoading(false)
     }
     load()
@@ -102,7 +110,7 @@ export default function AdminDashboard() {
   )
 
   const cards = STAT_CARDS(stats)
-  const activeWebinar = recentWebinars.find(w => w.status === 'active')
+  const activeWebinar = activeWebinars[0] || null
   const setupWebinars = recentWebinars.slice(0, 2).map(w => {
     const checks = [
       !!w.name,
@@ -140,7 +148,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="page-body">
-        {activeWebinar && (
+        {activeWebinars.length === 1 && activeWebinar && (
           <div style={{
             background: 'linear-gradient(135deg, rgba(239,68,68,0.16), rgba(239,68,68,0.05))',
             border: '1px solid rgba(239,68,68,0.25)',
@@ -163,6 +171,63 @@ export default function AdminDashboard() {
             <Link href={`/admin/projects/${activeWebinar.project_id}/webinars/${activeWebinar.id}/live`} className="btn btn-primary btn-sm">
               Control Room
             </Link>
+          </div>
+        )}
+
+        {activeWebinars.length > 1 && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(239,68,68,0.14), rgba(99,102,241,0.08))',
+            border: '1px solid rgba(239,68,68,0.22)',
+            borderRadius: 14,
+            padding: 16,
+            marginBottom: 18,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ color: '#fca5a5', fontSize: 11, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  {stats.webinarsActive} webinars ativos agora
+                </div>
+                <h2 style={{ color: 'var(--text-primary)', fontSize: 16, fontWeight: 800, marginTop: 3 }}>
+                  Lives acontecendo em paralelo
+                </h2>
+              </div>
+              {stats.webinarsActive > activeWebinars.length && (
+                <Link href="/admin/projects" className="btn btn-ghost btn-sm">
+                  Ver todos
+                </Link>
+              )}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+              {activeWebinars.map((webinar) => (
+                <div
+                  key={webinar.id}
+                  style={{
+                    background: 'rgba(255,255,255,0.04)',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    borderRadius: 11,
+                    padding: 12,
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 10px rgba(239,68,68,0.8)', flexShrink: 0 }} />
+                    <strong style={{ color: 'var(--text-primary)', fontSize: 13, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {webinar.name}
+                    </strong>
+                  </div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 11, marginBottom: 10, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {webinar.webi_projects?.name || 'Projeto'} - /w/{webinar.slug}
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                    <Link href={`/admin/projects/${webinar.project_id}/webinars/${webinar.id}/live`} className="btn btn-primary btn-sm">
+                      Control Room
+                    </Link>
+                    <Link href={`/admin/projects/${webinar.project_id}/webinars/${webinar.id}/analytics`} className="btn btn-ghost btn-sm">
+                      Analytics
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
         {/* Stat Cards */}

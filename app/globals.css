@@ -320,6 +320,13 @@ input, textarea, select { font-family: inherit; }
   margin: 12px 4px 4px;
 }
 
+.active-webinars-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
 .active-webinar-card {
   background: var(--bg-elevated);
   border: 1px solid rgba(239, 68, 68, 0.22);
@@ -349,11 +356,16 @@ input, textarea, select { font-family: inherit; }
 }
 
 .active-webinar-title {
+  display: block;
   color: var(--text-primary);
   font-size: 12px;
   line-height: 1.35;
   font-weight: 700;
   margin-bottom: 10px;
+}
+
+.active-webinar-title:hover {
+  color: var(--brand-light);
 }
 
 .active-webinar-actions {
@@ -371,6 +383,17 @@ input, textarea, select { font-family: inherit; }
   font-weight: 700;
   text-align: center;
   padding: 6px 7px;
+}
+
+.active-webinars-more {
+  color: var(--brand-light);
+  font-size: 11px;
+  font-weight: 800;
+  padding: 6px 8px;
+  text-align: center;
+  border-radius: 7px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.18);
 }
 
 .admin-topbar {

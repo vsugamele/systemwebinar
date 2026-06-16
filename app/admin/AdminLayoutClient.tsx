@@ -28,7 +28,7 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
   const supabase = useMemo(() => createClient(), [])
   const [userEmail, setUserEmail] = useState('')
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [activeWebinar, setActiveWebinar] = useState<ActiveWebinarContext | null>(null)
+  const [activeWebinars, setActiveWebinars] = useState<ActiveWebinarContext[]>([])
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
@@ -39,9 +39,8 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
       .select('id, project_id, name, slug, status')
       .eq('status', 'active')
       .order('updated_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => setActiveWebinar((data as ActiveWebinarContext | null) || null))
+      .limit(4)
+      .then(({ data }) => setActiveWebinars((data as ActiveWebinarContext[]) || []))
   }, [supabase])
 
   // Close mobile menu on route change
@@ -59,9 +58,15 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
     return pathname.startsWith(href)
   }
 
-  const webinarBase = activeWebinar
-    ? `/admin/projects/${activeWebinar.project_id}/webinars/${activeWebinar.id}`
+  const routeWebinarMatch = pathname.match(/^\/admin\/projects\/([^/]+)\/webinars\/([^/]+)/)
+  const routeWebinarBase = routeWebinarMatch
+    ? `/admin/projects/${routeWebinarMatch[1]}/webinars/${routeWebinarMatch[2]}`
     : null
+  const primaryActive = activeWebinars[0] || null
+  const fallbackWebinarBase = primaryActive
+    ? `/admin/projects/${primaryActive.project_id}/webinars/${primaryActive.id}`
+    : null
+  const webinarBase = routeWebinarBase || fallbackWebinarBase
 
   const quickTabs = [
     { href: '/admin', label: 'Dashboard', exact: true },
@@ -107,25 +112,37 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
             </Link>
           ))}
 
-          {activeWebinar && webinarBase && (
+          {activeWebinars.length > 0 && (
             <>
               <div className="nav-divider" />
-              <span className="nav-section-label">Webinar Ativo</span>
-              <div className="active-webinar-card">
-                <div className="active-webinar-live">
-                  <span className="active-webinar-dot" />
-                  Ao vivo
-                </div>
-                <div className="active-webinar-title">{activeWebinar.name}</div>
-                <div className="active-webinar-actions">
-                  <Link href={`${webinarBase}/live`}>Control Room</Link>
-                  <Link href={`${webinarBase}/analytics`}>Analytics</Link>
-                </div>
+              <span className="nav-section-label">Webinars Ativos</span>
+              <div className="active-webinars-list">
+                {activeWebinars.map((webinar) => {
+                  const base = `/admin/projects/${webinar.project_id}/webinars/${webinar.id}`
+                  return (
+                    <div className="active-webinar-card" key={webinar.id}>
+                      <div className="active-webinar-live">
+                        <span className="active-webinar-dot" />
+                        Ao vivo
+                      </div>
+                      <Link href={base} className="active-webinar-title">{webinar.name}</Link>
+                      <div className="active-webinar-actions">
+                        <Link href={`${base}/live`}>Control Room</Link>
+                        <Link href={`${base}/analytics`}>Analytics</Link>
+                      </div>
+                    </div>
+                  )
+                })}
+                {activeWebinars.length >= 4 && (
+                  <Link href="/admin/projects" className="active-webinars-more">Ver todos ativos</Link>
+                )}
               </div>
-              <Link href={webinarBase} className={`nav-item ${pathname === webinarBase ? 'active' : ''}`}>
-                <span className="nav-item-icon">🧭</span>
-                Hub do Webinar
-              </Link>
+              {webinarBase && (
+                <Link href={webinarBase} className={`nav-item ${pathname === webinarBase ? 'active' : ''}`}>
+                  <span className="nav-item-icon">🧭</span>
+                  Hub do Webinar
+                </Link>
+              )}
             </>
           )}
         </nav>
