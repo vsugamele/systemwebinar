@@ -237,7 +237,20 @@ export function SidebarWebinar({ projectId, webinarId }: { projectId: string; we
             value={projectId}
             onChange={(e) => {
               const newPid = e.target.value
-              router.push(`/admin/projects/${newPid}/webinars`)
+              const supabase = createClient()
+              supabase.from('webi_webinars')
+                .select('id')
+                .eq('project_id', newPid)
+                .order('name')
+                .limit(1)
+                .then(({ data }) => {
+                  const subPath = pathname.split(`/webinars/${webinarId}`)[1] || ''
+                  if (data && data.length > 0) {
+                    router.push(`/admin/projects/${newPid}/webinars/${data[0].id}${subPath}`)
+                  } else {
+                    router.push(`/admin/projects/${newPid}/webinars`)
+                  }
+                })
             }}
             style={{
               width: '100%',
