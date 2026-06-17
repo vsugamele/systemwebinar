@@ -16,6 +16,10 @@ interface WebinarData {
   yt_channel_avatar_url: string | null
   yt_comments_enabled: boolean
   language: string
+  fake_viewers_start?: number | null
+  fake_viewers_peak?: number | null
+  fake_viewers_end?: number | null
+  fake_viewers_peak_at_pct?: number | null
 }
 
 const THEMES = [
@@ -58,12 +62,16 @@ export default function AppearancePage() {
   const [ytAvatar, setYtAvatar] = useState('')
   const [ytCommentsEnabled, setYtCommentsEnabled] = useState(true)
   const [language, setLanguage] = useState('pt')
+  const [fakeViewersStart, setFakeViewersStart] = useState<number>(50)
+  const [fakeViewersPeak, setFakeViewersPeak] = useState<number>(500)
+  const [fakeViewersEnd, setFakeViewersEnd] = useState<number>(150)
+  const [fakeViewersPeakAtPct, setFakeViewersPeakAtPct] = useState<number>(30)
 
   useEffect(() => {
     async function load() {
       const { data: w } = await supabase
         .from('webi_webinars')
-        .select('id, name, theme, video_orientation, custom_background_url, yt_subscriber_count, yt_channel_avatar_url, yt_comments_enabled, language')
+        .select('id, name, theme, video_orientation, custom_background_url, yt_subscriber_count, yt_channel_avatar_url, yt_comments_enabled, language, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct')
         .eq('id', wid)
         .single()
       if (w) {
@@ -75,6 +83,10 @@ export default function AppearancePage() {
         setYtAvatar(w.yt_channel_avatar_url || '')
         setYtCommentsEnabled(w.yt_comments_enabled !== false)
         setLanguage(w.language || 'pt')
+        setFakeViewersStart(w.fake_viewers_start ?? 50)
+        setFakeViewersPeak(w.fake_viewers_peak ?? 500)
+        setFakeViewersEnd(w.fake_viewers_end ?? 150)
+        setFakeViewersPeakAtPct(w.fake_viewers_peak_at_pct ?? 30)
       }
       setLoading(false)
     }
@@ -114,6 +126,10 @@ export default function AppearancePage() {
           yt_channel_avatar_url: ytAvatar || null,
           yt_comments_enabled: ytCommentsEnabled,
           language,
+          fake_viewers_start: fakeViewersStart,
+          fake_viewers_peak: fakeViewersPeak,
+          fake_viewers_end: fakeViewersEnd,
+          fake_viewers_peak_at_pct: fakeViewersPeakAtPct,
         })
         .eq('id', wid)
 
@@ -323,6 +339,197 @@ export default function AppearancePage() {
             <option value="en">Inglês (EN)</option>
             <option value="es">Espanhol (ES)</option>
           </select>
+        </div>
+
+        <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '10px 0' }} />
+
+        {/* CURVA DE AUDIÊNCIA SIMULADA */}
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>📈 Curva de Audiência Simulada</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+            Configure o comportamento dos espectadores simulados ao longo do vídeo para simular picos e quedas de forma natural.
+          </div>
+
+          {/* Preset Buttons */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12, marginBottom: 20 }}>
+            <button
+              type="button"
+              onClick={() => {
+                setFakeViewersStart(12)
+                setFakeViewersPeak(45)
+                setFakeViewersEnd(18)
+                setFakeViewersPeakAtPct(35)
+                toast.success('Preset Pequeno (Validação) aplicado!')
+              }}
+              style={{
+                background: 'rgba(34, 197, 94, 0.08)',
+                border: '1px solid rgba(34, 197, 94, 0.2)',
+                borderRadius: 12,
+                padding: '12px 16px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.2s',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(34, 197, 94, 0.15)'
+                e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.4)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(34, 197, 94, 0.08)'
+                e.currentTarget.style.borderColor = 'rgba(34, 197, 94, 0.2)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#4ade80', fontSize: 14 }}>
+                <span>🟢</span> Pequeno (Validação)
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                Pico de 40 a 70 pessoas. Perfeito para salas iniciais ou validação.
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, display: 'flex', gap: 8 }}>
+                <span>Início: 12</span>
+                <span>Pico: 45</span>
+                <span>Fim: 18</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setFakeViewersStart(75)
+                setFakeViewersPeak(320)
+                setFakeViewersEnd(90)
+                setFakeViewersPeakAtPct(30)
+                toast.success('Preset Médio (Escala) aplicado!')
+              }}
+              style={{
+                background: 'rgba(234, 179, 8, 0.08)',
+                border: '1px solid rgba(234, 179, 8, 0.2)',
+                borderRadius: 12,
+                padding: '12px 16px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.2s',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(234, 179, 8, 0.15)'
+                e.currentTarget.style.borderColor = 'rgba(234, 179, 8, 0.4)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(234, 179, 8, 0.08)'
+                e.currentTarget.style.borderColor = 'rgba(234, 179, 8, 0.2)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#facc15', fontSize: 14 }}>
+                <span>🟡</span> Médio (Escala)
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                Pico de 250 a 450 pessoas. Ideal para campanhas ativas.
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, display: 'flex', gap: 8 }}>
+                <span>Início: 75</span>
+                <span>Pico: 320</span>
+                <span>Fim: 90</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setFakeViewersStart(450)
+                setFakeViewersPeak(2400)
+                setFakeViewersEnd(620)
+                setFakeViewersPeakAtPct(25)
+                toast.success('Preset Mega Lançamento aplicado!')
+              }}
+              style={{
+                background: 'rgba(239, 68, 68, 0.08)',
+                border: '1px solid rgba(239, 68, 68, 0.2)',
+                borderRadius: 12,
+                padding: '12px 16px',
+                cursor: 'pointer',
+                textAlign: 'left',
+                transition: 'all 0.2s',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 4
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.15)'
+                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.08)'
+                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.2)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#f87171', fontSize: 14 }}>
+                <span>🔴</span> Mega Lançamento
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                Pico de 1.500 a 3.000 pessoas. Curvas e quedas orgânicas.
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, display: 'flex', gap: 8 }}>
+                <span>Início: 450</span>
+                <span>Pico: 2400</span>
+                <span>Fim: 620</span>
+              </div>
+            </button>
+          </div>
+
+          {/* Individual Inputs Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, background: 'var(--bg-elevated)', padding: 16, borderRadius: 12, border: '1px solid var(--border)' }}>
+            <div>
+              <label className="form-label" style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>Espectadores Iniciais</label>
+              <input
+                type="number"
+                className="form-input"
+                min={0}
+                value={fakeViewersStart}
+                onChange={e => setFakeViewersStart(Math.max(0, parseInt(e.target.value) || 0))}
+              />
+            </div>
+            <div>
+              <label className="form-label" style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>Espectadores de Pico</label>
+              <input
+                type="number"
+                className="form-input"
+                min={0}
+                value={fakeViewersPeak}
+                onChange={e => setFakeViewersPeak(Math.max(0, parseInt(e.target.value) || 0))}
+              />
+            </div>
+            <div>
+              <label className="form-label" style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>Espectadores Finais</label>
+              <input
+                type="number"
+                className="form-input"
+                min={0}
+                value={fakeViewersEnd}
+                onChange={e => setFakeViewersEnd(Math.max(0, parseInt(e.target.value) || 0))}
+              />
+            </div>
+            <div>
+              <label className="form-label" style={{ fontWeight: 600, fontSize: 12, marginBottom: 6, display: 'block' }}>Pico aos % do Vídeo</label>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input
+                  type="number"
+                  className="form-input"
+                  min={0}
+                  max={100}
+                  style={{ paddingRight: 28 }}
+                  value={fakeViewersPeakAtPct}
+                  onChange={e => setFakeViewersPeakAtPct(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                />
+                <span style={{ position: 'absolute', right: 10, color: 'var(--text-muted)', fontSize: 12 }}>%</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         {/* YOUTUBE CUSTOM FIELDS (Only shown if theme is 'youtube') */}
