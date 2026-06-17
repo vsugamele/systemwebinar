@@ -215,12 +215,14 @@ export default async function WebinarPage({
   const effectiveStart = computeEffectiveStart(webinar)
 
   // Determine if the session is currently running (not ended)
+  // eslint-disable-next-line react-hooks/purity
   const isSessionRunning = effectiveStart
     ? (Date.now() - new Date(effectiveStart).getTime()) / 1000 < (webinar.duration_seconds || 3600)
     : false
 
   // Compute countdown server-side so WebinarRoom gets the correct initial value
   // without needing Date.now() on the client (which causes SSR/hydration flash)
+  // eslint-disable-next-line react-hooks/purity
   const initialCountdownSeconds = nextScheduledStart
     ? Math.max(0, Math.ceil((new Date(nextScheduledStart).getTime() - Date.now()) / 1000))
     : 0
