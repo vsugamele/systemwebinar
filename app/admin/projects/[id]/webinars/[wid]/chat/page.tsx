@@ -627,6 +627,7 @@ export default function ChatConfigPage() {
   const [aiEnabled, setAiEnabled] = useState(false)
   const [aiModel, setAiModel] = useState('google/gemini-flash-1.5')
   const [aiKnowledgeBase, setAiKnowledgeBase] = useState('')
+  const [videoTranscript, setVideoTranscript] = useState('')
   const [aiSystemPrompt, setAiSystemPrompt] = useState('')
   const [aiPersonaName, setAiPersonaName] = useState('')
   const [aiPersonaAvatar, setAiPersonaAvatar] = useState('')
@@ -702,7 +703,8 @@ export default function ChatConfigPage() {
             ai_enabled: aiEnabled,
             ai_model: aiModel,
             ai_knowledge_base: aiKnowledgeBase,
-            ai_system_prompt: aiSystemPrompt
+            ai_system_prompt: aiSystemPrompt,
+            video_transcript: videoTranscript
           }
         })
       })
@@ -773,7 +775,7 @@ export default function ChatConfigPage() {
       const [{ data }, { data: project }] = await Promise.all([
         supabase
           .from('webi_webinars')
-          .select('name, chat_cpm, chat_names, chat_default_tab, chat_mode, chat_interval_minutes, chat_interval_messages, chat_start_seconds, chat_end_seconds, chat_phrases, chat_phrases_elogios, chat_phrases_vaga, chat_phrases_engajamento, chat_segments, ai_enabled, ai_model, ai_knowledge_base, ai_system_prompt, ai_persona_name, ai_persona_avatar, bad_words_filter, disable_qa')
+          .select('name, chat_cpm, chat_names, chat_default_tab, chat_mode, chat_interval_minutes, chat_interval_messages, chat_start_seconds, chat_end_seconds, chat_phrases, chat_phrases_elogios, chat_phrases_vaga, chat_phrases_engajamento, chat_segments, ai_enabled, ai_model, ai_knowledge_base, ai_system_prompt, ai_persona_name, ai_persona_avatar, bad_words_filter, disable_qa, video_transcript')
           .eq('id', webinarId)
           .single(),
         supabase.from('webi_projects').select('openrouter_api_key').eq('id', projectId).single(),
@@ -811,6 +813,7 @@ export default function ChatConfigPage() {
         setAiEnabled(data.ai_enabled || false)
         setAiModel(data.ai_model || 'google/gemini-flash-1.5')
         setAiKnowledgeBase(data.ai_knowledge_base || '')
+        setVideoTranscript(data.video_transcript || '')
         setAiSystemPrompt(data.ai_system_prompt || '')
         setAiPersonaName((data as Record<string, unknown>).ai_persona_name as string || '')
         setAiPersonaAvatar((data as Record<string, unknown>).ai_persona_avatar as string || '')
@@ -843,6 +846,7 @@ export default function ChatConfigPage() {
         ai_enabled: aiEnabled,
         ai_model: aiModel,
         ai_knowledge_base: aiKnowledgeBase,
+        video_transcript: videoTranscript,
         ai_system_prompt: aiSystemPrompt,
         ai_persona_name: aiPersonaName,
         ai_persona_avatar: aiPersonaAvatar,
@@ -1636,6 +1640,14 @@ export default function ChatConfigPage() {
              Crie o &quot;Cérebro Comercial&quot; da Inteligência Artificial. Forneça o que ela precisa para vender: Promessa Forte, Preços (Pix/Cartão), tempo de Garantia (7 ou 30 dias?), e as 5 perguntas que mais matam suas vendas. Quando o lead disser <em>&quot;Acesso é de um ano?&quot;</em>, a IA lerá esse guia e responderá cirurgicamente focada em conversão.
           </div>
           <textarea className="form-input" rows={8} placeholder="PRODUTO: Formação Y&#10;PREÇO: R$ 997,00 à vista no Pix, ou 12x de R$ 97 no Cartão&#10;DÚVIDA 1: Divide no boleto? Resposta: Infelizmente não! Apenas cartão 12x!..." value={aiKnowledgeBase} onChange={e => setAiKnowledgeBase(e.target.value)} style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: 13 }} />
+        </div>
+
+        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, opacity: aiEnabled ? 1 : 0.5, pointerEvents: aiEnabled ? 'auto' : 'none' }}>
+          <div style={{ fontWeight: 700, marginBottom: 4 }}>Roteiro do Vídeo (Transcrição / Script)</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12, lineHeight: 1.5 }}>
+            Cole o roteiro completo ou a transcrição do vídeo do expert. A Inteligência Artificial lerá o roteiro para entender o que está sendo dito e explicado no vídeo, permitindo contextualizar as respostas e dar suporte de forma precisa e natural.
+          </div>
+          <textarea className="form-input" rows={8} placeholder="Cole aqui o roteiro ou a transcrição gerada pelo YouTube/Descript do vídeo do expert..." value={videoTranscript} onChange={e => setVideoTranscript(e.target.value)} style={{ resize: 'vertical', fontFamily: 'monospace', fontSize: 13 }} />
         </div>
 
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, opacity: aiEnabled ? 1 : 0.5, pointerEvents: aiEnabled ? 'auto' : 'none' }}>

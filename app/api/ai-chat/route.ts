@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     // Get webinar AI config + project openrouter key
     const { data: webinar } = await supabase
       .from('webi_webinars')
-      .select('name, ai_enabled, ai_model, ai_knowledge_base, ai_system_prompt, project_id')
+      .select('name, ai_enabled, ai_model, ai_knowledge_base, ai_system_prompt, project_id, video_transcript')
       .eq('id', webinar_id)
       .single()
 
@@ -53,14 +53,19 @@ export async function POST(req: NextRequest) {
 
     const model = overrides?.ai_model || webinar?.ai_model || 'google/gemini-flash-1.5'
     const knowledgeBase = overrides?.ai_knowledge_base !== undefined ? overrides.ai_knowledge_base : (webinar?.ai_knowledge_base || '')
+    const transcript = overrides?.video_transcript !== undefined ? overrides.video_transcript : (webinar?.video_transcript || '')
     
     let systemPrompt = (overrides?.ai_system_prompt !== undefined ? overrides.ai_system_prompt : webinar?.ai_system_prompt) ||
       `Você é um assistente inteligente do webinar "${webinar?.name || 'Webinar'}". 
 Responda dúvidas dos participantes de forma concisa, simpática e direta (máximo 2-3 frases).
-Baseie suas respostas nas informações do produto/conteúdo abaixo. Se não souber, diga "Boa pergunta! Fiquem atentos que o apresentador vai abordar isso!" e não invente informações.`
+Baseie suas respostas nas informações do produto/conteúdo e no roteiro do vídeo abaixo. Se não souber, diga "Boa pergunta! Fiquem atentos que o apresentador vai abordar isso!" e não invente informações.`
 
     if (knowledgeBase) {
       systemPrompt += `\n\nINFORMAÇÕES DO PRODUTO/WEBINAR:\n${knowledgeBase}`
+    }
+
+    if (transcript) {
+      systemPrompt += `\n\nROTEIRO/TRANSCRIÇÃO DO VÍDEO DO EXPERT:\n${transcript}`
     }
 
     let historyMessages: { role: 'user' | 'assistant'; content: string }[] = []

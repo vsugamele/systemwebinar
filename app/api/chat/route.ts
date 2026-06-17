@@ -91,7 +91,7 @@ async function respondWithAI(webinarId: string, userSessionId: string, questionT
     // 1. Fetch webinar configuration
     const { data: webinar } = await supabase
       .from('webi_webinars')
-      .select('name, ai_enabled, ai_persona_name, ai_persona_avatar, ai_model, ai_knowledge_base, ai_system_prompt, project_id')
+      .select('name, ai_enabled, ai_persona_name, ai_persona_avatar, ai_model, ai_knowledge_base, ai_system_prompt, project_id, video_transcript')
       .eq('id', webinarId)
       .single()
 
@@ -110,14 +110,19 @@ async function respondWithAI(webinarId: string, userSessionId: string, questionT
     // 3. Prepare AI system prompt and model
     const model = webinar.ai_model || 'google/gemini-flash-1.5'
     const knowledgeBase = webinar.ai_knowledge_base || ''
+    const transcript = webinar.video_transcript || ''
     
     let systemPrompt = webinar.ai_system_prompt ||
       `Você é um assistente inteligente do webinar "${webinar.name}". 
 Responda dúvidas dos participantes de forma concisa, simpática e direta (máximo 2-3 frases).
-Baseie suas respostas nas informações do produto/conteúdo abaixo. Se não souber, diga "Boa pergunta! Fiquem atentos que o apresentador vai abordar isso!" e não invente informações.`
+Baseie suas respostas nas informações do produto/conteúdo e no roteiro do vídeo abaixo. Se não souber, diga "Boa pergunta! Fiquem atentos que o apresentador vai abordar isso!" e não invente informações.`
 
     if (knowledgeBase) {
       systemPrompt += `\n\nINFORMAÇÕES DO PRODUTO/WEBINAR:\n${knowledgeBase}`
+    }
+
+    if (transcript) {
+      systemPrompt += `\n\nROTEIRO/TRANSCRIÇÃO DO VÍDEO DO EXPERT:\n${transcript}`
     }
 
     // 4. Fetch the last 10 messages from the database matching the user's session for context

@@ -88,6 +88,7 @@ export interface Webinar {
   landing_headline?: string | null
   landing_subheadline?: string | null
   landing_button_text?: string | null
+  video_transcript?: string | null
 }
 
 // ---- Event Payloads ----

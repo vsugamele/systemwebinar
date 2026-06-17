@@ -57,7 +57,7 @@ export function useWebinarHealth(webinarId: string): WebinarHealth {
           .from('webi_events')
           .select('id', { count: 'exact', head: true })
           .eq('webinar_id', webinarId)
-          .neq('event_type', 'chat_message'),
+          .neq('type', 'chat_message'),
         // Materials
         supabase
           .from('webi_materials')
@@ -73,7 +73,7 @@ export function useWebinarHealth(webinarId: string): WebinarHealth {
           .from('webi_events')
           .select('id', { count: 'exact', head: true })
           .eq('webinar_id', webinarId)
-          .eq('event_type', 'quiz_question'),
+          .eq('type', 'quiz_question'),
       ])
 
       if (cancelled) return
