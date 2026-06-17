@@ -1374,28 +1374,119 @@ tbody tr:hover td { background: var(--bg-hover); }
   border-top: 1px solid #303030;
 }
 
+.yt-mobile-tabs {
+  display: none;
+}
+
 /* Responsive adjustments for YouTube theme */
 @media (max-width: 1024px) {
   .webinar-page-wrapper[data-theme="youtube"] {
-    overflow-y: auto;
-    height: auto;
+    height: var(--app-height, 100dvh) !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    padding-top: 56px !important;
+    box-sizing: border-box !important;
   }
   
+  .webinar-page-wrapper[data-theme="youtube"] .yt-header {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px !important;
+    z-index: 200 !important;
+    border-bottom: 1px solid #303030;
+  }
+
   .webinar-page-wrapper[data-theme="youtube"] .webinar-room {
-    grid-template-columns: 1fr;
-    height: auto;
-    overflow: visible;
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    overflow: hidden !important;
+    grid-template-columns: unset !important;
+    grid-template-rows: unset !important;
   }
   
   .webinar-page-wrapper[data-theme="youtube"] .video-section {
-    height: auto;
-    overflow-y: visible;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 0 0 auto !important;
+    overflow: hidden !important;
+    position: relative !important;
+    height: auto !important;
+  }
+
+  .webinar-page-wrapper[data-theme="youtube"] .video-section.info-active {
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+  }
+
+  .webinar-page-wrapper[data-theme="youtube"] .video-wrapper {
+    width: 100% !important;
+    aspect-ratio: 16 / 9 !important;
+    height: auto !important;
+    flex: 0 0 auto !important;
+    overflow: hidden !important;
+    position: relative !important;
+  }
+
+  .yt-mobile-tabs {
+    display: flex !important;
+    background: #0f0f0f;
+    border-bottom: 1px solid #303030;
+    height: 44px;
+    align-items: stretch;
+    flex-shrink: 0;
   }
   
+  .yt-mobile-tab-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+  }
+  
+  .yt-mobile-tab-btn.active {
+    color: #fff;
+    border-bottom-color: #ff0000;
+  }
+  
+  .webinar-page-wrapper[data-theme="youtube"] .yt-video-details-container.mobile-hidden {
+    display: none !important;
+  }
+
+  .webinar-page-wrapper[data-theme="youtube"] .yt-video-details-container.mobile-visible {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    background: #0f0f0f !important;
+    padding: 12px 16px !important;
+  }
+
   .webinar-page-wrapper[data-theme="youtube"] .chat-section {
-    height: 480px;
-    border-left: none;
-    border-top: 1px solid #303030;
+    flex: 1 1 0 !important;
+    min-height: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    border-left: none !important;
+    border-top: none !important;
+    height: 100% !important;
+  }
+
+  .webinar-page-wrapper[data-theme="youtube"] .chat-section.mobile-hidden {
+    display: none !important;
   }
   
   .yt-video-details-container {
@@ -1408,6 +1499,56 @@ tbody tr:hover td { background: var(--bg-hover); }
   
   .yt-channel-actions-row {
     margin-bottom: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .yt-channel-left {
+    width: 100%;
+    justify-content: space-between;
+    align-items: center;
+  }
+  
+  .yt-btn-member {
+    display: none !important;
+  }
+  
+  .yt-channel-info {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .yt-channel-name {
+    min-width: 0;
+  }
+
+  .yt-channel-name span {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+  
+  .yt-actions-right {
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+    padding-bottom: 6px;
+    gap: 8px;
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  
+  .yt-actions-right::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .yt-actions-right > *, .yt-action-btn {
+    flex-shrink: 0;
   }
 }
 

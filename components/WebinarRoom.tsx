@@ -386,7 +386,7 @@ export const DEFAULT_NAMES = [
 
 const YouTubeHeader = ({ userName }: { userName: string }) => {
   return (
-    <header style={{
+    <header className="yt-header" style={{
       height: 56,
       background: '#0f0f0f',
       display: 'flex',
@@ -439,7 +439,7 @@ const YouTubeHeader = ({ userName }: { userName: string }) => {
 
       {/* Right: Actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 8, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Criar" disabled>
+        <button className="hidden-mobile" style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 8, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Criar" disabled>
           <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
             <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4zM14 13h-3v3H9v-3H6v-2h3V8h2v3h3v2z" />
           </svg>
@@ -594,6 +594,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   const [mobileChatOpen, setMobileChatOpen] = useState(false)
   const [userName, setUserName] = useState('Você')
+  const [activeMobileTab, setActiveMobileTab] = useState<'chat' | 'info'>('chat')
 
   // Set User Name for chat from localStorage OR test mode OR guest mode
   useEffect(() => {
@@ -2647,7 +2648,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         {webinar.theme === 'youtube' && <YouTubeHeader userName={userName} />}
         <div className="webinar-room">
       {/* VIDEO SECTION */}
-      <div className="video-section" ref={sectionRef}>
+      <div className={`video-section ${webinar.theme === 'youtube' && activeMobileTab === 'info' ? 'info-active' : ''}`} ref={sectionRef}>
         {webinar.theme !== 'youtube' && (
         <div className="video-header">
           <div className="webinar-title-bar">
@@ -3111,9 +3112,27 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           )}
         </div>
 
+        {/* YOUTUBE THEME: MOBILE TABS */}
+        {webinar.theme === 'youtube' && (
+          <div className="yt-mobile-tabs">
+            <button 
+              className={`yt-mobile-tab-btn ${activeMobileTab === 'chat' ? 'active' : ''}`}
+              onClick={() => setActiveMobileTab('chat')}
+            >
+              💬 Chat ao Vivo
+            </button>
+            <button 
+              className={`yt-mobile-tab-btn ${activeMobileTab === 'info' ? 'active' : ''}`}
+              onClick={() => setActiveMobileTab('info')}
+            >
+              ℹ️ Detalhes
+            </button>
+          </div>
+        )}
+
         {/* YOUTUBE THEME: VIDEO DETAILS */}
         {webinar.theme === 'youtube' && (
-          <div className="yt-video-details-container">
+          <div className={`yt-video-details-container ${activeMobileTab === 'chat' ? 'mobile-hidden' : 'mobile-visible'}`}>
             <h1 className="yt-video-title">
               {webinar.display_name || webinar.name}
             </h1>
@@ -3289,6 +3308,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         theme={webinar.theme}
         userName={userName}
         disableQa={!!webinar.disable_qa}
+        className={webinar.theme === 'youtube' && activeMobileTab !== 'chat' ? 'mobile-hidden' : ''}
       />
       {/* Mobile landscape chat toggle button */}
       <button

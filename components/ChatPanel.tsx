@@ -321,6 +321,7 @@ interface ChatPanelProps {
   theme?: 'dark' | 'light' | 'youtube'
   userName?: string
   disableQa?: boolean
+  className?: string
 }
 
 function formatYtHandle(name: string): string {
@@ -357,6 +358,7 @@ export default function ChatPanel({
   theme,
   userName = 'Você',
   disableQa = false,
+  className = '',
 }: ChatPanelProps) {
   const [chatTab, setChatTab] = useState<ChatTab>(defaultTab)
   const [chatInput, setChatInput] = useState('')
@@ -388,7 +390,7 @@ export default function ChatPanel({
   }
 
   return (
-    <div className={`chat-section${mobileChatOpen ? ' mobile-chat-open' : ''}`}>
+    <div className={`chat-section ${className} ${mobileChatOpen ? ' mobile-chat-open' : ''}`}>
       {/* YT CHAT HEADER */}
       {theme === 'youtube' && (
         <div style={{
