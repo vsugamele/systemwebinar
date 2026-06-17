@@ -12,6 +12,10 @@ interface WebinarData {
   theme: 'dark' | 'light' | 'youtube'
   video_orientation: 'horizontal' | 'vertical'
   custom_background_url: string | null
+  yt_subscriber_count: string | null
+  yt_channel_avatar_url: string | null
+  yt_comments_enabled: boolean
+  language: string
 }
 
 const THEMES = [
@@ -50,15 +54,27 @@ export default function AppearancePage() {
   const [theme, setTheme] = useState<'dark' | 'light' | 'youtube'>('dark')
   const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>('horizontal')
   const [customBg, setCustomBg] = useState('')
+  const [ytSubCount, setYtSubCount] = useState('')
+  const [ytAvatar, setYtAvatar] = useState('')
+  const [ytCommentsEnabled, setYtCommentsEnabled] = useState(true)
+  const [language, setLanguage] = useState('pt')
 
   useEffect(() => {
     async function load() {
-      const { data: w } = await supabase.from('webi_webinars').select('id, name, theme, video_orientation, custom_background_url').eq('id', wid).single()
+      const { data: w } = await supabase
+        .from('webi_webinars')
+        .select('id, name, theme, video_orientation, custom_background_url, yt_subscriber_count, yt_channel_avatar_url, yt_comments_enabled, language')
+        .eq('id', wid)
+        .single()
       if (w) {
         setWebinar(w as WebinarData)
         setTheme(w.theme || 'dark')
         setOrientation(w.video_orientation || 'horizontal')
         setCustomBg(w.custom_background_url || '')
+        setYtSubCount(w.yt_subscriber_count || '')
+        setYtAvatar(w.yt_channel_avatar_url || '')
+        setYtCommentsEnabled(w.yt_comments_enabled !== false)
+        setLanguage(w.language || 'pt')
       }
       setLoading(false)
     }
@@ -94,6 +110,10 @@ export default function AppearancePage() {
           theme,
           video_orientation: orientation,
           custom_background_url: customBg || null,
+          yt_subscriber_count: ytSubCount || null,
+          yt_channel_avatar_url: ytAvatar || null,
+          yt_comments_enabled: ytCommentsEnabled,
+          language,
         })
         .eq('id', wid)
 
@@ -284,6 +304,74 @@ export default function AppearancePage() {
             </button>
           </div>
         </div>
+
+        <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '10px 0' }} />
+
+        {/* IDIOMA PADRÃO */}
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>🌐 Idioma da Sala</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+            Defina o idioma principal da interface do participante (botões, enquetes, chat e contadores).
+          </div>
+          <select
+            className="form-input"
+            style={{ maxWidth: 300 }}
+            value={language}
+            onChange={e => setLanguage(e.target.value)}
+          >
+            <option value="pt">Português (PT)</option>
+            <option value="en">Inglês (EN)</option>
+            <option value="es">Espanhol (ES)</option>
+          </select>
+        </div>
+
+        {/* YOUTUBE CUSTOM FIELDS (Only shown if theme is 'youtube') */}
+        {theme === 'youtube' && (
+          <>
+            <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '10px 0' }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--brand-light)' }}>📺 Configurações do Tema YouTube</div>
+              
+              {/* Canal Avatar e Inscritos */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, display: 'block' }}>Foto de Perfil do Canal (Avatar URL)</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={ytAvatar}
+                    onChange={e => setYtAvatar(e.target.value)}
+                    placeholder="https://link-da-imagem.com/avatar.jpg"
+                  />
+                </div>
+                <div>
+                  <label className="form-label" style={{ fontWeight: 600, fontSize: 13, marginBottom: 6, display: 'block' }}>Quantidade de Inscritos do Canal</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={ytSubCount}
+                    onChange={e => setYtSubCount(e.target.value)}
+                    placeholder="Ex: 487 mil / 1.2 M"
+                  />
+                </div>
+              </div>
+
+              {/* Ativar/Desativar Comentários */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <input
+                  type="checkbox"
+                  id="yt_comments_enabled"
+                  checked={ytCommentsEnabled}
+                  onChange={e => setYtCommentsEnabled(e.target.checked)}
+                  style={{ width: 16, height: 16, cursor: 'pointer' }}
+                />
+                <label htmlFor="yt_comments_enabled" style={{ fontSize: 13, fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                  Ativar seção de comentários simulados abaixo do vídeo
+                </label>
+              </div>
+            </div>
+          </>
+        )}
 
         {/* SAVE BUTTON */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>

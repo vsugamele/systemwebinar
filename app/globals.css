@@ -1374,6 +1374,162 @@ tbody tr:hover td { background: var(--bg-hover); }
   border-top: 1px solid #303030;
 }
 
+/* YouTube Comments Styling */
+.yt-comments-section {
+  margin-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 24px;
+}
+
+.yt-comments-header {
+  font-size: 20px;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 24px;
+  font-family: "YouTube Sans", "Roboto", sans-serif;
+}
+
+.yt-add-comment-row {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 32px;
+}
+
+.yt-comment-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  font-size: 14px;
+  color: #fff;
+  flex-shrink: 0;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+}
+
+.yt-comment-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #303030;
+  padding: 8px 0;
+  color: #fff;
+  font-size: 14px;
+  outline: none;
+  transition: border-bottom-color 0.2s;
+}
+
+.yt-comment-input:focus {
+  border-bottom: 2px solid #fff;
+}
+
+.yt-comment-input::placeholder {
+  color: #aaa;
+}
+
+.yt-comment-item {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  align-items: flex-start;
+}
+
+.yt-comment-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.yt-comment-pinned-info {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #aaa;
+  margin-bottom: 6px;
+}
+
+.yt-comment-header-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.yt-comment-author-handle {
+  font-size: 13px;
+  font-weight: 500;
+  color: #f1f1f1;
+}
+
+.yt-comment-time {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.yt-comment-text {
+  font-size: 14px;
+  line-height: 1.4;
+  color: #f1f1f1;
+  white-space: pre-wrap;
+}
+
+.yt-comment-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.yt-comment-action-btn {
+  background: transparent;
+  border: none;
+  color: #aaa;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 16px;
+  font-size: 12px;
+}
+
+.yt-comment-action-btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.yt-comment-action-btn svg {
+  fill: currentColor;
+}
+
+.yt-comment-replies-link {
+  background: transparent;
+  border: none;
+  color: #3ea6ff;
+  font-weight: 600;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-radius: 18px;
+  font-size: 14px;
+  margin-top: 4px;
+  width: fit-content;
+}
+
+.yt-comment-replies-link:hover {
+  background: rgba(62, 166, 255, 0.1);
+}
+
+.yt-comment-replies-link span {
+  font-size: 12px;
+}
+
 .yt-mobile-tabs {
   display: none;
 }

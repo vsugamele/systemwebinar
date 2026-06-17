@@ -62,6 +62,60 @@ function parseMarkdownLinks(text: string) {
   return parts.length > 0 ? parts : text
 }
 
+const TRANSLATIONS = {
+  pt: {
+    liveChat: 'Chat ao vivo',
+    chatTab: '💬 Chat',
+    qaTab: '❓ Q&A',
+    materialsTab: '📂 Materiais',
+    sendPlaceholder: 'Enviar mensagem...',
+    qaPlaceholder: 'Faça sua pergunta...',
+    learnMore: 'Saiba mais',
+    pinnedLabel: 'Fixado no topo',
+    writeQuestion: 'Escrever uma pergunta...',
+    firstComment: 'Seja o primeiro a comentar! 👋',
+    liveChatPoll: '📊 Enquete do chat ao vivo',
+    vote: 'Votar',
+    voted: 'Voto computado',
+    voteText: 'voto',
+    votesText: 'votos',
+  },
+  en: {
+    liveChat: 'Live chat',
+    chatTab: '💬 Chat',
+    qaTab: '❓ Q&A',
+    materialsTab: '📂 Materials',
+    sendPlaceholder: 'Send message...',
+    qaPlaceholder: 'Ask a question...',
+    learnMore: 'Learn more',
+    pinnedLabel: 'Pinned',
+    writeQuestion: 'Write a question...',
+    firstComment: 'Be the first to comment! 👋',
+    liveChatPoll: '📊 Live chat poll',
+    vote: 'Vote',
+    voted: 'Vote cast',
+    voteText: 'vote',
+    votesText: 'votes',
+  },
+  es: {
+    liveChat: 'Chat en vivo',
+    chatTab: '💬 Chat',
+    qaTab: '❓ P&R',
+    materialsTab: '📂 Materiales',
+    sendPlaceholder: 'Enviar mensaje...',
+    qaPlaceholder: 'Haz una pregunta...',
+    learnMore: 'Más información',
+    pinnedLabel: 'Fijado',
+    writeQuestion: 'Escribir una pregunta...',
+    firstComment: '¡Sé el primero en comentar! 👋',
+    liveChatPoll: '📊 Encuesta de chat en vivo',
+    vote: 'Votar',
+    voted: 'Voto computado',
+    voteText: 'voto',
+    votesText: 'votos',
+  },
+}
+
 // ---- QuizCard inline component ----
 interface QuizCardProps {
   card: QuizCardData
@@ -69,11 +123,13 @@ interface QuizCardProps {
   voteCounts: number[]
   onVote: (optionIdx: number) => void
   theme?: 'dark' | 'light' | 'youtube'
+  lang?: 'pt' | 'en' | 'es'
 }
 
-function QuizCard({ card, userAnswer, voteCounts, onVote, theme }: QuizCardProps) {
+function QuizCard({ card, userAnswer, voteCounts, onVote, theme, lang = 'pt' }: QuizCardProps) {
   const voted = userAnswer !== null
   const totalVotes = voteCounts.reduce((a, b) => a + b, 0)
+  const t = TRANSLATIONS[lang]
 
   if (theme === 'youtube') {
     return (
@@ -89,7 +145,7 @@ function QuizCard({ card, userAnswer, voteCounts, onVote, theme }: QuizCardProps
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 11, color: '#aaaaaa', fontWeight: 600 }}>
           <span>📊</span>
-          <span>Enquete do chat ao vivo</span>
+          <span>{t.liveChatPoll}</span>
         </div>
 
         {/* Question */}
@@ -173,7 +229,7 @@ function QuizCard({ card, userAnswer, voteCounts, onVote, theme }: QuizCardProps
 
         {/* Footer */}
         <div style={{ fontSize: 11, color: '#aaaaaa', marginTop: 10, fontWeight: 500 }}>
-          {totalVotes} {totalVotes === 1 ? 'voto' : 'votos'}
+          {totalVotes} {totalVotes === 1 ? t.voteText : t.votesText}
         </div>
       </div>
     )
@@ -196,7 +252,7 @@ function QuizCard({ card, userAnswer, voteCounts, onVote, theme }: QuizCardProps
         </div>
         {totalVotes > 0 && (
           <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            {totalVotes} respostas
+            {totalVotes} {totalVotes === 1 ? (lang === 'pt' ? 'resposta' : lang === 'es' ? 'respuesta' : 'answer') : (lang === 'pt' ? 'respostas' : lang === 'es' ? 'respuestas' : 'answers')}
           </span>
         )}
       </div>
@@ -322,6 +378,7 @@ interface ChatPanelProps {
   userName?: string
   disableQa?: boolean
   className?: string
+  lang?: 'pt' | 'en' | 'es'
 }
 
 function formatYtHandle(name: string): string {
@@ -359,7 +416,9 @@ export default function ChatPanel({
   userName = 'Você',
   disableQa = false,
   className = '',
+  lang = 'pt',
 }: ChatPanelProps) {
+  const t = TRANSLATIONS[lang]
   const [chatTab, setChatTab] = useState<ChatTab>(defaultTab)
   const [chatInput, setChatInput] = useState('')
   const [qaInput, setQaInput] = useState('')
@@ -402,13 +461,13 @@ export default function ChatPanel({
           background: '#0f0f0f',
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>Chat ao vivo</span>
+            <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{t.liveChat}</span>
             <svg viewBox="0 0 24 24" width="16" height="16" fill="#fff">
               <path d="M12 15.25L6 9.25L7.41 7.84L12 12.43L16.59 7.84L18 9.25L12 15.25Z" />
             </svg>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 11, color: '#aaaaaa' }}>Saiba mais</span>
+            <span style={{ fontSize: 11, color: '#aaaaaa' }}>{t.learnMore}</span>
             <button style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 2 }} disabled>
               <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                 <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
@@ -427,10 +486,10 @@ export default function ChatPanel({
         background: 'var(--bg-card)',
       }}>
         {([
-          { id: 'chat', label: '💬 Chat', count: messages.filter(m => !m.isBroadcast).length },
-          ...(!disableQa ? [{ id: 'qa', label: '❓ Q&A', count: qaMessages.length }] : []),
+          { id: 'chat', label: t.chatTab, count: messages.filter(m => !m.isBroadcast).length },
+          ...(!disableQa ? [{ id: 'qa', label: t.qaTab, count: qaMessages.length }] : []),
           ...(visibleMaterials.length > 0 || materials.length > 0
-            ? [{ id: 'materials', label: '📂 Materiais', count: visibleMaterials.length }]
+            ? [{ id: 'materials', label: t.materialsTab, count: visibleMaterials.length }]
             : []),
         ] as any[]).map(tab => {
           const isActive = chatTab === tab.id;
@@ -456,7 +515,7 @@ export default function ChatPanel({
               }}
             >
               {theme === 'youtube' ? (
-                tab.id === 'chat' ? 'Chat' : tab.id === 'qa' ? 'Q&A' : 'Materiais'
+                tab.id === 'chat' ? (lang === 'pt' ? 'Chat' : lang === 'es' ? 'Chat' : 'Chat') : tab.id === 'qa' ? (lang === 'pt' ? 'Q&A' : lang === 'es' ? 'P&R' : 'Q&A') : (lang === 'pt' ? 'Materiais' : lang === 'es' ? 'Materiales' : 'Materials')
               ) : tab.label}
               {tab.count > 0 && (
                 <span style={{

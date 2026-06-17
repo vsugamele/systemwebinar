@@ -60,6 +60,10 @@ interface WebinarConfig {
   custom_background_url?: string | null
   video_orientation?: 'horizontal' | 'vertical'
   disable_qa?: boolean
+  yt_subscriber_count?: string | null
+  yt_channel_avatar_url?: string | null
+  yt_comments_enabled?: boolean
+  language?: string
 }
 
 const PT_BAD_WORDS = [
@@ -384,7 +388,273 @@ export const DEFAULT_NAMES = [
   'Floripes Correia', 'Godofredo Ramos', 'Preciliana Campos', 'Geraldo Ferreira', 'Geralda Farias',
 ]
 
-const YouTubeHeader = ({ userName }: { userName: string }) => {
+const TRANSLATIONS = {
+  pt: {
+    live: 'AO VIVO',
+    offline: 'OFFLINE',
+    soon: 'EM BREVE',
+    ended: 'ENCERRADO',
+    watching: 'assistindo',
+    liveChat: 'Chat ao vivo',
+    chatTab: '💬 Chat',
+    qaTab: '❓ Q&A',
+    materialsTab: '📂 Materiais',
+    subscribe: 'Inscrever-se',
+    subscribed: 'Inscrito',
+    subscribers: 'de inscritos',
+    watchingNow: 'assistindo agora',
+    streamStarted: 'Transmissão iniciada há',
+    minutesAgo: 'minutos',
+    showMore: '... mais',
+    showLess: 'Mostrar menos',
+    descriptionDefault: 'Assista a esta super transmissão ao vivo e tire todas as suas dúvidas no chat.',
+    chatTabMobile: '💬 Chat ao Vivo',
+    infoTabMobile: 'ℹ️ Detalhes',
+    sendPlaceholder: 'Enviar mensagem...',
+    qaPlaceholder: 'Faça sua pergunta...',
+    quizHeader: '📊 Enquete do chat ao vivo',
+    vote: 'Votar',
+    voted: 'Voto computado',
+    offlineTitle: 'Fora do Ar',
+    offlineDesc: 'Nenhuma transmissão programada nas próximas 12 horas. Volte em breve!',
+    countdownTitle: 'A AULA AO VIVO COMEÇA EM',
+    endedTitle: 'Transmissão Encerrada',
+    endedDesc: 'Obrigado por participar! Fique atento às próximas sessões.',
+    buyNow: 'COMPRAR AGORA',
+    limitedSpots: 'Vagas limitadas',
+    videoNotConfigured: 'Vídeo não configurado para este webinar',
+    unmuteBtn: '🔊 Clique para ativar o som',
+    commentsTitle: 'Comentários',
+    commentsOff: 'Os comentários estão desativados.',
+    replyText: 'Responder',
+    pinnedBy: 'Fixado por',
+    addCommentPlaceholder: 'Adicione um comentário público...',
+  },
+  en: {
+    live: 'LIVE',
+    offline: 'OFFLINE',
+    soon: 'COMING SOON',
+    ended: 'ENDED',
+    watching: 'watching',
+    liveChat: 'Live chat',
+    chatTab: '💬 Chat',
+    qaTab: '❓ Q&A',
+    materialsTab: '📂 Materials',
+    subscribe: 'Subscribe',
+    subscribed: 'Subscribed',
+    subscribers: 'subscribers',
+    watchingNow: 'watching now',
+    streamStarted: 'Started streaming',
+    minutesAgo: 'minutes ago',
+    showMore: '... more',
+    showLess: 'Show less',
+    descriptionDefault: 'Watch this live stream and ask any questions in the chat.',
+    chatTabMobile: '💬 Live Chat',
+    infoTabMobile: 'ℹ️ Details',
+    sendPlaceholder: 'Send message...',
+    qaPlaceholder: 'Ask a question...',
+    quizHeader: '📊 Live chat poll',
+    vote: 'Vote',
+    voted: 'Vote cast',
+    offlineTitle: 'Offline',
+    offlineDesc: 'No stream scheduled in the next 12 hours. Come back soon!',
+    countdownTitle: 'THE LIVE CLASS STARTS IN',
+    endedTitle: 'Broadcast Ended',
+    endedDesc: 'Thank you for participating! Stay tuned for future sessions.',
+    buyNow: 'BUY NOW',
+    limitedSpots: 'Limited spots',
+    videoNotConfigured: 'Video not configured for this webinar',
+    unmuteBtn: '🔊 Click to unmute',
+    commentsTitle: 'Comments',
+    commentsOff: 'Comments are turned off.',
+    replyText: 'Reply',
+    pinnedBy: 'Pinned by',
+    addCommentPlaceholder: 'Add a public comment...',
+  },
+  es: {
+    live: 'EN VIVO',
+    offline: 'DESCONECTADO',
+    soon: 'PRÓXIMAMENTE',
+    ended: 'FINALIZADO',
+    watching: 'espectadores',
+    liveChat: 'Chat en vivo',
+    chatTab: '💬 Chat',
+    qaTab: '❓ P&R',
+    materialsTab: '📂 Materiales',
+    subscribe: 'Suscribirse',
+    subscribed: 'Suscrito',
+    subscribers: 'suscriptores',
+    watchingNow: 'viendo ahora',
+    streamStarted: 'Transmitido hace',
+    minutesAgo: 'minutos',
+    showMore: '... más',
+    showLess: 'Mostrar menos',
+    descriptionDefault: 'Mira esta transmisión en vivo y haz tus preguntas en el chat.',
+    chatTabMobile: '💬 Chat en Vivo',
+    infoTabMobile: 'ℹ️ Detalles',
+    sendPlaceholder: 'Enviar mensaje...',
+    qaPlaceholder: 'Haz una pregunta...',
+    quizHeader: '📊 Encuesta de chat en vivo',
+    vote: 'Votar',
+    voted: 'Voto computado',
+    offlineTitle: 'Fuera del Aire',
+    offlineDesc: 'No hay transmisión programada en las próximas 12 horas. ¡Vuelve pronto!',
+    countdownTitle: 'LA CLASE EN VIVO COMIENZA EN',
+    endedTitle: 'Transmisión Finalizada',
+    endedDesc: '¡Gracias por participar! Mantente atento a las próximas sesiones.',
+    buyNow: 'COMPRAR AHORA',
+    limitedSpots: 'Cupos limitados',
+    videoNotConfigured: 'Video no configurado para este webinar',
+    unmuteBtn: '🔊 Haz clic para activar el sonido',
+    commentsTitle: 'Comentarios',
+    commentsOff: 'Los comentarios están desactivados.',
+    replyText: 'Responder',
+    pinnedBy: 'Fijado por',
+    addCommentPlaceholder: 'Añade un comentario...',
+  },
+}
+
+const YT_COMMENTS = {
+  pt: [
+    {
+      author: 'Doctora Lipedema',
+      handle: '@doctoralipedema',
+      text: 'Gente, obrigada por compartilhar suas histórias nos comentários. Já somos mais de 15.000 mulheres no nosso desafio. Se você ainda não viu o vídeo até o final, preste muita atenção na parte do Truque da Laranja, é ali que a mágica acontece.',
+      time: 'há 2 meses',
+      likes: '1,2 mil',
+      isPinned: true,
+      avatar: '',
+    },
+    {
+      author: 'Vanessa Rodriguez',
+      handle: '@vanessa_rodriguez_ar',
+      text: 'Eu tinha desistido de usar short há quase 8 anos por causa dos nódulos nas coxas. Hoje voltei a tirar foto na piscina sem canga. Pareço outra pessoa. Para quem está começando: façam as 3 fases bem feitas, fortalecer, desinflamar e ativar o linfático. Funciona.',
+      time: 'há 1 dia',
+      likes: '934',
+      avatar: '',
+    },
+    {
+      author: 'Lucia Ramírez',
+      handle: '@lucia.ramirez_mx',
+      text: 'Os flavonoides da casca da laranja foram a peça que faltava. Em 21 dias minha celulite de aspectoo duro e doloroso começou a amolecer, parece que o tecido voltou a respirar. Custou menos de 1 dólar por semana fazer a receita. Quem ainda gasta em clínica está jogando dinheiro fora.',
+      time: 'há 2 dias',
+      likes: '389',
+      avatar: '',
+    },
+    {
+      author: 'Carolina Méndez',
+      handle: '@carolina.mendez.cl',
+      text: 'Sou do Chile e descobri este canal por recomendação de uma amiga. A doutora explica exatamente o que nenhum endocrinologista soube me explicar em 10 anos. A oscilação do estrogênio é a chave que todos ignoram. Já recomendei o vídeo para 7 amigas que sofrem em silêncio com o lipedema.',
+      time: 'há 4 dias',
+      likes: '478',
+      avatar: '',
+    },
+    {
+      author: 'Renata Souza',
+      handle: '@renata.souza_oficial',
+      text: 'Meu marido me disse que eu estava perdendo dinheiro com isso, que era melhor fazer drenagem na clínica. Hoje ele me olha de outra forma e até teve ciúmes na praia. Vou continuar até completar os 21 dias.',
+      time: 'há 5 dias',
+      likes: '215',
+      avatar: '',
+    }
+  ],
+  en: [
+    {
+      author: 'Doctora Lipedema',
+      handle: '@doctoralipedema',
+      text: 'Girls, thank you for sharing your stories in the comments. We are already more than 15,000 women in our challenge. If you still haven\'t watched the video to the end, pay attention to the Orange Trick part, that is where the magic happens.',
+      time: '2 months ago',
+      likes: '1.2K',
+      isPinned: true,
+      avatar: '',
+    },
+    {
+      author: 'Vanessa Rodriguez',
+      handle: '@vanessa_rodriguez_ar',
+      text: 'I had given up on wearing shorts almost 8 years ago because of the nodules in my thighs. Today I went back to taking photos at the pool without a cover-up. I feel like a different person. For those starting out: do the 3 phases right, strengthen, reduce inflammation, and activate the lymphatic system. It works.',
+      time: '1 day ago',
+      likes: '934',
+      avatar: '',
+    },
+    {
+      author: 'Lucia Ramírez',
+      handle: '@lucia.ramirez_mx',
+      text: 'The flavonoids from the orange peel were the missing piece. In 21 days my hard, painful cellulite started to soften, it feels like the tissue can breathe again. It cost less than 1 dollar per week to make the recipe. Anyone still spending money on clinics is throwing money away.',
+      time: '2 days ago',
+      likes: '389',
+      avatar: '',
+    },
+    {
+      author: 'Carolina Méndez',
+      handle: '@carolina.mendez.cl',
+      text: 'I am from Chile and I discovered this channel on a friend\'s recommendation. The doctor explains exactly what no endocrinologist has explained to me in 10 years. Estrogen fluctuation is the key that everyone ignores. I have already recommended the video to 7 friends suffering in silence with lipedema.',
+      time: '4 days ago',
+      likes: '478',
+      avatar: '',
+    },
+    {
+      author: 'Renata Souza',
+      handle: '@renata.souza_oficial',
+      text: 'My husband told me I was wasting money on this, that it was better to do drainage at the clinic. Today he looks at me differently and even got jealous at the beach. I will continue until I complete the 21 days.',
+      time: '5 days ago',
+      likes: '215',
+      avatar: '',
+    }
+  ],
+  es: [
+    {
+      author: 'Doctora Lipedema',
+      handle: '@doctoralipedema',
+      text: 'Chicas, gracias por compartir sus historias en los comentarios. Ya somos más de 15.000 mujeres en nuestro desafío. Si todavía no vieron el video hasta el final, presten atención a la parte del Truco de la Naranja, es ahí donde sucede la magia.',
+      time: 'hace 2 meses',
+      likes: '27 mil',
+      isPinned: true,
+      avatar: '',
+    },
+    {
+      author: 'Vanessa Rodriguez',
+      handle: '@vanessa_rodriguez_ar',
+      text: 'Había desistido de usar short hace casi 8 años por los nódulos en los muslos. Hoy volví a sacarme foto en la piscina sin usar pareo. Parezco otra persona. Para quien recién empieza: hagan las 3 fases bien hechas, fortalecer, desinflamar y activar el linfático. Funciona.',
+      time: 'hace 1 día',
+      likes: '934',
+      avatar: '',
+    },
+    {
+      author: 'Lucía Ramírez',
+      handle: '@lucia.ramirez_mx',
+      text: 'Los flavonoides de la cáscara de naranja fueron la pieza que faltaba. En 21 dias mi celulitis de aspecto duro y dolorosa empezó a ablandarse, parece que el tejido volvió a respirar. Costó menos de 1 dólar por semana hacer la receta. Quien todavía gasta en clínica está tirando el dinero.',
+      time: 'hace 2 días',
+      likes: '389',
+      avatar: '',
+    },
+    {
+      author: 'Carolina Méndez',
+      handle: '@carolina.mendez.cl',
+      text: 'Soy de Chile y descubrí este canal por recomendación de una amiga. La doctora explica exactamente lo que ningún endocrinólogo supo explicarme en 10 años. La oscilación del estrógeno es la clave que todos ignoran. Ya recomendé el video a 7 amigas que sufren en silencio con el lipedema.',
+      time: 'hace 4 días',
+      likes: '478',
+      avatar: '',
+    },
+    {
+      author: 'Renata Souza',
+      handle: '@renata.souza_oficial',
+      text: 'Mi esposo me dijo que estaba perdiendo dinero con esto, que era mejor hacer drenaje en la clínica. Hoy me mira de otra manera y hasta tuvo celos en la playa. Voy a continuar hasta completar los 21 días.',
+      time: 'hace 5 días',
+      likes: '215',
+      avatar: '',
+    }
+  ]
+}
+
+const YouTubeHeader = ({ 
+  userName, 
+  lang, 
+  onChangeLang 
+}: { 
+  userName: string; 
+  lang: 'pt' | 'en' | 'es'; 
+  onChangeLang: (l: 'pt' | 'en' | 'es') => void 
+}) => {
   return (
     <header className="yt-header" style={{
       height: 56,
@@ -411,7 +681,9 @@ const YouTubeHeader = ({ userName }: { userName: string }) => {
           </svg>
           <span style={{ fontFamily: '"Roboto", sans-serif', fontWeight: 900, fontSize: 18, letterSpacing: '-0.8px' }}>YouTube</span>
           <span style={{ fontSize: 10, color: '#aaaaaa', alignSelf: 'flex-start', marginTop: 2, marginLeft: 2, fontWeight: 400 }}>Premium</span>
-          <span style={{ fontSize: 9, background: '#FF0000', color: '#fff', padding: '1px 4px', borderRadius: 2, marginLeft: 6, fontWeight: 700, letterSpacing: '0px' }}>AO VIVO</span>
+          <span style={{ fontSize: 9, background: '#FF0000', color: '#fff', padding: '1px 4px', borderRadius: 2, marginLeft: 6, fontWeight: 700, letterSpacing: '0px' }}>
+            {lang === 'pt' ? 'AO VIVO' : lang === 'es' ? 'EN VIVO' : 'LIVE'}
+          </span>
         </div>
       </div>
 
@@ -420,7 +692,7 @@ const YouTubeHeader = ({ userName }: { userName: string }) => {
         <div style={{ display: 'flex', flex: 1, background: '#121212', borderRadius: '40px 0 0 40px', border: '1px solid #303030', borderRight: 'none', padding: '0 16px', height: 40, alignItems: 'center' }}>
           <input
             type="text"
-            placeholder="Pesquisar"
+            placeholder={lang === 'pt' ? 'Pesquisar' : lang === 'es' ? 'Buscar' : 'Search'}
             style={{ background: 'transparent', border: 'none', color: '#fff', width: '100%', outline: 'none', fontSize: 14 }}
             disabled
           />
@@ -449,6 +721,29 @@ const YouTubeHeader = ({ userName }: { userName: string }) => {
             <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
           </svg>
         </button>
+        
+        {/* Language selector */}
+        <select 
+          value={lang} 
+          onChange={(e) => onChangeLang(e.target.value as any)}
+          style={{
+            background: 'rgba(255,255,255,0.08)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            color: '#fff',
+            borderRadius: 6,
+            padding: '3px 8px',
+            fontSize: 12,
+            fontWeight: 600,
+            outline: 'none',
+            cursor: 'pointer',
+            marginLeft: 4,
+          }}
+        >
+          <option value="pt" style={{ background: '#222', color: '#fff' }}>PT</option>
+          <option value="en" style={{ background: '#222', color: '#fff' }}>EN</option>
+          <option value="es" style={{ background: '#222', color: '#fff' }}>ES</option>
+        </select>
+
         <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--brand)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 13, marginLeft: 8 }}>
           {getInitials(userName)}
         </div>
@@ -464,6 +759,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const sectionRef = useRef<HTMLDivElement>(null)
   const sessionId = useRef(generateSessionId())
   const sentEmailsRef = useRef<Set<string>>(new Set())
+
+  // Language state (defaults to webinar.language or 'pt')
+  const [lang, setLang] = useState<'pt' | 'en' | 'es'>((webinar.language as any) || 'pt')
+  const t = useMemo(() => TRANSLATIONS[lang], [lang])
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
@@ -2645,7 +2944,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           backgroundAttachment: 'fixed'
         } : undefined}
       >
-        {webinar.theme === 'youtube' && <YouTubeHeader userName={userName} />}
+        {webinar.theme === 'youtube' && <YouTubeHeader userName={userName} lang={lang} onChangeLang={setLang} />}
         <div className="webinar-room">
       {/* VIDEO SECTION */}
       <div className={`video-section ${webinar.theme === 'youtube' && activeMobileTab === 'info' ? 'info-active' : ''}`} ref={sectionRef}>
@@ -2655,17 +2954,17 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             {isSessionEnded ? (
               <div className="live-badge" style={{ background: 'rgba(34,197,94,0.12)', borderColor: 'rgba(34,197,94,0.3)', color: '#22c55e' }}>
                 <div className="live-dot" style={{ background: '#22c55e', animation: 'none', boxShadow: 'none' }} />
-                ENCERRADO
+                {t.ended}
               </div>
             ) : sessionIsOffline ? (
               <div className="live-badge" style={{ background: 'rgba(107,114,128,0.12)', borderColor: 'rgba(107,114,128,0.3)', color: '#9ca3af' }}>
                 <div className="live-dot" style={{ background: '#4b5563', boxShadow: 'none', animation: 'none' }} />
-                OFFLINE
+                {t.offline}
               </div>
             ) : (
               <div className="live-badge" style={sessionIsScheduledFuture ? { background: 'rgba(156,163,175,0.15)', borderColor: 'rgba(156,163,175,0.3)' } : {}}>
                 <div className="live-dot" style={sessionIsScheduledFuture ? { background: '#9ca3af', boxShadow: 'none', animation: 'none' } : {}} />
-                {sessionIsScheduledFuture ? 'EM BREVE' : 'AO VIVO'}
+                {sessionIsScheduledFuture ? t.soon : t.live}
                 {!sessionIsScheduledFuture && (
                   <span style={{ opacity: 0.7, fontWeight: 400, marginLeft: 4 }}>
                     {String(Math.floor(elapsedSeconds / 3600)).padStart(2, '0')}:{String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2, '0')}:{String(elapsedSeconds % 60).padStart(2, '0')}
@@ -2682,6 +2981,27 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {/* Language Selector */}
+            <select 
+              value={lang} 
+              onChange={(e) => setLang(e.target.value as any)}
+              style={{
+                background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                color: 'var(--text-primary)',
+                borderRadius: 8,
+                padding: '5px 8px',
+                fontSize: 12,
+                fontWeight: 600,
+                outline: 'none',
+                cursor: 'pointer',
+              }}
+            >
+              <option value="pt" style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}>PT</option>
+              <option value="en" style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}>EN</option>
+              <option value="es" style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)' }}>ES</option>
+            </select>
+
             {!!(webinar as unknown as Record<string, unknown>).has_quiz && (
               <button
                 onClick={() => setQuizOpen(true)}
@@ -2704,13 +3024,15 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
               title="Alternar Tela Cheia"
             >
               ⛶ 
-              <span className="hidden-mobile" style={{ fontSize: 11 }}>Expandir</span>
+              <span className="hidden-mobile" style={{ fontSize: 11 }}>
+                {lang === 'pt' ? 'Expandir' : lang === 'es' ? 'Expandir' : 'Expand'}
+              </span>
             </button>
             {!isSessionEnded && (
               <div className="viewer-count" style={{ marginLeft: 4 }}>
                 <div className="viewer-dot" />
                 <span className={viewersPulse ? 'bump-anim' : ''}>{viewers.toLocaleString()}</span>
-                <span className="hidden-mobile" style={{ marginLeft: 4 }}>assistindo</span>
+                <span className="hidden-mobile" style={{ marginLeft: 4 }}>{t.watching}</span>
               </div>
             )}
           </div>
@@ -3119,13 +3441,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
               className={`yt-mobile-tab-btn ${activeMobileTab === 'chat' ? 'active' : ''}`}
               onClick={() => setActiveMobileTab('chat')}
             >
-              💬 Chat ao Vivo
+              {t.chatTabMobile}
             </button>
             <button 
               className={`yt-mobile-tab-btn ${activeMobileTab === 'info' ? 'active' : ''}`}
               onClick={() => setActiveMobileTab('info')}
             >
-              ℹ️ Detalhes
+              {t.infoTabMobile}
             </button>
           </div>
         )}
@@ -3142,11 +3464,15 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 <div 
                   className="yt-channel-avatar"
                   style={{
-                    backgroundImage: webinar.ai_persona_avatar ? `url(${webinar.ai_persona_avatar})` : undefined,
+                    backgroundImage: webinar.yt_channel_avatar_url 
+                      ? `url(${webinar.yt_channel_avatar_url})` 
+                      : webinar.ai_persona_avatar 
+                        ? `url(${webinar.ai_persona_avatar})` 
+                        : undefined,
                     backgroundSize: 'cover',
                   }}
                 >
-                  {!webinar.ai_persona_avatar && getInitials(webinar.display_name || webinar.name)}
+                  {!webinar.yt_channel_avatar_url && !webinar.ai_persona_avatar && getInitials(webinar.display_name || webinar.name)}
                 </div>
                 <div className="yt-channel-info">
                   <div className="yt-channel-name">
@@ -3156,12 +3482,14 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     </svg>
                   </div>
                   <div className="yt-sub-count">
-                    {formatSubscriberCount(webinar.fake_viewers_peak || 25000)} de inscritos
+                    {webinar.yt_subscriber_count 
+                      ? `${webinar.yt_subscriber_count} ${t.subscribers}`
+                      : `${formatSubscriberCount(webinar.fake_viewers_peak || 25000)} ${t.subscribers}`}
                   </div>
                 </div>
                 
                 <button className="yt-btn-member" disabled style={{ cursor: 'not-allowed', opacity: 0.8 }}>
-                  Seja membro
+                  {lang === 'pt' ? 'Seja membro' : lang === 'es' ? 'Unirse' : 'Join'}
                 </button>
                 
                 <button 
@@ -3170,12 +3498,12 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 >
                   {isSubscribed ? (
                     <>
-                      <span>Inscrito</span>
+                      <span>{t.subscribed}</span>
                       <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
                         <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
                       </svg>
                     </>
-                  ) : 'Inscrever-se'}
+                  ) : t.subscribe}
                 </button>
               </div>
               
@@ -3261,7 +3589,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             {/* Description Box */}
             <div className="yt-description-box" onClick={() => setDescriptionExpanded(e => !e)} style={{ cursor: 'pointer' }}>
               <div style={{ fontWeight: 'bold', marginBottom: 8, fontSize: 14 }}>
-                {viewers.toLocaleString()} assistindo agora • Transmissão iniciada há {Math.max(1, Math.floor(elapsedSeconds / 60)) || 1} minutos
+                {viewers.toLocaleString()} {t.watchingNow} • {t.streamStarted} {Math.max(1, Math.floor(elapsedSeconds / 60)) || 1} {t.minutesAgo}
               </div>
               <p style={{
                 fontSize: 13,
@@ -3274,12 +3602,127 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 overflow: 'hidden',
                 color: '#f1f1f1'
               }}>
-                {webinar.description || 'Assista a esta super transmissão ao vivo e tire todas as suas dúvidas no chat.'}
+                {webinar.description || t.descriptionDefault}
               </p>
               <div style={{ fontSize: 12, fontWeight: 'bold', marginTop: 8, color: '#aaa' }}>
-                {descriptionExpanded ? 'Mostrar menos' : '... mais'}
+                {descriptionExpanded ? t.showLess : t.showMore}
               </div>
             </div>
+
+            {/* YouTube Pinned Comments and List */}
+            {webinar.yt_comments_enabled !== false && (
+              <div className="yt-comments-section">
+                <h2 className="yt-comments-header">
+                  {t.commentsTitle} ({YT_COMMENTS[lang].length + 2})
+                </h2>
+                
+                {/* Add Comment Row */}
+                <div className="yt-add-comment-row">
+                  <div className="yt-comment-avatar" style={{ background: '#c084fc' }}>
+                    {getInitials(userName)}
+                  </div>
+                  <input 
+                    type="text" 
+                    className="yt-comment-input" 
+                    placeholder={t.addCommentPlaceholder}
+                    disabled
+                  />
+                </div>
+
+                {/* Comments List */}
+                {YT_COMMENTS[lang].map((comment, idx) => (
+                  <div key={idx} className="yt-comment-item">
+                    <div 
+                      className="yt-comment-avatar" 
+                      style={{ 
+                        background: comment.isPinned ? '#ff0000' : idx % 4 === 0 ? '#10b981' : idx % 4 === 1 ? '#3b82f6' : idx % 4 === 2 ? '#f59e0b' : '#ec4899',
+                        backgroundImage: comment.isPinned && webinar.yt_channel_avatar_url 
+                          ? `url(${webinar.yt_channel_avatar_url})` 
+                          : comment.isPinned && webinar.ai_persona_avatar 
+                            ? `url(${webinar.ai_persona_avatar})` 
+                            : undefined,
+                        backgroundSize: 'cover',
+                      }}
+                    >
+                      {!comment.isPinned && getInitials(comment.author)}
+                      {comment.isPinned && !webinar.yt_channel_avatar_url && !webinar.ai_persona_avatar && getInitials(comment.author)}
+                    </div>
+                    
+                    <div className="yt-comment-content">
+                      {comment.isPinned && (
+                        <div className="yt-comment-pinned-info">
+                          <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" style={{ display: 'inline-block', verticalAlign: 'middle', marginRight: 4 }}>
+                            <path d="M16 12V4h1v-1H7v1h1v8l-2 2v2h5.2v6h1.6v-6H18v-2l-2-2z"/>
+                          </svg>
+                          <span>{t.pinnedBy} {comment.author}</span>
+                        </div>
+                      )}
+                      
+                      <div className="yt-comment-header-row">
+                        <span 
+                          className="yt-comment-author-handle" 
+                          style={comment.isPinned ? {
+                            background: '#333', 
+                            color: '#fff', 
+                            padding: '2px 8px', 
+                            borderRadius: 12,
+                            fontSize: 11
+                          } : {}}
+                        >
+                          {comment.handle}
+                        </span>
+                        <span className="yt-comment-time">{comment.time}</span>
+                      </div>
+                      
+                      <p className="yt-comment-text">{comment.text}</p>
+                      
+                      <div className="yt-comment-actions">
+                        <button className="yt-comment-action-btn" disabled>
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                            <path d="M1 21h4V9H1v12zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2z" />
+                          </svg>
+                          <span>{comment.likes}</span>
+                        </button>
+                        <button className="yt-comment-action-btn" disabled>
+                          <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+                            <path d="M23 3h-4v12h4V3zm-22 11c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2H6c-.83 0-1.54.5-1.84 1.22L1.14 11.27c-.09.23-.14.47-.14.73v-2z" />
+                          </svg>
+                        </button>
+                        <button className="yt-comment-action-btn" style={{ fontWeight: 600 }} disabled>
+                          {t.replyText}
+                        </button>
+                      </div>
+                      
+                      {idx === 0 && (
+                        <button className="yt-comment-replies-link" disabled>
+                          <span>▼</span>
+                          <span>87 {t.replyText.toLowerCase()}s</span>
+                        </button>
+                      )}
+                      {idx === 1 && (
+                        <button className="yt-comment-replies-link" disabled>
+                          <span>▼</span>
+                          <span>17 {t.replyText.toLowerCase()}s</span>
+                        </button>
+                      )}
+                      {idx === 2 && (
+                        <button className="yt-comment-replies-link" disabled>
+                          <span>▼</span>
+                          <span>8 {t.replyText.toLowerCase()}s</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {/* If comments are disabled */}
+            {webinar.yt_comments_enabled === false && (
+              <div className="yt-comments-section" style={{ textAlign: 'center', padding: '24px 0', color: '#aaa', fontSize: 13 }}>
+                🔒 {t.commentsOff}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -3309,6 +3752,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         userName={userName}
         disableQa={!!webinar.disable_qa}
         className={webinar.theme === 'youtube' && activeMobileTab !== 'chat' ? 'mobile-hidden' : ''}
+        lang={lang}
       />
       {/* Mobile landscape chat toggle button */}
       <button

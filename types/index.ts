@@ -89,6 +89,10 @@ export interface Webinar {
   landing_subheadline?: string | null
   landing_button_text?: string | null
   video_transcript?: string | null
+  yt_subscriber_count?: string | null
+  yt_channel_avatar_url?: string | null
+  yt_comments_enabled?: boolean
+  language?: string
 }
 
 // ---- Event Payloads ----
