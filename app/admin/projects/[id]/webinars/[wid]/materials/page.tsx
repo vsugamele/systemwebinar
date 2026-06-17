@@ -76,7 +76,7 @@ export default function MaterialsAdminPage() {
           <h1 className="page-title">📂 Materiais de Apoio</h1>
           <p className="page-subtitle">
             Libere PDFs, planilhas e links no momento certo da aula. Os participantes veem na aba
-            <strong style={{ color: 'var(--text-primary)' }}> "Materiais"</strong> automaticamente ao chegar no minuto configurado.
+            <strong style={{ color: 'var(--text-primary)' }}> &quot;Materiais&quot;</strong> automaticamente ao chegar no minuto configurado.
           </p>
         </div>
         <div style={{

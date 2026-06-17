@@ -283,7 +283,7 @@ function SegmentTimeline({
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           fontSize: 13, color: 'var(--text-muted)', cursor: 'pointer',
         }} onClick={onAdd}>
-          Clique em "+ Adicionar Segmento" para começar →
+          Clique em &quot;+ Adicionar Segmento&quot; para começar →
         </div>
       ) : (
         <div style={{
