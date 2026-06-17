@@ -768,7 +768,7 @@ export default function SetupWizardPage() {
 
               {status === 'active' ? (
                 <div style={{ background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: 10, padding: 14, fontSize: 13, color: '#10b981', textAlign: 'center' }}>
-                  🎉 Este webinar já está **Ativo e Publicado**! Você pode iniciar as divulgações.
+                  🎉 Este webinar já está **Publicado**! Você pode iniciar as divulgações.
                 </div>
               ) : (
                 <div style={{ background: 'rgba(245,158,11,0.05)', border: '1px solid rgba(245,158,11,0.1)', borderRadius: 10, padding: 14, fontSize: 13, color: 'var(--text-secondary)' }}>

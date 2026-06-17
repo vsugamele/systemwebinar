@@ -21,6 +21,8 @@ interface ActiveWebinarContext {
   name: string
   slug: string
   status: string
+  session_started_at?: string | null
+  is_evergreen?: boolean
 }
 
 export default function AdminLayoutClient({ children }: { children: React.ReactNode }) {
@@ -42,8 +44,9 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
     })
     supabase
       .from('webi_webinars')
-      .select('id, project_id, name, slug, status')
+      .select('id, project_id, name, slug, status, session_started_at, is_evergreen')
       .eq('status', 'active')
+      .or('session_started_at.not.is.null,is_evergreen.eq.true')
       .order('updated_at', { ascending: false })
       .limit(4)
       .then(({ data }) => setActiveWebinars((data as ActiveWebinarContext[]) || []))

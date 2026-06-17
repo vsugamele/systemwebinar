@@ -328,7 +328,7 @@ export default function WebinarOverviewPage() {
           <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: 12 }}>
             ⚡ Painel de Pré-lançamento
             <span className={`badge badge-${webinar.status}`} style={{ fontSize: 12, fontWeight: 600 }}>
-              {isActive ? '● Ativo' : webinar.status === 'paused' ? '⏸ Pausado' : '○ Rascunho'}
+              {isActive ? '● Publicado' : webinar.status === 'paused' ? '⏸ Pausado' : '○ Rascunho'}
             </span>
           </h1>
           <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0 0' }}>

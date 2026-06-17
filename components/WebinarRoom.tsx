@@ -649,11 +649,15 @@ const YT_COMMENTS = {
 const YouTubeHeader = ({ 
   userName, 
   lang, 
-  onChangeLang 
+  onChangeLang,
+  isLive,
+  isScheduled
 }: { 
   userName: string; 
   lang: 'pt' | 'en' | 'es'; 
-  onChangeLang: (l: 'pt' | 'en' | 'es') => void 
+  onChangeLang: (l: 'pt' | 'en' | 'es') => void;
+  isLive: boolean;
+  isScheduled: boolean;
 }) => {
   return (
     <header className="yt-header" style={{
@@ -681,9 +685,19 @@ const YouTubeHeader = ({
           </svg>
           <span style={{ fontFamily: '"Roboto", sans-serif', fontWeight: 900, fontSize: 18, letterSpacing: '-0.8px' }}>YouTube</span>
           <span style={{ fontSize: 10, color: '#aaaaaa', alignSelf: 'flex-start', marginTop: 2, marginLeft: 2, fontWeight: 400 }}>Premium</span>
-          <span style={{ fontSize: 9, background: '#FF0000', color: '#fff', padding: '1px 4px', borderRadius: 2, marginLeft: 6, fontWeight: 700, letterSpacing: '0px' }}>
-            {lang === 'pt' ? 'AO VIVO' : lang === 'es' ? 'EN VIVO' : 'LIVE'}
-          </span>
+          {isLive ? (
+            <span style={{ fontSize: 9, background: '#FF0000', color: '#fff', padding: '1px 4px', borderRadius: 2, marginLeft: 6, fontWeight: 700, letterSpacing: '0px' }}>
+              {lang === 'pt' ? 'AO VIVO' : lang === 'es' ? 'EN VIVO' : 'LIVE'}
+            </span>
+          ) : isScheduled ? (
+            <span style={{ fontSize: 9, background: '#606060', color: '#fff', padding: '1px 4px', borderRadius: 2, marginLeft: 6, fontWeight: 700, letterSpacing: '0px' }}>
+              {lang === 'pt' ? 'EM BREVE' : lang === 'es' ? 'PRÓXIMAMENTE' : 'UPCOMING'}
+            </span>
+          ) : (
+            <span style={{ fontSize: 9, background: '#333333', color: '#aaaaaa', padding: '1px 4px', borderRadius: 2, marginLeft: 6, fontWeight: 700, letterSpacing: '0px' }}>
+              {lang === 'pt' ? 'OFFLINE' : lang === 'es' ? 'DESCONECTADO' : 'OFFLINE'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -2944,7 +2958,15 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           backgroundAttachment: 'fixed'
         } : undefined}
       >
-        {webinar.theme === 'youtube' && <YouTubeHeader userName={userName} lang={lang} onChangeLang={setLang} />}
+        {webinar.theme === 'youtube' && (
+          <YouTubeHeader 
+            userName={userName} 
+            lang={lang} 
+            onChangeLang={setLang} 
+            isLive={isSessionActive} 
+            isScheduled={sessionIsScheduledFuture} 
+          />
+        )}
         <div className="webinar-room">
       {/* VIDEO SECTION */}
       <div className={`video-section ${webinar.theme === 'youtube' && activeMobileTab === 'info' ? 'info-active' : ''}`} ref={sectionRef}>

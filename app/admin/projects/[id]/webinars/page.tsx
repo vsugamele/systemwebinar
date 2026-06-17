@@ -186,7 +186,7 @@ export default function WebinarsPage() {
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                     <span className={`badge badge-${w.status}`} style={{ fontSize: 11 }}>
-                      {w.status === 'active' ? '● Ativo' : w.status === 'draft' ? '○ Rascunho' : '⏸ Pausado'}
+                      {w.status === 'active' ? '● Publicado' : w.status === 'draft' ? '○ Rascunho' : '⏸ Pausado'}
                     </span>
                     <code style={{ fontSize: 11, color: 'var(--text-muted)' }}>/w/{w.slug}</code>
                   </div>
@@ -303,7 +303,7 @@ export default function WebinarsPage() {
                 <select className="form-input form-select" value={form.status}
                   onChange={e => setForm(f => ({ ...f, status: e.target.value as 'draft' | 'active' | 'paused' }))}>
                   <option value="draft">Rascunho</option>
-                  <option value="active">Ativo</option>
+                  <option value="active">Publicado (Inscrições Abertas)</option>
                   <option value="paused">Pausado</option>
                 </select>
               </div>
