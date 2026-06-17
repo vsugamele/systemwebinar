@@ -64,78 +64,125 @@ export function SidebarWebinar({ projectId, webinarId }: { projectId: string; we
 
   const base = `/admin/projects/${projectId}/webinars/${webinarId}`
 
-  const links: {
+  interface NavLink {
     href: string
     label: string
     exact: boolean
-    statusKey: keyof typeof health
+    statusKey?: keyof typeof health
     count?: number
-  }[] = [
-    { href: base,                     label: '⚙️ Visão Geral',   exact: true,  statusKey: 'overview' },
-    { href: `${base}/registration`,   label: '🧲 Pág. de Captura', exact: false, statusKey: 'registration' },
-    { href: `${base}/events`,         label: '⚡ Timeline',       exact: false, statusKey: 'events',    count: health.eventsCount },
-    { href: `${base}/chat`,           label: '💬 Chat & IA',      exact: false, statusKey: 'chat' },
-    { href: `${base}/materials`,      label: '📂 Materiais',      exact: false, statusKey: 'materials', count: health.materialsCount },
-    { href: `${base}/quiz`,           label: '📝 Quiz',           exact: false, statusKey: 'quiz' },
-    { href: `${base}/leads`,          label: '📇 Leads (CRM)',    exact: false, statusKey: 'leads',     count: health.leadsCount },
-    { href: `${base}/analytics`,      label: '📊 Analytics',      exact: false, statusKey: 'analytics' },
+  }
+
+  interface NavBlock {
+    title: string
+    links: NavLink[]
+  }
+
+  const blocks: NavBlock[] = [
+    {
+      title: 'Setup',
+      links: [
+        { href: base,                     label: '⚙️ Visão Geral',   exact: true,  statusKey: 'overview' },
+        { href: `${base}/registration`,   label: '🧲 Página de Captura', exact: false, statusKey: 'registration' },
+        { href: `${base}/video-pitch`,    label: '🎥 Vídeo & Pitch',   exact: false },
+        { href: `${base}/appearance`,     label: '🎨 Aparência',      exact: false },
+      ]
+    },
+    {
+      title: 'Interação',
+      links: [
+        { href: `${base}/events`,         label: '⚡ Gatilhos da Aula', exact: false, statusKey: 'events',    count: health.eventsCount },
+        { href: `${base}/chat`,           label: '💬 Chat & IA',      exact: false, statusKey: 'chat' },
+        { href: `${base}/materials`,      label: '📂 Materiais da Aula', exact: false, statusKey: 'materials', count: health.materialsCount },
+        { href: `${base}/quiz`,           label: '📝 Quiz',           exact: false, statusKey: 'quiz' },
+      ]
+    },
+    {
+      title: 'Operação',
+      links: [
+        { href: `${base}/live`,           label: '🔴 Ao Vivo / Execuções', exact: false },
+        { href: `${base}/runs`,           label: '⏱️ Execuções',      exact: false },
+        { href: `${base}/chat-history`,   label: '💬 Histórico de Chat', exact: false },
+      ]
+    },
+    {
+      title: 'Resultados',
+      links: [
+        { href: `${base}/analytics`,      label: '📊 Métricas',       exact: false, statusKey: 'analytics' },
+        { href: `${base}/leads`,          label: '📇 Leads e Engajamento', exact: false, statusKey: 'leads',     count: health.leadsCount },
+        { href: `${base}/exports`,        label: '📥 Exportações',      exact: false },
+      ]
+    }
   ]
 
   const auxLinks = [
-    { href: `${base}/chat-history`,                                    label: '💬 Histórico de Chat' },
     { href: `/admin/emails?project=${projectId}&webinar=${webinarId}`, label: '✉️ E-mails Ocultos' },
     { href: `/admin/projects/${projectId}/analytics`,                  label: '📊 Analytics Global' },
   ]
 
-  // Overall progress: how many sections are 'ok'
   const statusKeys: (keyof typeof health)[] = ['overview','registration','events','chat','materials','quiz']
   const okCount = statusKeys.filter(k => health[k] === 'ok').length
   const totalCount = statusKeys.length
   const pct = Math.round((okCount / totalCount) * 100)
 
+
   const renderNavLinks = (isMobileStyle = false) => {
     return (
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: isMobileStyle ? 6 : 2 }}>
-        {links.map(link => {
-          const isActive = link.exact
-            ? pathname === link.href
-            : pathname.startsWith(link.href)
-          const status = health[link.statusKey] as HealthStatus
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {blocks.map(block => (
+          <div key={block.title} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{
+              fontSize: 10,
+              fontWeight: 800,
+              color: 'var(--text-muted)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.08em',
+              paddingLeft: 8,
+              marginBottom: 4,
+            }}>
+              {block.title}
+            </span>
+            {block.links.map(link => {
+              const isActive = link.exact
+                ? pathname === link.href
+                : pathname.startsWith(link.href)
+              const status = link.statusKey ? health[link.statusKey] as HealthStatus : undefined
 
-          return (
-            <Link
-              key={link.href}
-              href={link.href}
-              onClick={() => setMobileMenuOpen(false)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                padding: isMobileStyle ? '14px 16px' : '10px 12px',
-                borderRadius: 8,
-                fontSize: isMobileStyle ? 14 : 13,
-                fontWeight: isActive ? 600 : 500,
-                color: isActive ? 'var(--brand-light)' : 'var(--text-secondary)',
-                backgroundColor: isActive ? 'rgba(99, 102, 241, 0.1)' : isMobileStyle ? 'rgba(255,255,255,0.02)' : 'transparent',
-                textDecoration: 'none',
-                transition: 'all 0.15s ease',
-                border: isMobileStyle ? '1px solid rgba(255,255,255,0.03)' : 'none',
-              }}
-            >
-              <span style={{ flex: 1 }}>{link.label}</span>
-              {!health.loading && (
-                <StatusDot
-                  status={status}
-                  count={link.count !== undefined && link.count > 0 ? link.count : undefined}
-                />
-              )}
-              {health.loading && (
-                <span style={{ width: 20, height: 8, borderRadius: 4, background: 'var(--border)', marginLeft: 'auto' }} />
-              )}
-            </Link>
-          )
-        })}
-      </nav>
+              return (
+                <Link
+                  key={link.href}
+                  href={link.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: isMobileStyle ? '12px 16px' : '8px 12px',
+                    borderRadius: 8,
+                    fontSize: isMobileStyle ? 14 : 13,
+                    fontWeight: isActive ? 600 : 500,
+                    color: isActive ? 'var(--brand-light)' : 'var(--text-secondary)',
+                    backgroundColor: isActive ? 'rgba(99, 102, 241, 0.1)' : isMobileStyle ? 'rgba(255,255,255,0.02)' : 'transparent',
+                    textDecoration: 'none',
+                    transition: 'all 0.15s ease',
+                    border: isMobileStyle ? '1px solid rgba(255,255,255,0.03)' : 'none',
+                  }}
+                >
+                  <span style={{ flex: 1 }}>{link.label}</span>
+                  {!health.loading && status && (
+                    <StatusDot
+                      status={status}
+                      count={link.count !== undefined && link.count > 0 ? link.count : undefined}
+                    />
+                  )}
+                  {health.loading && status && (
+                    <span style={{ width: 20, height: 8, borderRadius: 4, background: 'var(--border)', marginLeft: 'auto' }} />
+                  )}
+                </Link>
+              )
+            })}
+          </div>
+        ))}
+      </div>
     )
   }
 
@@ -149,7 +196,7 @@ export function SidebarWebinar({ projectId, webinarId }: { projectId: string; we
             onClick={() => setMobileMenuOpen(false)}
             style={{
               display: 'flex', alignItems: 'center',
-              padding: isMobileStyle ? '14px 16px' : '10px 12px',
+              padding: isMobileStyle ? '12px 16px' : '8px 12px',
               borderRadius: 8,
               fontSize: isMobileStyle ? 14 : 13,
               fontWeight: 500,
@@ -282,23 +329,9 @@ export function SidebarWebinar({ projectId, webinarId }: { projectId: string; we
         {/* Nav links */}
         {renderNavLinks(false)}
 
-        {/* Outros label */}
-        <div style={{ marginTop: 28, marginBottom: 10, paddingLeft: 4, fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          Outros
-        </div>
-
         {/* Aux links */}
-        {renderAuxLinks(false)}
-
-        {/* Control Room CTA */}
-        <div style={{ marginTop: 24 }}>
-          <Link
-            href={`${base}/live`}
-            className="btn btn-primary"
-            style={{ width: '100%', justifyContent: 'center', gap: 8, padding: '12px 16px', borderRadius: 8, fontWeight: 700 }}
-          >
-            <span style={{ fontSize: 16 }}>🔴</span> Control Room
-          </Link>
+        <div style={{ marginTop: 20 }}>
+          {renderAuxLinks(false)}
         </div>
       </div>
 
@@ -401,16 +434,6 @@ export function SidebarWebinar({ projectId, webinarId }: { projectId: string; we
                 </span>
                 {renderAuxLinks(true)}
               </div>
-
-              {/* Control Room CTA in mobile sheet */}
-              <Link
-                href={`${base}/live`}
-                onClick={() => setMobileMenuOpen(false)}
-                className="btn btn-primary"
-                style={{ width: '100%', justifyContent: 'center', gap: 8, padding: '14px 16px', borderRadius: 10, fontWeight: 700 }}
-              >
-                <span style={{ fontSize: 16 }}>🔴</span> Entrar na Control Room
-              </Link>
             </div>
           </div>
         )}

@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import AdminToasts from '@/components/AdminToasts'
+import { toast } from 'react-hot-toast'
 
 const navItems = [
   { href: '/admin', icon: '📊', label: 'Dashboard', exact: true },
@@ -32,6 +33,7 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
   const [insightsOpen, setInsightsOpen] = useState(false)
   const [commandQuery, setCommandQuery] = useState('')
   const [activeWebinars, setActiveWebinars] = useState<ActiveWebinarContext[]>([])
+  const [currentWebinar, setCurrentWebinar] = useState<{ id: string; name: string; slug: string; project_id: string } | null>(null)
   const commandInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -86,6 +88,23 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
   }
 
   const routeWebinarMatch = pathname.match(/^\/admin\/projects\/([^/]+)\/webinars\/([^/]+)/)
+  const currentWebinarId = routeWebinarMatch ? routeWebinarMatch[2] : null
+
+  useEffect(() => {
+    if (currentWebinarId) {
+      supabase
+        .from('webi_webinars')
+        .select('id, name, slug, project_id')
+        .eq('id', currentWebinarId)
+        .single()
+        .then(({ data }) => {
+          if (data) setCurrentWebinar(data)
+        })
+    } else {
+      setCurrentWebinar(null)
+    }
+  }, [currentWebinarId, supabase])
+
   const routeWebinarBase = routeWebinarMatch
     ? `/admin/projects/${routeWebinarMatch[1]}/webinars/${routeWebinarMatch[2]}`
     : null
@@ -94,6 +113,7 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
     ? `/admin/projects/${primaryActive.project_id}/webinars/${primaryActive.id}`
     : null
   const webinarBase = routeWebinarBase || fallbackWebinarBase
+
 
   const quickTabs = [
     { href: '/admin', label: 'Dashboard', exact: true },
@@ -105,27 +125,62 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
   ]
 
   const commandActions = [
-    { href: '/admin', icon: '📊', label: 'Dashboard', hint: 'Visao geral da conta' },
+    { href: '/admin', icon: '📊', label: 'Dashboard', hint: 'Visão geral da conta' },
     { href: '/admin/projects', icon: '🗂️', label: 'Projetos', hint: 'Todos os projetos' },
     { href: '/admin/registrants', icon: '👥', label: 'Registrantes', hint: 'Leads globais' },
-    { href: '/admin/analytics', icon: '📈', label: 'Analytics Global', hint: 'Metricas consolidadas' },
-    { href: '/admin/emails', icon: '✉️', label: 'E-mails', hint: 'Templates e retencao' },
-    ...(webinarBase ? [
-      { href: webinarBase, icon: '🧭', label: 'Hub do Webinar', hint: 'Configuracao principal' },
-      { href: `${webinarBase}/registration`, icon: '🧲', label: 'Pagina de Captura', hint: 'Cadastro e copy' },
-      { href: `${webinarBase}/events`, icon: '⚡', label: 'Timeline', hint: 'Chat, pitch e popups' },
-      { href: `${webinarBase}/live`, icon: '🔴', label: 'Control Room', hint: 'Operacao da live' },
-      { href: `${webinarBase}/analytics`, icon: '📊', label: 'Analytics do Webinar', hint: 'Retencao e funil' },
-      { href: `${webinarBase}/leads`, icon: '📇', label: 'Leads do Webinar', hint: 'CRM e exportacao' },
-      { href: `${webinarBase}/materials`, icon: '📂', label: 'Materiais', hint: 'Arquivos e links' },
-      { href: `${webinarBase}/quiz`, icon: '📝', label: 'Quiz', hint: 'Perguntas e certificados' },
+    { href: '/admin/analytics', icon: '📈', label: 'Analytics Global', hint: 'Métricas consolidadas' },
+    { href: '/admin/emails', icon: '✉️', label: 'E-mails', hint: 'Templates e retenção' },
+    ...(currentWebinar ? [
+      { href: `/admin/projects/${currentWebinar.project_id}/webinars/${currentWebinar.id}`, icon: '🧭', label: 'Hub do Webinar', hint: 'Visão geral de pré-lançamento' },
+      { href: `/admin/projects/${currentWebinar.project_id}/webinars/${currentWebinar.id}/registration`, icon: '🧲', label: 'Página de Captura', hint: 'Copy e formulário' },
+      { href: `/admin/projects/${currentWebinar.project_id}/webinars/${currentWebinar.id}/video-pitch`, icon: '🎥 Criar pitch', hint: 'Configurar vídeo, thumbnail e oferta' },
+      { href: `/admin/projects/${currentWebinar.project_id}/webinars/${currentWebinar.id}/leads`, icon: '📇 Ver leads quentes', hint: 'Visualizar cadastros e engajamento' },
+      { href: `/admin/projects/${currentWebinar.project_id}/webinars/${currentWebinar.id}/analytics`, icon: '📊 Abrir analytics', hint: 'Métricas de retenção e conversão' },
+      {
+        icon: '🔥',
+        label: 'Iniciar sessão',
+        hint: 'Disparar início de transmissão imediata (Run)',
+        action: async () => {
+          try {
+            const res = await fetch('/api/webinar-runs', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ webinar_id: currentWebinar.id, action: 'start' }),
+            })
+            const d = await res.json()
+            if (!res.ok) throw new Error(d.error || 'Erro operacional')
+            toast.success('Transmissão iniciada com sucesso via atalho!')
+            router.refresh()
+          } catch (e: any) {
+            toast.error(`Erro ao iniciar: ${e.message}`)
+          }
+        }
+      },
+      {
+        icon: '🔗',
+        label: 'Copiar link de inscrição',
+        hint: 'Copiar link da página de captura para o clipboard',
+        action: () => {
+          navigator.clipboard.writeText(`${window.location.origin}/r/${currentWebinar.slug}`)
+          toast.success('Link de inscrição copiado para área de transferência!')
+        }
+      },
+      { href: `/admin/projects/${currentWebinar.project_id}/webinars/${currentWebinar.id}?focus=whatsapp_api_url`, icon: '💬 Configurar WhatsApp', hint: 'Ajustar mensagens automáticas de checkout' },
+      { href: `/admin/projects/${currentWebinar.project_id}/webinars/${currentWebinar.id}/exports`, icon: '📥 Exportar métricas', hint: 'Ir para central de exportação em CSV' },
+      { href: `/admin/projects/${currentWebinar.project_id}/webinars/${currentWebinar.id}/events`, icon: '⚡ Gatilhos da Aula', hint: 'Timeline de chat e popups' },
+      { href: `/admin/projects/${currentWebinar.project_id}/webinars/${currentWebinar.id}/live`, icon: '🔴 Ao Vivo / Execuções', hint: 'Entrar no painel de controle da live' },
+    ] : webinarBase ? [
+      { href: webinarBase, icon: '🧭', label: 'Hub do Webinar', hint: 'Configuração principal' },
+      { href: `${webinarBase}/registration`, icon: '🧲', label: 'Página de Captura', hint: 'Cadastro e copy' },
+      { href: `${webinarBase}/events`, icon: '⚡ Gatilhos da Aula', hint: 'Chat, pitch e popups' },
+      { href: `${webinarBase}/live`, icon: '🔴 Ao Vivo / Execuções', hint: 'Operação da live' },
+      { href: `${webinarBase}/analytics`, icon: '📊 Analytics do Webinar', hint: 'Retenção e funil' },
     ] : []),
     ...activeWebinars.flatMap(webinar => {
       const base = `/admin/projects/${webinar.project_id}/webinars/${webinar.id}`
       return [
         { href: base, icon: '🎬', label: webinar.name, hint: 'Abrir hub do webinar ativo' },
-        { href: `${base}/live`, icon: '🔴', label: `${webinar.name} - Control Room`, hint: 'Entrar na operacao ao vivo' },
-        { href: `${base}/analytics`, icon: '📊', label: `${webinar.name} - Analytics`, hint: 'Ver metricas do webinar' },
+        { href: `${base}/live`, icon: '🔴', label: `${webinar.name} - Ao Vivo`, hint: 'Entrar na operação' },
       ]
     }),
   ]
@@ -166,11 +221,17 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
     },
   ]
 
-  function navigateTo(href: string) {
+  function executeCommand(action: { href?: string; action?: () => void } | string) {
     setCommandOpen(false)
     setInsightsOpen(false)
     setCommandQuery('')
-    router.push(href)
+    if (typeof action === 'string') {
+      router.push(action)
+    } else if (action.action) {
+      action.action()
+    } else if (action.href) {
+      router.push(action.href)
+    }
   }
 
   return (
@@ -290,12 +351,12 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
               {filteredCommandActions.length === 0 ? (
                 <div className="admin-command-empty">Nenhum atalho encontrado.</div>
               ) : (
-                filteredCommandActions.map(action => (
+                filteredCommandActions.map((action, idx) => (
                   <button
                     type="button"
-                    key={`${action.href}-${action.label}`}
+                    key={`${action.href || idx}-${action.label}`}
                     className="admin-command-item"
-                    onClick={() => navigateTo(action.href)}
+                    onClick={() => executeCommand(action)}
                   >
                     <span className="admin-command-icon">{action.icon}</span>
                     <span>
@@ -324,7 +385,7 @@ export default function AdminLayoutClient({ children }: { children: React.ReactN
                 type="button"
                 className="admin-insight-card"
                 key={`${item.scope}-${item.title}`}
-                onClick={() => navigateTo(item.href)}
+                onClick={() => executeCommand(item.href)}
               >
                 <span>{item.scope}</span>
                 <strong>{item.title}</strong>
