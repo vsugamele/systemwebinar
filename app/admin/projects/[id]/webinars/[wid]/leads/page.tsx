@@ -38,6 +38,10 @@ interface LeadEngagement {
   country: string
   score: number
   tags: string[]
+  events?: SessionEventDetail[]
+  os?: string
+  browser?: string
+  sessionId?: string
 }
 
 type EngagementFilter = 'all' | 'hot' | 'clicked' | 'watched50' | 'chat'
@@ -54,6 +58,12 @@ const formatWatchTime = (seconds = 0) => {
     return `${hours}h ${restMinutes}min`
   }
   return remainingSeconds > 0 ? `${minutes}min ${remainingSeconds}s` : `${minutes}min`
+}
+
+const formatVideoPosition = (seconds = 0) => {
+  const m = Math.floor(seconds / 60)
+  const s = seconds % 60
+  return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
 }
 
 const getWhatsAppUrl = (phone?: string | null) => {
@@ -94,6 +104,17 @@ export default function LeadsPage() {
   const [loadingList, setLoadingList] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
+  // New UX/CX states
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([])
+  const [videoDuration, setVideoDuration] = useState(3600)
+  const [utmSourceFilter, setUtmSourceFilter] = useState('')
+  const [customTagFilter, setCustomTagFilter] = useState('all')
+  const [watchPercentFilter, setWatchPercentFilter] = useState('all')
+  const [selectedLeadForTimeline, setSelectedLeadForTimeline] = useState<Lead | null>(null)
+  const [tagInputOpen, setTagInputOpen] = useState(false)
+  const [newBulkTag, setNewBulkTag] = useState('')
+  const [updatingTags, setUpdatingTags] = useState(false)
+
   // Debounce search
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -126,6 +147,9 @@ export default function LeadsPage() {
         const res = await fetch(`/api/analytics?webinar_id=${wid}&bucket_seconds=60`)
         if (!res.ok) return
         const data = await res.json()
+        if (data.duration_seconds) {
+          setVideoDuration(data.duration_seconds)
+        }
         const sessions = (data.sessions || []) as SessionDetail[]
         const byEmail: Record<string, LeadEngagement> = {}
 
@@ -159,6 +183,10 @@ export default function LeadsPage() {
               country: session.country,
               score,
               tags,
+              events: session.events,
+              os: session.os,
+              browser: session.browser,
+              sessionId: session.session_id,
             }
           }
         })
@@ -197,20 +225,51 @@ export default function LeadsPage() {
         query = query.or(`name.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%,phone.ilike.%${debouncedSearch}%`)
       }
 
-      const needsEngagementFilter = engagementFilter !== 'all'
+      const needsClientFilter = engagementFilter !== 'all' || watchPercentFilter !== 'all' || customTagFilter !== 'all' || utmSourceFilter.trim() !== ''
       const from = (page - 1) * PAGE_SIZE
       const to = from + PAGE_SIZE - 1
 
       query = query.order('registered_at', { ascending: false })
 
-      if (needsEngagementFilter) {
+      if (needsClientFilter) {
         const { data } = await query.limit(5000)
         const filteredLeads = ((data || []) as unknown as Lead[]).filter(lead => {
-          const engagement = engagementByEmail[leadEmailKey(lead.email)]
-          if (engagementFilter === 'hot') return (engagement?.score || 0) >= 70
-          if (engagementFilter === 'clicked') return !!engagement?.clickedCta
-          if (engagementFilter === 'watched50') return (engagement?.watchTime || 0) >= 30 * 60
-          if (engagementFilter === 'chat') return (engagement?.chatMessages || 0) > 0
+          const email = leadEmailKey(lead.email)
+          const engagement = engagementByEmail[email]
+          const meta = lead.metadata || {}
+
+          // 1. Engagement filter
+          if (engagementFilter === 'hot') {
+            if ((engagement?.score || 0) < 70) return false
+          } else if (engagementFilter === 'clicked') {
+            if (!engagement?.clickedCta) return false
+          } else if (engagementFilter === 'watched50') {
+            if ((engagement?.watchTime || 0) < 30 * 60) return false
+          } else if (engagementFilter === 'chat') {
+            if ((engagement?.chatMessages || 0) === 0) return false
+          }
+
+          // 2. Watch Percent filter
+          if (watchPercentFilter !== 'all') {
+            const pct = videoDuration > 0 && engagement ? Math.round((engagement.watchTime / videoDuration) * 100) : 0
+            if (watchPercentFilter === '75' && pct < 75) return false
+            if (watchPercentFilter === '50' && (pct < 50 || pct >= 75)) return false
+            if (watchPercentFilter === '25' && (pct < 25 || pct >= 50)) return false
+            if (watchPercentFilter === '0' && pct > 0) return false
+          }
+
+          // 3. Custom Tag filter
+          if (customTagFilter !== 'all') {
+            const leadTags = meta.tags || []
+            if (!leadTags.includes(customTagFilter)) return false
+          }
+
+          // 4. UTM Source filter
+          if (utmSourceFilter.trim()) {
+            const utm = (meta.utm_source || '').toLowerCase()
+            if (!utm.includes(utmSourceFilter.trim().toLowerCase())) return false
+          }
+
           return true
         })
 
@@ -230,7 +289,7 @@ export default function LeadsPage() {
     if (!loading) { // only after initial load
       fetchLeads()
     }
-  }, [wid, supabase, page, statusFilter, engagementFilter, debouncedSearch, loading, engagementByEmail])
+  }, [wid, supabase, page, statusFilter, engagementFilter, debouncedSearch, loading, engagementByEmail, watchPercentFilter, customTagFilter, utmSourceFilter, videoDuration])
 
   // Needs CSV Export to handle mass export ignoring pagination
   const handleExportCSV = async () => {
@@ -306,6 +365,111 @@ export default function LeadsPage() {
     }
   }
 
+  const availableTags = useMemo(() => {
+    const tagsSet = new Set<string>()
+    leads.forEach(l => {
+      const list = l.metadata?.tags || []
+      list.forEach((t: string) => tagsSet.add(t))
+    })
+    return Array.from(tagsSet)
+  }, [leads])
+
+  const handleExportSelectedCSV = () => {
+    const selectedLeads = leads.filter(l => selectedLeadIds.includes(l.id))
+    if (selectedLeads.length === 0) return
+
+    const headers = [
+      'ID', 'Nome', 'Email', 'WhatsApp / Telefone', 'Compareceu na Sala', 'Data de Registro',
+      'UTM Source', 'UTM Medium', 'UTM Campaign', 'Score', 'Tags', 'Tempo Assistido',
+      'Clicou CTA', 'Mensagens no Chat', 'Dispositivo', 'Pais'
+    ]
+    const csvRows = [headers.join(',')]
+
+    for (const lead of selectedLeads) {
+      const meta = lead.metadata || {}
+      const engagement = engagementByEmail[leadEmailKey(lead.email)]
+      const row = [
+        lead.id,
+        csvCell(lead.name),
+        csvCell(lead.email),
+        csvCell(lead.phone),
+        lead.attended ? 'SIM' : 'NAO',
+        csvCell(new Date(lead.registered_at).toLocaleString()),
+        csvCell(meta.utm_source),
+        csvCell(meta.utm_medium),
+        csvCell(meta.utm_campaign),
+        engagement?.score || 0,
+        csvCell([...(engagement?.tags || []), ...(meta.tags || [])].join(' | ')),
+        csvCell(formatWatchTime(engagement?.watchTime || 0)),
+        engagement?.clickedCta ? 'SIM' : 'NAO',
+        engagement?.chatMessages || 0,
+        csvCell(engagement?.device),
+        csvCell(engagement?.country),
+      ]
+      csvRows.push(row.join(','))
+    }
+
+    const csvContent = csvRows.join('\n')
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.setAttribute('href', url)
+    link.setAttribute('download', `leads_selecionados_webinar_${wid}.csv`)
+    link.style.visibility = 'hidden'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
+
+  const handleEmailSelected = () => {
+    const selectedEmails = leads
+      .filter(l => selectedLeadIds.includes(l.id))
+      .map(l => l.email)
+      .join(',')
+    if (selectedEmails) {
+      window.open(`mailto:${selectedEmails}`)
+    }
+  }
+
+  async function addTagsInBulk() {
+    if (!newBulkTag.trim()) return
+    setUpdatingTags(true)
+    const tagToAdd = newBulkTag.trim()
+
+    try {
+      const promises = leads
+        .filter(l => selectedLeadIds.includes(l.id))
+        .map(async (lead) => {
+          const currentMeta = lead.metadata || {}
+          const currentTags = currentMeta.tags || []
+          if (currentTags.includes(tagToAdd)) return
+
+          const newMeta = {
+            ...currentMeta,
+            tags: [...currentTags, tagToAdd]
+          }
+
+          const { error } = await supabase
+            .from('webi_leads')
+            .update({ metadata: newMeta })
+            .eq('id', lead.id)
+          
+          if (!error) {
+            setLeads(prev => prev.map(item => item.id === lead.id ? { ...item, metadata: newMeta } : item))
+          }
+        })
+      
+      await Promise.all(promises)
+      setNewBulkTag('')
+      setTagInputOpen(false)
+      setSelectedLeadIds([])
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setUpdatingTags(false)
+    }
+  }
+
   if (loading) return <div className="loading-screen"><div className="spinner" /></div>
 
   const rate = totalLeads ? Math.round((totalAttended / totalLeads) * 100) : 0
@@ -362,21 +526,21 @@ export default function LeadsPage() {
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         
         {/* FILTERS BAR */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16, padding: '16px 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-elevated)', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, flex: '1 1 520px', minWidth: 0 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
             <input 
               type="text" 
               placeholder="Buscar por nome, e-mail ou telefone..." 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="form-input"
-              style={{ flex: '1 1 240px', minWidth: 220 }}
+              style={{ flex: '1 1 280px', minWidth: 220 }}
             />
             <select 
               className="form-input form-select" 
               value={statusFilter} 
               onChange={e => { setStatusFilter(e.target.value as 'all' | 'attended' | 'absent'); setPage(1) }}
-              style={{ cursor: 'pointer', flex: '0 1 190px' }}
+              style={{ cursor: 'pointer', flex: '0 1 180px' }}
             >
               <option value="all">Todos os Status</option>
               <option value="attended">Presentes na sala</option>
@@ -386,7 +550,7 @@ export default function LeadsPage() {
               className="form-input form-select"
               value={engagementFilter}
               onChange={e => { setEngagementFilter(e.target.value as EngagementFilter); setPage(1) }}
-              style={{ cursor: 'pointer', flex: '0 1 220px' }}
+              style={{ cursor: 'pointer', flex: '0 1 180px' }}
             >
               <option value="all">Todos os engajamentos</option>
               <option value="hot">Lead quente</option>
@@ -394,27 +558,63 @@ export default function LeadsPage() {
               <option value="watched50">Assistiu 30min+</option>
               <option value="chat">Interagiu no chat</option>
             </select>
+            <select
+              className="form-input form-select"
+              value={watchPercentFilter}
+              onChange={e => { setWatchPercentFilter(e.target.value); setPage(1) }}
+              style={{ cursor: 'pointer', flex: '0 1 180px' }}
+            >
+              <option value="all">Todo tempo assistido</option>
+              <option value="75">Assistiu 75%+</option>
+              <option value="50">Assistiu 50% - 74%</option>
+              <option value="25">Assistiu 25% - 49%</option>
+              <option value="0">Não assistiu (0%)</option>
+            </select>
           </div>
-          
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, minWidth: 240 }}>
-            <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Página {page} de {totalPages}</span>
-            <div style={{ display: 'flex', gap: 4 }}>
-              <button 
-                className="btn btn-secondary" 
-                style={{ padding: '8px 12px' }} 
-                disabled={page === 1}
-                onClick={() => setPage(p => Math.max(1, p - 1))}
+
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+              <input 
+                type="text" 
+                placeholder="Filtrar por UTM Source..." 
+                value={utmSourceFilter}
+                onChange={(e) => { setUtmSourceFilter(e.target.value); setPage(1) }}
+                className="form-input"
+                style={{ width: 200 }}
+              />
+              <select
+                className="form-input form-select"
+                value={customTagFilter}
+                onChange={e => { setCustomTagFilter(e.target.value); setPage(1) }}
+                style={{ cursor: 'pointer', width: 200 }}
               >
-                Anterior
-              </button>
-              <button 
-                 className="btn btn-secondary" 
-                 style={{ padding: '8px 12px' }} 
-                 disabled={page >= totalPages}
-                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              >
-                Próxima
-              </button>
+                <option value="all">Todas as tags salvas</option>
+                {availableTags.map(tag => (
+                  <option key={tag} value={tag}>{tag}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Página {page} de {totalPages}</span>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ padding: '8px 12px' }} 
+                  disabled={page === 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                >
+                  Anterior
+                </button>
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ padding: '8px 12px' }} 
+                  disabled={page >= totalPages}
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                >
+                  Próxima
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -437,10 +637,25 @@ export default function LeadsPage() {
               <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
                 <thead>
                   <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ padding: '12px 20px', width: 40 }}>
+                      <input
+                        type="checkbox"
+                        checked={leads.length > 0 && leads.every(l => selectedLeadIds.includes(l.id))}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            const ids = leads.map(l => l.id)
+                            setSelectedLeadIds(prev => Array.from(new Set([...prev, ...ids])))
+                          } else {
+                            const ids = leads.map(l => l.id)
+                            setSelectedLeadIds(prev => prev.filter(id => !ids.includes(id)))
+                          }
+                        }}
+                      />
+                    </th>
                     <th style={{ padding: '12px 20px', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>NOME & UTM</th>
                     <th style={{ padding: '12px 20px', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>EMAIL</th>
                     <th style={{ padding: '12px 20px', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>TELEFONE</th>
-                    <th style={{ padding: '12px 20px', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>ENGAJAMENTO</th>
+                    <th style={{ padding: '12px 20px', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>COMPORTAMENTO (ENGAJAMENTO)</th>
                     <th style={{ padding: '12px 20px', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>STATUS</th>
                     <th style={{ padding: '12px 20px', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>DATA REGISTRO</th>
                     <th style={{ padding: '12px 20px', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>ACOES</th>
@@ -451,8 +666,25 @@ export default function LeadsPage() {
                     const hasUtms = lead.metadata?.utm_source || lead.metadata?.utm_campaign
                     const engagement = engagementByEmail[leadEmailKey(lead.email)]
                     const whatsappUrl = getWhatsAppUrl(lead.phone)
+                    const watchPct = videoDuration > 0 && engagement ? Math.round((engagement.watchTime / videoDuration) * 100) : 0
+                    const barColor = watchPct >= 70 ? '#10b981' : watchPct >= 35 ? '#fb923c' : '#ef4444'
+                    const customTags = lead.metadata?.tags || []
+
                     return (
                       <tr key={lead.id} style={{ borderBottom: '1px solid var(--border)', transition: 'background 0.2s' }}>
+                        <td style={{ padding: '14px 20px', width: 40 }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedLeadIds.includes(lead.id)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setSelectedLeadIds(prev => [...prev, lead.id])
+                              } else {
+                                setSelectedLeadIds(prev => prev.filter(id => id !== lead.id))
+                              }
+                            }}
+                          />
+                        </td>
                         <td style={{ padding: '14px 20px' }}>
                           <div style={{ fontSize: 14, fontWeight: 500, color: '#fff' }}>
                             {lead.name || <span style={{ color: 'var(--text-muted)' }}>Anônimo</span>}
@@ -470,11 +702,11 @@ export default function LeadsPage() {
                         <td style={{ padding: '14px 20px', fontSize: 14, color: '#A1A1AA' }}>
                           {lead.phone || '-'}
                         </td>
-                        <td style={{ padding: '14px 20px', minWidth: 220 }}>
+                        <td style={{ padding: '14px 20px', minWidth: 240 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                             <div style={{
-                              width: 42,
-                              height: 42,
+                              width: 38,
+                              height: 38,
                               borderRadius: 8,
                               display: 'flex',
                               alignItems: 'center',
@@ -487,15 +719,17 @@ export default function LeadsPage() {
                                   ? 'rgba(245, 158, 11, 0.18)'
                                   : 'rgba(255,255,255,0.06)',
                               border: '1px solid var(--border)',
+                              flexShrink: 0,
                             }}>
                               {engagement?.score || 0}
                             </div>
-                            <div>
-                              <div style={{ fontSize: 12, color: '#fff', fontWeight: 700 }}>
-                                {formatWatchTime(engagement?.watchTime || 0)} assistidos
+                            <div style={{ flex: 1 }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#fff', fontWeight: 700, marginBottom: 2 }}>
+                                <span>{watchPct}% assistidos</span>
+                                <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{formatWatchTime(engagement?.watchTime || 0)}</span>
                               </div>
-                              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                CTA {engagement?.clickedCta ? 'sim' : 'nao'} | Chat {engagement?.chatMessages || 0}
+                              <div style={{ height: 5, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden' }}>
+                                <div style={{ width: `${Math.min(100, watchPct)}%`, height: '100%', background: barColor, borderRadius: 99 }} />
                               </div>
                             </div>
                           </div>
@@ -504,12 +738,27 @@ export default function LeadsPage() {
                               <span
                                 key={tag}
                                 style={{
-                                  fontSize: 11,
+                                  fontSize: 10,
                                   color: tag === 'Lead quente' ? '#fed7aa' : '#A1A1AA',
-                                  background: tag === 'Lead quente' ? 'rgba(249, 115, 22, 0.16)' : 'rgba(255,255,255,0.06)',
-                                  padding: '3px 7px',
-                                  borderRadius: 999,
-                                  border: '1px solid var(--border)',
+                                  background: tag === 'Lead quente' ? 'rgba(249, 115, 22, 0.16)' : 'rgba(255,255,255,0.05)',
+                                  padding: '2px 6px',
+                                  borderRadius: 8,
+                                  border: '1px solid rgba(255,255,255,0.03)',
+                                }}
+                              >
+                                {tag}
+                              </span>
+                            ))}
+                            {customTags.map((tag: string) => (
+                              <span
+                                key={tag}
+                                style={{
+                                  fontSize: 10,
+                                  color: '#a78bfa',
+                                  background: 'rgba(167,139,250,0.12)',
+                                  padding: '2px 6px',
+                                  borderRadius: 8,
+                                  border: '1px solid rgba(167,139,250,0.2)',
                                 }}
                               >
                                 {tag}
@@ -528,7 +777,15 @@ export default function LeadsPage() {
                           {new Date(lead.registered_at).toLocaleString()}
                         </td>
                         <td style={{ padding: '14px 20px' }}>
-                          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            <button
+                              onClick={() => setSelectedLeadForTimeline(lead)}
+                              disabled={!engagement}
+                              className="btn btn-secondary"
+                              style={{ padding: '6px 10px', fontSize: 12 }}
+                            >
+                              Timeline
+                            </button>
                             <a
                               href={`mailto:${lead.email}`}
                               className="btn btn-secondary"
@@ -559,6 +816,227 @@ export default function LeadsPage() {
         </div>
       </div>
 
+      {/* Floating Bulk Actions Bar */}
+      {selectedLeadIds.length > 0 && (
+        <div style={{
+          position: 'fixed',
+          bottom: 70,
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(30, 27, 75, 0.95)',
+          backdropFilter: 'blur(16px)',
+          border: '1px solid rgba(99, 102, 241, 0.4)',
+          borderRadius: 16,
+          padding: '12px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 20,
+          boxShadow: '0 10px 40px rgba(0,0,0,0.5), 0 0 20px rgba(99, 102, 241, 0.15)',
+          zIndex: 50,
+          animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+        }}>
+          <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', borderRight: '1px solid rgba(255,255,255,0.1)', paddingRight: 16 }}>
+            👥 {selectedLeadIds.length} lead{selectedLeadIds.length > 1 ? 's' : ''} selecionado{selectedLeadIds.length > 1 ? 's' : ''}
+          </span>
+          
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button
+              onClick={handleEmailSelected}
+              className="btn btn-secondary btn-sm"
+              style={{ fontSize: 12, padding: '8px 14px' }}
+            >
+              ✉️ E-mail em Massa
+            </button>
+            <button
+              onClick={handleExportSelectedCSV}
+              className="btn btn-secondary btn-sm"
+              style={{ fontSize: 12, padding: '8px 14px' }}
+            >
+              📥 Exportar CSV
+            </button>
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <button
+                onClick={() => setTagInputOpen(!tagInputOpen)}
+                className="btn btn-primary btn-sm"
+                style={{ fontSize: 12, padding: '8px 14px' }}
+              >
+                🏷️ Adicionar Tag
+              </button>
+              {tagInputOpen && (
+                <div style={{
+                  position: 'absolute', bottom: '100%', right: 0, marginBottom: 10,
+                  background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+                  borderRadius: 12, padding: 14, width: 220,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', gap: 8,
+                }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>Nome da Tag</span>
+                  <input
+                    type="text"
+                    placeholder="Ex: Quente, Suporte..."
+                    className="form-input form-input-sm"
+                    value={newBulkTag}
+                    onChange={e => setNewBulkTag(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') addTagsInBulk() }}
+                    disabled={updatingTags}
+                  />
+                  <button
+                    onClick={addTagsInBulk}
+                    disabled={updatingTags}
+                    className="btn btn-primary btn-sm"
+                    style={{ width: '100%', justifyContent: 'center' }}
+                  >
+                    {updatingTags ? 'Salvando...' : 'Aplicar'}
+                  </button>
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setSelectedLeadIds([])}
+              style={{ background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: 11, cursor: 'pointer', marginLeft: 8 }}
+            >
+              Limpar seleção
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Lead Timeline Modal */}
+      {selectedLeadForTimeline && (() => {
+        const email = leadEmailKey(selectedLeadForTimeline.email)
+        const engagement = engagementByEmail[email]
+        const events = engagement?.events || []
+        
+        // Sort events chronologically
+        const sortedEvents = [...events].sort((a, b) => {
+          const timeA = new Date(a.created_at).getTime()
+          const timeB = new Date(b.created_at).getTime()
+          return timeA - timeB
+        })
+
+        const translateEventType = (type: string) => {
+          switch (type) {
+            case 'page_view': return { label: 'Acessou a Sala', icon: '👁️', color: '#60a5fa' }
+            case 'play': return { label: 'Iniciou o Vídeo (Play)', icon: '▶️', color: '#22c55e' }
+            case 'pause': return { label: 'Pausou o Vídeo', icon: '⏸️', color: '#f59e0b' }
+            case 'seek': return { label: 'Avançou/Retrocedeu o Vídeo', icon: '⏩', color: '#818cf8' }
+            case 'chat_sent': return { label: 'Enviou Mensagem no Chat', icon: '💬', color: '#c084fc' }
+            case 'cta_click': return { label: 'Clicou na Oferta (CTA)', icon: '🛒', color: '#fb923c' }
+            case 'offer_seen': return { label: 'Visualizou Oferta', icon: '💰', color: '#34d399' }
+            case 'quiz_response': return { label: 'Respondeu Quiz', icon: '📝', color: '#facc15' }
+            default: return { label: type, icon: '⚡', color: '#A1A1AA' }
+          }
+        }
+
+        return (
+          <div style={{
+            position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+            background: 'rgba(5, 5, 8, 0.75)', backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'flex-end',
+            zIndex: 100,
+          }} onClick={() => setSelectedLeadForTimeline(null)}>
+            
+            <div style={{
+              width: '100%', maxWidth: 460, height: '100%',
+              background: 'var(--bg-card)', borderLeft: '1px solid var(--border)',
+              display: 'flex', flexDirection: 'column',
+              boxShadow: '-10px 0 40px rgba(0,0,0,0.6)',
+              animation: 'slideLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+            }} onClick={e => e.stopPropagation()}>
+              
+              {/* Header */}
+              <div style={{ padding: '24px 28px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0, color: '#fff' }}>🕵️ Timeline de Comportamento</h3>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Histórico detalhado do lead na sala</span>
+                </div>
+                <button
+                  onClick={() => setSelectedLeadForTimeline(null)}
+                  style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: '#fff', cursor: 'pointer', width: 32, height: 32, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Lead Summary Panel */}
+              <div style={{ padding: '20px 28px', background: 'rgba(255,255,255,0.01)', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: '#fff' }}>
+                  {selectedLeadForTimeline.name || 'Anônimo'}
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                  {selectedLeadForTimeline.email}
+                </div>
+                {engagement && (
+                  <div style={{ display: 'flex', gap: 16, marginTop: 14, flexWrap: 'wrap' }}>
+                    <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', fontSize: 11 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Assistido:</span> <strong style={{ color: '#10b981' }}>{formatWatchTime(engagement.watchTime)}</strong>
+                    </div>
+                    <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', fontSize: 11 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Score:</span> <strong style={{ color: '#fb923c' }}>{engagement.score}/100</strong>
+                    </div>
+                    <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', fontSize: 11 }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Dispositivo:</span> <strong>{engagement.device} ({engagement.os})</strong>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Timeline Events Scroll */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '28px' }}>
+                {sortedEvents.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-muted)' }}>
+                    Sem eventos registrados para este lead nesta sessão.
+                  </div>
+                ) : (
+                  <div style={{ position: 'relative', paddingLeft: 20, borderLeft: '2px solid rgba(255,255,255,0.06)' }}>
+                    {sortedEvents.map((ev, index) => {
+                      const details = translateEventType(ev.type)
+                      const timeStr = new Date(ev.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                      return (
+                        <div key={index} style={{ position: 'relative', marginBottom: 24 }}>
+                          {/* Timeline dot */}
+                          <div style={{
+                            position: 'absolute', left: -27, top: 2, width: 12, height: 12, borderRadius: '50%',
+                            background: details.color, border: '2px solid var(--bg-card)',
+                            boxShadow: `0 0 6px ${details.color}40`,
+                          }} />
+                          
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                            <strong style={{ fontSize: 13, color: '#fff' }}>{details.label}</strong>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace' }}>{timeStr}</span>
+                          </div>
+                          
+                          {ev.timestamp !== null && ev.timestamp !== undefined && (
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace', marginBottom: 4 }}>
+                              Posição do vídeo: {formatVideoPosition(ev.timestamp)}
+                            </div>
+                          )}
+
+                          {ev.details && (
+                            <div style={{ fontSize: 12, color: 'var(--text-secondary)', background: 'rgba(255,255,255,0.02)', padding: '6px 10px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.04)', wordBreak: 'break-all' }}>
+                              {ev.details}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      <style>{`
+        @keyframes slideUp {
+          from { transform: translate(-50%, 40px); opacity: 0; }
+          to { transform: translate(-50%, 0); opacity: 1; }
+        }
+        @keyframes slideLeft {
+          from { transform: translateX(100%); }
+          to { transform: translateX(0); }
+        }
+      `}</style>
     </div>
   )
 }

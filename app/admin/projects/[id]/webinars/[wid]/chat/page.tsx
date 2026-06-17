@@ -675,6 +675,51 @@ export default function ChatConfigPage() {
   const previewTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const previewCounterRef = useRef(0)
 
+  // Sandbox State
+  const [sandboxMessages, setSandboxMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([])
+  const [sandboxInput, setSandboxInput] = useState('')
+  const [sandboxTyping, setSandboxTyping] = useState(false)
+
+  async function sendSandboxMessage() {
+    const text = sandboxInput.trim()
+    if (!text || sandboxTyping) return
+
+    setSandboxInput('')
+    const newMsg = { role: 'user' as const, content: text }
+    const updatedMessages = [...sandboxMessages, newMsg]
+    setSandboxMessages(updatedMessages)
+    setSandboxTyping(true)
+
+    try {
+      const res = await fetch('/api/ai-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          question: text,
+          webinar_id: webinarId,
+          history: sandboxMessages, // pass current sandbox history
+          overrides: {
+            ai_enabled: aiEnabled,
+            ai_model: aiModel,
+            ai_knowledge_base: aiKnowledgeBase,
+            ai_system_prompt: aiSystemPrompt
+          }
+        })
+      })
+
+      const data = await res.json()
+      if (data.answer) {
+        setSandboxMessages(prev => [...prev, { role: 'assistant', content: data.answer }])
+      } else if (data.skip) {
+        setSandboxMessages(prev => [...prev, { role: 'assistant', content: '⚠️ IA ignorou esta mensagem ou não foi possível obter resposta (verifique a API Key do OpenRouter nos Ajustes do Projeto).' }])
+      }
+    } catch (err) {
+      setSandboxMessages(prev => [...prev, { role: 'assistant', content: '❌ Erro ao se conectar com o servidor.' }])
+    } finally {
+      setSandboxTyping(false)
+    }
+  }
+
   async function handleGenerateAi() {
     if (!aiScriptText.trim()) return toast.error('Digite o roteiro ou contexto da aula.')
     setAiGenerating(true)
@@ -1607,6 +1652,149 @@ export default function ChatConfigPage() {
           </div>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>Instrução Customizada (System Prompt)</div>
           <textarea className="form-input" rows={4} placeholder={`Você é assistente. Responda dúvidas baseadas na Base de Dados. Seja conciso.`} value={aiSystemPrompt} onChange={e => setAiSystemPrompt(e.target.value)} style={{ resize: 'vertical', fontSize: 13 }} />
+        </div>
+
+        {/* Sandbox Test Console Card */}
+        <div style={{
+          background: 'var(--bg-card)',
+          border: '1px solid var(--border)',
+          borderRadius: 16,
+          padding: 20,
+          opacity: aiEnabled ? 1 : 0.5,
+          pointerEvents: aiEnabled ? 'auto' : 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 16
+        }}>
+          <div>
+            <div style={{ fontWeight: 700, marginBottom: 4 }}>🧪 Sandbox de Testes da IA</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
+              Teste o cérebro da sua IA em tempo real antes da live. Faça perguntas sobre preço, garantia ou suporte para ver como ela responderá aos seus alunos, mantendo o histórico de conversação.
+            </div>
+          </div>
+
+          {/* Conversation history area */}
+          <div style={{
+            background: 'var(--bg)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            padding: 16,
+            minHeight: 200,
+            maxHeight: 320,
+            overflowY: 'auto',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 12
+          }}>
+            {sandboxMessages.length === 0 ? (
+              <div style={{
+                margin: 'auto',
+                textAlign: 'center',
+                color: 'var(--text-muted)',
+                fontSize: 13,
+                padding: '20px 0'
+              }}>
+                💬 Envie uma mensagem para iniciar o teste da IA...
+              </div>
+            ) : (
+              sandboxMessages.map((msg, i) => (
+                <div key={i} style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: msg.role === 'user' ? 'flex-end' : 'flex-start',
+                  gap: 4
+                }}>
+                  <div style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: 'var(--text-muted)',
+                    marginLeft: msg.role === 'user' ? 0 : 4,
+                    marginRight: msg.role === 'user' ? 4 : 0,
+                  }}>
+                    {msg.role === 'user' ? 'Você (Testador)' : (aiPersonaName || '🤖 Assistente')}
+                  </div>
+                  <div style={{
+                    background: msg.role === 'user' ? 'var(--brand)' : 'var(--bg-elevated)',
+                    border: msg.role === 'user' ? 'none' : '1px solid var(--border)',
+                    color: '#fff',
+                    borderRadius: 12,
+                    padding: '8px 12px',
+                    fontSize: 13,
+                    maxWidth: '85%',
+                    lineHeight: 1.4,
+                    wordBreak: 'break-word',
+                  }}>
+                    {msg.content}
+                  </div>
+                </div>
+              ))
+            )}
+            
+            {sandboxTyping && (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'flex-start',
+                gap: 4
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', marginLeft: 4 }}>
+                  {aiPersonaName || '🤖 Assistente'}
+                </div>
+                <div style={{
+                  background: 'var(--bg-elevated)',
+                  border: '1px solid var(--border)',
+                  color: 'var(--text-muted)',
+                  borderRadius: 12,
+                  padding: '8px 12px',
+                  fontSize: 13,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}>
+                  <span className="spinner" style={{ width: 12, height: 12 }} />
+                  digitando...
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Sandbox Controls */}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <input
+              type="text"
+              className="form-input"
+              value={sandboxInput}
+              onChange={e => setSandboxInput(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  sendSandboxMessage()
+                }
+              }}
+              placeholder="Pergunte algo (Ex: Tem garantia?)"
+              style={{ flex: 1 }}
+              disabled={sandboxTyping}
+            />
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={sendSandboxMessage}
+              disabled={sandboxTyping || !sandboxInput.trim()}
+              style={{ display: 'flex', alignItems: 'center', gap: 6 }}
+            >
+              Enviar 🚀
+            </button>
+            {sandboxMessages.length > 0 && (
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() => setSandboxMessages([])}
+                style={{ color: '#ef4444' }}
+              >
+                Limpar Histórico ✕
+              </button>
+            )}
+          </div>
         </div>
       </div>
 

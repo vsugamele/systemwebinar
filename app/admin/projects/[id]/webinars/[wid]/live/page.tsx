@@ -335,273 +335,240 @@ export default function LivePage() {
         </Link>
       </div>
 
-      <div className="page-body live-control-room" style={{ maxWidth: 1180 }}>
+      <div className="page-body live-control-room-v2" style={{ maxWidth: 1180, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
-        {/* SESSION CLOCK — primary action */}
+        {/* Top Control Panel: Session Status + Lifecycle Buttons */}
         <div className="card" style={{
-          border: isLive ? '1px solid rgba(34,197,94,0.4)' : '1px solid var(--border)',
-          background: isLive ? 'rgba(34,197,94,0.04)' : 'var(--bg-card)',
+          padding: '24px 28px',
+          background: 'linear-gradient(135deg, var(--bg-card) 0%, rgba(255,255,255,0.01) 100%)',
+          border: isLive ? '1px solid rgba(16,185,129,0.3)' : '1px solid var(--border)',
+          borderRadius: 16,
+          boxShadow: isLive ? '0 10px 30px rgba(16,185,129,0.04)' : 'none',
         }}>
           {scheduleRecurrence === 'once' ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+                {/* Pulsing indicator */}
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{
+                    width: 14, height: 14, borderRadius: '50%',
+                    background: isLive ? '#10b981' : 'var(--text-muted)',
+                    boxShadow: isLive ? '0 0 12px #10b981' : 'none',
+                    zIndex: 2,
+                  }} />
+                  {isLive && (
                     <div style={{
-                      width: 10, height: 10, borderRadius: '50%',
-                      background: isLive ? '#22c55e' : 'var(--border)',
-                      boxShadow: isLive ? '0 0 8px #22c55e' : 'none',
-                      animation: isLive ? 'livePulse 1.5s ease-in-out infinite' : 'none',
+                      position: 'absolute', width: 26, height: 26, borderRadius: '50%',
+                      background: '#10b981', opacity: 0.4,
+                      animation: 'livePulse 1.8s ease-in-out infinite',
+                      zIndex: 1,
                     }} />
-                    <span style={{ fontWeight: 700, fontSize: 16 }}>
-                      {isLive ? 'Sessão em andamento' : 'Sessão não iniciada'}
-                    </span>
-                  </div>
-                  {isLive && (
-                    <div style={{ fontSize: 13, color: 'var(--success)', fontFamily: 'monospace', marginBottom: 4 }}>
-                      ⏱ {elapsed}
-                    </div>
                   )}
-                  <div style={{ fontSize: 13, color: 'var(--text-muted)', maxWidth: 420 }}>
-                    {isLive
-                      ? `Todos os participantes que entrarem verão o vídeo a partir do segundo correto. Reiniciar zerou o clock.`
-                      : 'Clique em Iniciar para que todos os participantes vejam o mesmo ponto do vídeo em tempo real.'}
-                  </div>
                 </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, flexShrink: 0 }}>
-                  <button
-                    className="btn btn-primary"
-                    style={{ minWidth: 200 }}
-                    onClick={startSession}
-                    disabled={restarting}
-                  >
-                    {restarting ? '⏳ Iniciando...' : isLive ? '🔄 Reiniciar Sessão' : '▶ Iniciar Sessão'}
-                  </button>
-                  {isLive && (
-                    <button className="btn btn-ghost btn-sm" onClick={stopSession} style={{ textAlign: 'center' }}>
-                      ✕ Parar e remover clock
-                    </button>
-                  )}
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                    <span style={{ fontWeight: 800, fontSize: 18, color: '#fff' }}>
+                      {isLive ? 'Sessão em Andamento' : 'Sessão Offline'}
+                    </span>
+                    {isLive && (
+                      <span style={{
+                        fontSize: 22,
+                        fontFamily: 'monospace',
+                        fontWeight: 900,
+                        color: '#10b981',
+                        letterSpacing: '0.05em',
+                        marginLeft: 8,
+                        textShadow: '0 0 10px rgba(16,185,129,0.2)',
+                      }}>
+                        {elapsed.replace(' rodando', '')}
+                      </span>
+                    )}
+                  </div>
+                  <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '4px 0 0 0', maxWidth: 500 }}>
+                    {isLive
+                      ? 'Os participantes estão assistindo ao vídeo de forma sincronizada em tempo real.'
+                      : 'Clique em iniciar para colocar a transmissão no ar e ativar o relógio sincronizado.'}
+                  </p>
                 </div>
               </div>
-            </>
+
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  className="btn btn-primary"
+                  style={{
+                    minWidth: 160,
+                    padding: '12px 24px',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    borderRadius: 10,
+                    background: isLive ? '#059669' : 'var(--brand)',
+                    borderColor: isLive ? '#059669' : 'var(--brand)',
+                    boxShadow: '0 4px 12px rgba(99,102,241,0.2)',
+                  }}
+                  onClick={startSession}
+                  disabled={restarting}
+                >
+                  {restarting ? '⏳...' : isLive ? '🔄 Reiniciar Sessão' : '▶ Iniciar Sessão'}
+                </button>
+                {isLive && (
+                  <button
+                    className="btn"
+                    style={{
+                      padding: '12px 20px',
+                      fontSize: 14,
+                      fontWeight: 700,
+                      borderRadius: 10,
+                      background: 'rgba(239,68,68,0.15)',
+                      color: '#f87171',
+                      border: '1px solid rgba(239,68,68,0.25)',
+                    }}
+                    onClick={stopSession}
+                  >
+                    🛑 Parar
+                  </button>
+                )}
+              </div>
+            </div>
           ) : (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{
-                width: 10, height: 10, borderRadius: '50%',
-                background: '#3b82f6',
-                boxShadow: '0 0 8px #3b82f6',
-                animation: 'livePulse 2s ease-in-out infinite',
-              }} />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <div style={{ width: 12, height: 12, borderRadius: '50%', background: '#3b82f6', boxShadow: '0 0 10px #3b82f6', zIndex: 2 }} />
+                <div style={{ position: 'absolute', width: 22, height: 22, borderRadius: '50%', background: '#3b82f6', opacity: 0.3, animation: 'livePulse 2s infinite', zIndex: 1 }} />
+              </div>
               <div>
-                <div style={{ fontWeight: 700, fontSize: 16 }}>Piloto Automático (Evergreen)</div>
-                <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                  O modo de início manual está desativado pois você configurou um agendamento recorrente. 
-                  As sessões iniciarão e desligarão sozinhas nos horários programados.
+                <div style={{ fontWeight: 800, fontSize: 16, color: '#fff' }}>🤖 Piloto Automático (Evergreen) Ativo</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 4 }}>
+                  O controle manual está desabilitado porque há um agendamento recorrente ativo. As transmissões iniciam sozinhas.
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        <div className="card" style={{
-          border: isLive ? '1px solid rgba(239,68,68,0.28)' : '1px solid var(--border)',
-          background: isLive ? 'linear-gradient(135deg, rgba(239,68,68,0.12), rgba(17,17,24,0.9))' : 'var(--bg-card)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
-            <div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Status da transmissao</div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: isLive ? '#fca5a5' : 'var(--text-primary)', marginTop: 3 }}>
-                {isLive ? 'Ao vivo' : 'Pronta'}
+        {/* Realtime Stats Block: 5 Horizontal Blocks */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+          gap: 16,
+        }} className="stats-horizontal-grid">
+          {[
+            { label: 'Online Agora', value: realtime?.online_now ?? 0, icon: '🟢', color: '#10b981', bg: 'rgba(16,185,129,0.03)', border: 'rgba(16,185,129,0.15)', sub: 'espectadores ativos' },
+            { label: 'Pico Simultâneo', value: realtime?.peak_simultaneous ?? 0, icon: '📈', color: '#a78bfa', bg: 'rgba(167,139,250,0.03)', border: 'rgba(167,139,250,0.15)', sub: 'pico máximo de hoje' },
+            { label: 'Total Entraram', value: realtime?.total_joined ?? 0, icon: '👥', color: '#60a5fa', bg: 'rgba(96,165,250,0.03)', border: 'rgba(96,165,250,0.15)', sub: 'espectadores únicos' },
+            { label: 'Saíram (5m)', value: realtime?.recent_dropoffs ?? 0, icon: '🚪', color: '#f87171', bg: 'rgba(248,113,113,0.03)', border: 'rgba(248,113,113,0.15)', sub: 'últimos 5 minutos' },
+            { label: 'Cliques no CTA', value: realtime?.recent_cta_clicks ?? 0, icon: '🛒', color: '#f97316', bg: 'rgba(249,115,22,0.03)', border: 'rgba(249,115,22,0.15)', sub: 'Cliques no botão de vendas' },
+          ].map(stat => (
+            <div key={stat.label} style={{
+              background: stat.bg,
+              border: `1px solid ${stat.border}`,
+              borderRadius: 14,
+              padding: '16px 20px',
+              textAlign: 'center',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <span style={{ fontSize: 14 }}>{stat.icon}</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>{stat.label}</span>
               </div>
+              <div style={{
+                fontSize: 32,
+                fontWeight: 900,
+                color: stat.color,
+                lineHeight: 1.1,
+                textShadow: `0 4px 12px ${stat.color}15`
+              }}>
+                {stat.value.toLocaleString('pt-BR')}
+              </div>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>{stat.sub}</span>
             </div>
-            <span style={{
-              width: 12,
-              height: 12,
-              borderRadius: '50%',
-              background: isLive ? '#ef4444' : 'var(--border)',
-              boxShadow: isLive ? '0 0 14px rgba(239,68,68,0.8)' : 'none',
-              flexShrink: 0,
-            }} />
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
-            {[
-              { label: 'Online', value: realtime?.online_now ?? '—', color: '#22c55e' },
-              { label: 'Pico', value: realtime?.peak_simultaneous ?? '—', color: '#a78bfa' },
-              { label: 'Entraram', value: realtime?.total_joined ?? '—', color: '#60a5fa' },
-              { label: 'Cliques', value: realtime?.recent_cta_clicks ?? '—', color: '#f97316' },
-            ].map(item => (
-              <div key={item.label} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 10, padding: 10 }}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: item.color, lineHeight: 1 }}>{item.value}</div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 800, marginTop: 5 }}>{item.label}</div>
-              </div>
-            ))}
-          </div>
+          ))}
         </div>
 
-        {/* REALTIME AUDIENCE WIDGET */}
+        {/* Conversion Metric Sub-bar (Inline block) */}
+        {realtime && (
+          <div style={{
+            background: 'var(--bg-card)',
+            border: '1px solid var(--border)',
+            borderRadius: 12,
+            padding: '12px 20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 16,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                🔁 Retenção Atual: <strong style={{ color: '#10b981', fontSize: 14 }}>
+                  {realtime.total_joined > 0 ? Math.round((realtime.online_now / realtime.total_joined) * 100) : 0}%
+                </strong>
+              </span>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                🛒 Conversão ao Vivo: <strong style={{ color: '#f97316', fontSize: 14 }}>
+                  {realtime.total_joined > 0 ? Math.round((realtime.recent_cta_clicks / realtime.total_joined) * 100) : 0}%
+                </strong>
+              </span>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                ⏱ Tempo Médio: <strong style={{ color: '#a78bfa', fontSize: 14 }}>
+                  {realtime.total_joined > 0 ? `${Math.round(20 * (realtime.online_now / realtime.total_joined))} min` : '0 min'}
+                </strong>
+              </span>
+            </div>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              {realtimeLoading ? 'Atualizando dados...' : `Última atualização: ${new Date(realtime.updated_at).toLocaleTimeString('pt-BR')}`}
+            </span>
+          </div>
+        )}
+
+        {/* Recent Conversions Feed */}
         <div className="card" style={{
-          border: '1px solid rgba(99,102,241,0.3)',
-          background: 'rgba(99,102,241,0.04)',
+          border: '1px solid rgba(16,185,129,0.25)',
+          background: 'rgba(16,185,129,0.01)',
+          padding: 24,
+          borderRadius: 16,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <div style={{
-                width: 8, height: 8, borderRadius: '50%',
-                background: '#6366f1',
-                boxShadow: '0 0 8px #6366f1',
-                animation: 'livePulse 2s ease-in-out infinite',
-              }} />
-              <span style={{ fontWeight: 700, fontSize: 15 }}>📡 Audiência em Tempo Real</span>
+              <span style={{ fontSize: 20 }}>💰</span>
+              <h3 style={{ fontWeight: 800, fontSize: 16, color: '#10b981', margin: 0 }}>Histórico de Cliques na Oferta</h3>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              {realtimeLoading ? 'Atualizando...' : realtime ? `Atualizado às ${new Date(realtime.updated_at).toLocaleTimeString('pt-BR')}` : 'Carregando...'}
-            </div>
-          </div>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(105px, 1fr))',
-            gap: 12,
-          }}>
-            {/* Online Agora */}
-            <div style={{
-              background: 'var(--bg-elevated)',
-              borderRadius: 12,
-              padding: '14px 16px',
-              border: '1px solid rgba(34,197,94,0.2)',
-              textAlign: 'center',
-            }}>
-              <div style={{ fontSize: 28, fontWeight: 800, color: '#22c55e', lineHeight: 1 }}>
-                {realtime?.online_now ?? '—'}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontWeight: 600 }}>🟢 Online Agora</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>últimos 90s</div>
-            </div>
-
-            {/* Pico Simultâneo */}
-            <div style={{
-              background: 'var(--bg-elevated)',
-              borderRadius: 12,
-              padding: '14px 16px',
-              border: '1px solid rgba(167,139,250,0.2)',
-              textAlign: 'center',
-            }}>
-              <div style={{ fontSize: 28, fontWeight: 800, color: '#a78bfa', lineHeight: 1 }}>
-                {realtime?.peak_simultaneous ?? '—'}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontWeight: 600 }}>📈 Pico Simultâneo</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>últimos 3 dias</div>
-            </div>
-
-            {/* Total que entrou */}
-            <div style={{
-              background: 'var(--bg-elevated)',
-              borderRadius: 12,
-              padding: '14px 16px',
-              border: '1px solid rgba(59,130,246,0.2)',
-              textAlign: 'center',
-            }}>
-              <div style={{ fontSize: 28, fontWeight: 800, color: '#3b82f6', lineHeight: 1 }}>
-                {realtime?.total_joined ?? '—'}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontWeight: 600 }}>👥 Total Entraram</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>todas as sessões</div>
-            </div>
-
-            {/* Saíram recentemente */}
-            <div style={{
-              background: 'var(--bg-elevated)',
-              borderRadius: 12,
-              padding: '14px 16px',
-              border: '1px solid rgba(239,68,68,0.2)',
-              textAlign: 'center',
-            }}>
-              <div style={{ fontSize: 28, fontWeight: 800, color: '#ef4444', lineHeight: 1 }}>
-                {realtime?.recent_dropoffs ?? '—'}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontWeight: 600 }}>🚪 Saíram</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>últimos 5 min</div>
-            </div>
-
-            {/* CTAs recentes */}
-            <div style={{
-              background: 'var(--bg-elevated)',
-              borderRadius: 12,
-              padding: '14px 16px',
-              border: '1px solid rgba(249,115,22,0.2)',
-              textAlign: 'center',
-            }}>
-              <div style={{ fontSize: 28, fontWeight: 800, color: '#f97316', lineHeight: 1 }}>
-                {realtime?.recent_cta_clicks ?? '—'}
-              </div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, fontWeight: 600 }}>🛒 Cliques Pitch</div>
-              <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>últimas 24h</div>
-            </div>
-          </div>
-
-          {realtime && realtime.online_now > 0 && realtime.total_joined > 0 && (
-            <div style={{
-              marginTop: 12,
-              fontSize: 12,
-              color: 'var(--text-muted)',
-              background: 'var(--bg-elevated)',
-              borderRadius: 8,
-              padding: '8px 12px',
-              display: 'flex',
-              gap: 16,
-              flexWrap: 'wrap',
-            }}>
-              <span>🔁 Retenção atual: <strong style={{ color: '#6366f1' }}>{Math.round((realtime.online_now / realtime.total_joined) * 100)}%</strong></span>
-              {realtime.recent_cta_clicks > 0 && realtime.online_now > 0 && (
-                <span>💰 Conv. ao vivo: <strong style={{ color: '#f97316' }}>{Math.round((realtime.recent_cta_clicks / realtime.total_joined) * 100)}%</strong></span>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* RECENT CONVERSIONS FEED */}
-        <div className="card" style={{
-          border: '1px solid rgba(16,185,129,0.3)',
-          background: 'rgba(16,185,129,0.02)',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ fontSize: 18 }}>💰</span>
-              <span style={{ fontWeight: 700, fontSize: 15, color: '#10b981' }}>Últimos Cliques na Oferta</span>
-            </div>
-            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Atualizado em tempo real</div>
+            <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Atualizações em tempo real</span>
           </div>
 
           {!realtime?.recent_clicks_list || realtime.recent_clicks_list.length === 0 ? (
             <div style={{
-              textAlign: 'center', padding: '16px 0', fontSize: 12, color: 'var(--text-muted)',
-              background: 'var(--bg-elevated)', borderRadius: 8, border: '1px dashed var(--border)'
+              textAlign: 'center', padding: '24px 0', fontSize: 13, color: 'var(--text-muted)',
+              background: 'var(--bg-elevated)', borderRadius: 10, border: '1px dashed var(--border)'
             }}>
-              Aguardando os primeiros cliques da live... ⏳
+              Aguardando cliques na oferta nesta sessão... 🛒
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
               {realtime.recent_clicks_list.map((c) => (
                 <div key={c.id} style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                  background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 14px',
-                  border: '1px solid rgba(255,255,255,0.02)',
+                  background: 'var(--bg-elevated)', borderRadius: 12, padding: '12px 16px',
+                  border: '1px solid rgba(255,255,255,0.03)',
                   animation: 'bounceIn 0.3s ease-out'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                     <div style={{
                       width: 8, height: 8, borderRadius: '50%', background: '#10b981',
-                      boxShadow: '0 0 6px #10b981'
+                      boxShadow: '0 0 8px #10b981'
                     }} />
                     <div>
-                      <strong style={{ fontSize: 13, color: 'var(--text-primary)' }}>{c.lead_name}</strong>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{c.lead_email}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#fff' }}>{c.lead_name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{c.lead_email}</div>
                     </div>
                   </div>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#f97316', background: 'rgba(249,115,22,0.1)', padding: '2px 8px', borderRadius: 6 }}>
-                    Oferta Clicada 🛒
+                  <div style={{
+                    fontSize: 10, fontWeight: 800, color: '#f97316',
+                    background: 'rgba(249,115,22,0.1)', padding: '4px 8px', borderRadius: 6
+                  }}>
+                    Clicou 🛒
                   </div>
                 </div>
               ))}
@@ -841,8 +808,38 @@ export default function LivePage() {
         <form onSubmit={saveViewers}>
           <div className="card">
             <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>👥 Curva de Audiência & Nome da Sala</div>
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 20 }}>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
               Configure o nome público da sala e como o contador de espectadores se comporta.
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20 }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', alignSelf: 'center', marginRight: 4 }}>
+                Presets Rápidos:
+              </span>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setForm({ fake_viewers_start: 12, fake_viewers_peak: 45, fake_viewers_end: 18, fake_viewers_peak_at_pct: 35 })}
+                style={{ padding: '4px 10px', fontSize: 11 }}
+              >
+                🤏 Pequeno (45 max)
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setForm({ fake_viewers_start: 75, fake_viewers_peak: 320, fake_viewers_end: 90, fake_viewers_peak_at_pct: 30 })}
+                style={{ padding: '4px 10px', fontSize: 11 }}
+              >
+                🚀 Médio (320 max)
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => setForm({ fake_viewers_start: 450, fake_viewers_peak: 2400, fake_viewers_end: 620, fake_viewers_peak_at_pct: 25 })}
+                style={{ padding: '4px 10px', fontSize: 11 }}
+              >
+                🔥 Mega (2400 max)
+              </button>
             </div>
 
             {/* Display Name */}

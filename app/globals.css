@@ -3168,3 +3168,30 @@ tbody tr:hover td { background: var(--bg-hover); }
     padding-top: 16px;
   }
 }
+
+/* =============================================
+   WEBINAR DETAIL SIDEBAR (Desktop vs Mobile)
+   ============================================= */
+.sidebar-webinar-desktop {
+  width: 260px;
+  padding: 20px 16px;
+  background: var(--bg-card);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.sidebar-webinar-mobile {
+  display: none;
+}
+
+@media (max-width: 1024px) {
+  .sidebar-webinar-desktop {
+    display: none !important;
+  }
+  .sidebar-webinar-mobile {
+    display: block !important;
+  }
+}

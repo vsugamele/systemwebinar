@@ -74,7 +74,7 @@ export default function AdminDashboard() {
       ] = await Promise.all([
         supabase.from('webi_projects').select('id'),
         supabase.from('webi_webinars').select('id'),
-        supabase.from('webi_webinars').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+        supabase.from('webi_webinars').select('id', { count: 'exact', head: true }).eq('status', 'active').or('session_started_at.not.is.null,is_evergreen.eq.true'),
         supabase.from('webi_leads').select('id', { count: 'exact', head: true }),
         supabase.from('webi_session_events').select('id', { count: 'exact', head: true }).eq('event_type', 'cta_clicked'),
         supabase.from('webi_webinars')
@@ -84,6 +84,7 @@ export default function AdminDashboard() {
         supabase.from('webi_webinars')
           .select('*, webi_projects(name, brand_color)')
           .eq('status', 'active')
+          .or('session_started_at.not.is.null,is_evergreen.eq.true')
           .order('updated_at', { ascending: false })
           .limit(6),
       ])
@@ -127,10 +128,11 @@ export default function AdminDashboard() {
       total: checks.length,
       pct: Math.round((done / checks.length) * 100),
       missing: [
-        !w.video_url ? 'video' : '',
-        !w.landing_headline ? 'captura' : '',
-        w.status !== 'active' ? 'publicacao' : '',
-      ].filter(Boolean).join(', ') || 'pronto para revisar',
+        !w.video_url ? { key: 'video_url', label: 'vídeo 🎥', href: `/admin/projects/${w.project_id}/webinars/${w.id}?focus=video_url` } : null,
+        !w.landing_headline ? { key: 'captura', label: 'captura 🧲', href: `/admin/projects/${w.project_id}/webinars/${w.id}/registration` } : null,
+        (!w.webhook_url && !w.whatsapp_api_url) ? { key: 'integracao', label: 'integração 🔌', href: `/admin/projects/${w.project_id}/webinars/${w.id}?focus=webhook_url` } : null,
+        w.status !== 'active' ? { key: 'publicacao', label: 'publicar 🚀', href: `/admin/projects/${w.project_id}/webinars/${w.id}?focus=status` } : null,
+      ].filter(Boolean) as { key: string; label: string; href: string }[]
     }
   })
 
@@ -300,28 +302,67 @@ export default function AdminDashboard() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
               {setupWebinars.map(item => (
-                <Link
+                <div
                   key={item.webinar.id}
-                  href={`/admin/projects/${item.webinar.project_id}/webinars/${item.webinar.id}`}
                   style={{
                     background: 'var(--bg-card)',
                     border: '1px solid var(--border)',
                     borderRadius: 12,
-                    padding: 14,
-                    textDecoration: 'none',
+                    padding: 16,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'space-between',
+                    gap: 12,
                   }}
                 >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.webinar.name}</div>
-                      <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 2 }}>{item.done} de {item.total} secoes · falta: {item.missing}</div>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+                      <Link
+                        href={`/admin/projects/${item.webinar.project_id}/webinars/${item.webinar.id}`}
+                        style={{ color: 'var(--text-primary)', fontWeight: 800, fontSize: 13, textDecoration: 'none', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                      >
+                        {item.webinar.name}
+                      </Link>
+                      <span style={{ color: item.pct >= 80 ? '#22c55e' : '#f59e0b', fontSize: 12, fontWeight: 800 }}>{item.pct}%</span>
                     </div>
-                    <span style={{ color: item.pct >= 80 ? '#22c55e' : '#f59e0b', fontSize: 12, fontWeight: 800 }}>{item.pct}%</span>
+                    <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden', marginBottom: 12 }}>
+                      <div style={{ width: `${item.pct}%`, height: '100%', background: item.pct >= 80 ? '#22c55e' : '#6366f1', borderRadius: 99 }} />
+                    </div>
+                    
+                    <div style={{ color: 'var(--text-muted)', fontSize: 11, marginBottom: 6 }}>
+                      {item.done} de {item.total} configurado
+                    </div>
                   </div>
-                  <div style={{ height: 4, background: 'rgba(255,255,255,0.06)', borderRadius: 99, overflow: 'hidden' }}>
-                    <div style={{ width: `${item.pct}%`, height: '100%', background: item.pct >= 80 ? '#22c55e' : '#6366f1', borderRadius: 99 }} />
-                  </div>
-                </Link>
+
+                  {item.missing.length > 0 && (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {item.missing.map(m => (
+                        <Link
+                          key={m.key}
+                          href={m.href}
+                          style={{
+                            fontSize: 10,
+                            fontWeight: 700,
+                            padding: '3px 8px',
+                            borderRadius: 6,
+                            background: 'rgba(99, 102, 241, 0.1)',
+                            color: 'var(--brand-light)',
+                            textDecoration: 'none',
+                            border: '1px solid rgba(99, 102, 241, 0.2)',
+                            transition: 'all 0.15s ease',
+                          }}
+                        >
+                          + {m.label}
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                  {item.missing.length === 0 && (
+                    <div style={{ fontSize: 11, color: '#22c55e', fontWeight: 600 }}>
+                      ✓ Pronto para rodar!
+                    </div>
+                  )}
+                </div>
               ))}
             </div>
           </div>

@@ -110,15 +110,43 @@ async function respondWithAI(webinarId: string, userSessionId: string, questionT
     // 3. Prepare AI system prompt and model
     const model = webinar.ai_model || 'google/gemini-flash-1.5'
     const knowledgeBase = webinar.ai_knowledge_base || ''
-    const systemPrompt = webinar.ai_system_prompt ||
+    
+    let systemPrompt = webinar.ai_system_prompt ||
       `Você é um assistente inteligente do webinar "${webinar.name}". 
 Responda dúvidas dos participantes de forma concisa, simpática e direta (máximo 2-3 frases).
-Baseie suas respostas nas informações do produto/conteúdo abaixo. Se não souber, diga "Boa pergunta! Fiquem atentos que o apresentador vai abordar isso!" e não invente informações.
+Baseie suas respostas nas informações do produto/conteúdo abaixo. Se não souber, diga "Boa pergunta! Fiquem atentos que o apresentador vai abordar isso!" e não invente informações.`
 
-INFORMAÇÕES DO PRODUTO/WEBINAR:
-${knowledgeBase || 'Webinar ao vivo. Sem informações adicionais configuradas.'}`
+    if (knowledgeBase) {
+      systemPrompt += `\n\nINFORMAÇÕES DO PRODUTO/WEBINAR:\n${knowledgeBase}`
+    }
 
-    // 4. Request completion from OpenRouter
+    // 4. Fetch the last 10 messages from the database matching the user's session for context
+    const { data: chatHistory } = await supabase
+      .from('webi_live_chat')
+      .select('session_id, text, created_at')
+      .eq('webinar_id', webinarId)
+      .in('session_id', [userSessionId, `ai-moderator:${userSessionId}`])
+      .order('created_at', { ascending: false })
+      .limit(10)
+
+    const reversedHistory = (chatHistory || []).reverse()
+    const historyMessages = reversedHistory.map((m) => ({
+      role: (m.session_id === userSessionId ? 'user' : 'assistant') as 'user' | 'assistant',
+      content: m.text,
+    }))
+
+    // Construct final prompt messages
+    const apiMessages: { role: 'system' | 'user' | 'assistant'; content: string }[] = [
+      { role: 'system', content: systemPrompt },
+      ...historyMessages,
+    ]
+
+    // To prevent race conditions, if the latest message isn't in history yet, append it
+    if (historyMessages.length === 0 || historyMessages[historyMessages.length - 1].content !== questionText) {
+      apiMessages.push({ role: 'user', content: questionText })
+    }
+
+    // 5. Request completion from OpenRouter
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -129,10 +157,7 @@ ${knowledgeBase || 'Webinar ao vivo. Sem informações adicionais configuradas.'
       },
       body: JSON.stringify({
         model,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: questionText }
-        ],
+        messages: apiMessages,
         max_tokens: 200,
         temperature: 0.7,
       }),
@@ -150,11 +175,10 @@ ${knowledgeBase || 'Webinar ao vivo. Sem informações adicionais configuradas.'
     const aiName = webinar.ai_persona_name || '🤖 Assistente'
     const aiAvatar = webinar.ai_persona_avatar || ''
 
-    // 5. Insert AI response into the database
-    // Use session_id 'ai-moderator' so the sender receives it via Realtime as well
+    // 6. Insert AI response into the database with prefixed session_id
     await supabase.from('webi_live_chat').insert({
       webinar_id: webinarId,
-      session_id: 'ai-moderator',
+      session_id: `ai-moderator:${userSessionId}`,
       author: aiName,
       avatar: aiAvatar || null,
       text: answer,

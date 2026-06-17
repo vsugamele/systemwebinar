@@ -539,6 +539,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     checkAdminAndBan()
   }, [webinar.id])
 
+  // Redirect immediately on mount if the Panic Button is active
+  useEffect(() => {
+    if (webinar.is_panic_active && webinar.fallback_url && typeof window !== 'undefined') {
+      window.location.href = webinar.fallback_url
+    }
+  }, [webinar.is_panic_active, webinar.fallback_url])
+
   // ---- Live session start tracking ----
   // We keep session_started_at in state so the component re-renders when
   // the admin starts the session (the initial prop is static / server-rendered).
@@ -1503,7 +1510,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       filter: `webinar_id=eq.${webinar.id}`
     }, (payload) => {
       const dbMsg = payload.new
-      if (dbMsg.session_id === 'ai-moderator') {
+      if (dbMsg.session_id === 'ai-moderator' || dbMsg.session_id === `ai-moderator:${sessionId.current}`) {
         setAiTyping(false)
         if (aiTypingTimeoutRef.current) {
           clearTimeout(aiTypingTimeoutRef.current)

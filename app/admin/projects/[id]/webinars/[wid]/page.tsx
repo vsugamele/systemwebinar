@@ -42,6 +42,9 @@ function Section({
   children: React.ReactNode
 }) {
   const [open, setOpen] = useState(defaultOpen)
+  useEffect(() => {
+    setOpen(defaultOpen)
+  }, [defaultOpen])
   return (
     <div style={{
       background: 'var(--bg-card)',
@@ -158,6 +161,39 @@ export default function WebinarOverviewPage() {
   const [savingInt, setSavingInt] = useState(false)
   const [uploading, setUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const [focusParam, setFocusParam] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      const focus = params.get('focus')
+      if (focus) {
+        setFocusParam(focus)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (loading || !focusParam) return
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`${focusParam}_input`) || document.getElementById(`${focusParam}_btn`)
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.focus?.()
+        if (focusParam === 'status') {
+          const originalOutline = el.style.outline
+          el.style.outline = '3px solid var(--brand)'
+          el.style.boxShadow = '0 0 15px var(--brand)'
+          setTimeout(() => {
+            el.style.outline = originalOutline
+            el.style.boxShadow = 'none'
+          }, 3000)
+        }
+      }
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [loading, focusParam])
 
   // ── Load ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -303,6 +339,7 @@ export default function WebinarOverviewPage() {
           </div>
         </div>
         <button
+          id="status_btn"
           onClick={toggleStatus}
           className={isActive ? 'btn btn-ghost' : 'btn btn-primary'}
           style={{ padding: '8px 16px' }}
@@ -482,6 +519,7 @@ export default function WebinarOverviewPage() {
                   URL do Vídeo
                 </FieldLabel>
                 <input
+                  id="video_url_input"
                   type="text" className="form-input" style={{ width: '100%' }}
                   value={essentials.video_url}
                   onChange={e => {
@@ -656,7 +694,7 @@ export default function WebinarOverviewPage() {
           title="Integrações Avançadas"
           subtitle="Pixel de rastreamento, Webhook & WhatsApp — configure por último"
           badge={hasIntegrations ? { label: '✅ Ativas', ok: true } : undefined}
-          defaultOpen={false}
+          defaultOpen={focusParam === 'webhook_url'}
         >
           <form onSubmit={saveIntegrations}>
             {/* PIXELS */}
@@ -702,6 +740,7 @@ export default function WebinarOverviewPage() {
                 Webhook URL
               </FieldLabel>
               <input
+                id="webhook_url_input"
                 type="text" className="form-input" style={{ width: '100%', fontFamily: 'monospace', fontSize: 13 }}
                 value={integrations.webhook_url}
                 onChange={e => setIntegrations(f => ({ ...f, webhook_url: e.target.value }))}

@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import {
   ComposedChart, Area, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, ReferenceLine,
+  Tooltip, ResponsiveContainer, ReferenceLine, ReferenceDot,
   BarChart, LabelList, Line,
 } from 'recharts'
 import { getMetricDelta } from '@/lib/analytics-metrics.mjs'
@@ -493,11 +493,15 @@ export default function AnalyticsPage() {
     return `${run.status === 'active' ? 'Ao vivo - ' : ''}${run.title || date}`
   }
 
+  const showupPct = summary.totalLeads > 0 ? Math.round((summary.joined / summary.totalLeads) * 100) : 0
+  const pitchPct = summary.retentionAtPitch
+  const clickPct = summary.joined > 0 ? Math.round((summary.ctaClicks / summary.joined) * 100) : 0
+
   const vturbFunnelData = [
-    { name: 'Visualizacoes unicas', pct: funnelBase > 0 ? 100 : 0, count: funnelBase, color: '#3b82f6' },
-    { name: 'Plays unicos', pct: playFunnelPct, count: summary.uniquePlays, color: '#22c55e' },
-    { name: 'Audiencia no pitch', pct: pitchFunnelPct, count: presentAtPitch, color: '#f59e0b' },
-    { name: 'Cliques no botao', pct: offerClickPct, count: summary.ctaClicks, color: '#f97316' },
+    { name: 'Leads Cadastrados', pct: summary.totalLeads > 0 ? 100 : 0, count: summary.totalLeads, color: '#3b82f6' },
+    { name: 'Entraram na Sala (Show-up)', pct: showupPct, count: summary.joined, color: '#22c55e' },
+    { name: 'Presentes no Pitch (Retenção)', pct: pitchPct, count: presentAtPitch, color: '#f59e0b' },
+    { name: 'Clicaram na Oferta', pct: clickPct, count: summary.ctaClicks, color: '#f97316' },
   ]
 
   const keyMetrics = [
@@ -631,6 +635,54 @@ export default function AnalyticsPage() {
     document.body.removeChild(link)
     URL.revokeObjectURL(url)
   }
+
+  const getRetentionPctAt = (seconds: number) => {
+    const pt = retentionData.find(d => d.time_seconds === seconds)
+    return pt ? pt.retention_pct : 0
+  }
+
+  const minuteIntervals = useMemo(() => {
+    if (retentionData.length === 0) return []
+    const maxSeconds = retentionData[retentionData.length - 1].time_seconds
+    const intervalSeconds = 5 * 60 // 5 minutes
+    const intervals: {
+      label: string
+      startSec: number
+      endSec: number
+      retentionPct: number
+      viewers: number
+      dropoff: number
+      hasPitch: boolean
+    }[] = []
+
+    const pitchMin = summary.pitchAtMinute ?? -1
+
+    for (let sec = 0; sec <= maxSeconds; sec += intervalSeconds) {
+      const startSec = sec
+      const endSec = Math.min(maxSeconds, sec + intervalSeconds)
+      
+      const point = retentionData.find(d => d.time_seconds === endSec) || retentionData[retentionData.length - 1]
+      const startPoint = retentionData.find(d => d.time_seconds === startSec) || retentionData[0]
+      
+      const dropoffVal = Math.max(0, (startPoint?.viewers || 0) - (point?.viewers || 0))
+      const startMin = startSec / 60
+      const endMin = endSec / 60
+      const hasPitch = pitchMin >= startMin && pitchMin < endMin
+
+      intervals.push({
+        label: `${formatChartTime(startSec)} - ${formatChartTime(endSec)}`,
+        startSec,
+        endSec,
+        retentionPct: point?.retention_pct ?? 0,
+        viewers: point?.viewers ?? 0,
+        dropoff: dropoffVal,
+        hasPitch,
+      })
+
+      if (endSec === maxSeconds) break
+    }
+    return intervals
+  }, [retentionData, summary.pitchAtMinute])
 
   return (
     <div style={{ maxWidth: 1160, margin: '0 auto', padding: '32px 24px' }}>
@@ -831,7 +883,28 @@ export default function AnalyticsPage() {
           <div className="analytics-retention-panel">
             <div className="analytics-panel-header">
               <div>
-                <h2>Curva de Retencao</h2>
+                <h2 style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  Curva de Retencao
+                  <span 
+                    title="No modo Evergreen, buracos na curva significam intervalos onde nenhum espectador entrou atrasado para assistir àquele trecho do vídeo."
+                    style={{ 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      background: 'rgba(255,255,255,0.08)', 
+                      color: 'var(--text-muted)', 
+                      borderRadius: '50%', 
+                      width: 16, 
+                      height: 16, 
+                      fontSize: 10, 
+                      cursor: 'help',
+                      fontWeight: 'bold',
+                      fontFamily: 'serif',
+                    }}
+                  >
+                    i
+                  </span>
+                </h2>
                 <p>% da audiencia em buckets de 5s, com pitch e cliques sobrepostos.</p>
               </div>
               <div className="analytics-chart-legend">
@@ -1200,16 +1273,61 @@ export default function AnalyticsPage() {
                     }}
                   />
                   {peakMinute !== null && (
-                    <ReferenceLine yAxisId="left" x={peakMinute} stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="4 4"
-                      label={{ value: '🔝', fill: '#a78bfa', fontSize: 12, position: 'top', offset: 6 }} />
+                    <ReferenceDot
+                      yAxisId="left"
+                      x={peakMinute}
+                      y={getRetentionPctAt(peakMinute)}
+                      r={5}
+                      fill="#a78bfa"
+                      stroke="#fff"
+                      strokeWidth={1.5}
+                      label={{
+                        value: `📈 Pico: ${getRetentionPctAt(peakMinute)}%`,
+                        fill: '#a78bfa',
+                        fontSize: 10,
+                        fontWeight: 'bold',
+                        position: 'top',
+                        offset: 8
+                      }}
+                    />
                   )}
-                  {maxDropoffMinute && (
-                    <ReferenceLine yAxisId="left" x={maxDropoffMinute.minute} stroke="#f87171" strokeWidth={1.5} strokeDasharray="3 3"
-                      label={{ value: '⚠️', fill: '#f87171', fontSize: 12, position: 'insideTopLeft', offset: 6 }} />
+                  {worstDropoff && (
+                    <ReferenceDot
+                      yAxisId="left"
+                      x={worstDropoff.time_seconds}
+                      y={worstDropoff.retention_pct}
+                      r={5}
+                      fill="#ef4444"
+                      stroke="#fff"
+                      strokeWidth={1.5}
+                      label={{
+                        value: `⚠️ Queda: -${worstDropoff.dropoff} (${worstDropoff.dropoff_pct}%)`,
+                        fill: '#fca5a5',
+                        fontSize: 10,
+                        fontWeight: 'bold',
+                        position: 'bottom',
+                        offset: 8
+                      }}
+                    />
                   )}
                   {pitchSecond !== null && (
-                    <ReferenceLine yAxisId="left" x={pitchSecond} stroke="#fb923c" strokeWidth={2} strokeDasharray="5 3"
-                      label={{ value: '🎯', fill: '#fb923c', fontSize: 12, position: 'top', offset: 6 }} />
+                    <ReferenceDot
+                      yAxisId="left"
+                      x={pitchSecond}
+                      y={summary.retentionAtPitch}
+                      r={5}
+                      fill="#fb923c"
+                      stroke="#fff"
+                      strokeWidth={1.5}
+                      label={{
+                        value: `🛒 Pitch: ${summary.retentionAtPitch}%`,
+                        fill: '#fb923c',
+                        fontSize: 10,
+                        fontWeight: 'bold',
+                        position: 'top',
+                        offset: 8
+                      }}
+                    />
                   )}
                   <Bar yAxisId="right" dataKey="dropoff" fill="#f87171" barSize={6} opacity={0.35} radius={[4, 4, 0, 0]} />
                   <Bar yAxisId="right" dataKey="clicks" fill="#fb923c" barSize={10} radius={[4, 4, 0, 0]} />
@@ -1286,6 +1404,94 @@ export default function AnalyticsPage() {
                       </div>
                     ))}
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* 5-Minute Interval Retention Table */}
+            {retentionData.length > 0 && (
+              <div style={{
+                marginTop: 24,
+                border: '1px solid var(--border)',
+                background: 'var(--bg-elevated)',
+                borderRadius: 12,
+                padding: 20,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ fontSize: 15, fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>📊 Retenção por Intervalo (5 minutos)</h3>
+                    <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 0 0' }}>Análise detalhada de evasão e presença em blocos de 5 minutos</p>
+                  </div>
+                  {summary.pitchAtMinute !== null && (
+                    <span style={{ fontSize: 11, background: 'rgba(251,146,60,0.12)', color: '#fb923c', border: '1px solid rgba(251,146,60,0.25)', padding: '4px 10px', borderRadius: 6, fontWeight: 700 }}>
+                      🎯 Pitch revelado no minuto {summary.pitchAtMinute}
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, textAlign: 'left' }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                        <th style={{ padding: '8px 12px', fontWeight: 600 }}>Intervalo</th>
+                        <th style={{ padding: '8px 12px', fontWeight: 600, width: '40%' }}>Retenção (%)</th>
+                        <th style={{ padding: '8px 12px', fontWeight: 600 }}>Espectadores Retidos</th>
+                        <th style={{ padding: '8px 12px', fontWeight: 600 }}>Saídas no Bloco</th>
+                        <th style={{ padding: '8px 12px', fontWeight: 600, textAlign: 'right' }}>Destaque</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {minuteIntervals.map((item, index) => {
+                        const isPitchHighlighted = item.hasPitch
+                        return (
+                          <tr
+                            key={index}
+                            style={{
+                              borderBottom: '1px solid rgba(255,255,255,0.03)',
+                              background: isPitchHighlighted ? 'rgba(251,146,60,0.04)' : 'transparent',
+                              borderLeft: isPitchHighlighted ? '3px solid #fb923c' : '3px solid transparent',
+                              transition: 'background 0.2s',
+                            }}
+                            className="hover-row"
+                          >
+                            <td style={{ padding: '12px', fontWeight: isPitchHighlighted ? 800 : 500 }}>
+                              {item.label}
+                            </td>
+                            <td style={{ padding: '12px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <span style={{ width: 36, fontWeight: 700, color: isPitchHighlighted ? '#fb923c' : '#fff' }}>{item.retentionPct}%</span>
+                                <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden' }}>
+                                  <div style={{
+                                    width: `${item.retentionPct}%`,
+                                    height: '100%',
+                                    background: isPitchHighlighted
+                                      ? 'linear-gradient(90deg, #fb923c, #f97316)'
+                                      : 'linear-gradient(90deg, #818cf8, #6366f1)',
+                                    borderRadius: 99
+                                  }} />
+                                </div>
+                              </div>
+                            </td>
+                            <td style={{ padding: '12px', fontWeight: 700 }}>
+                              {item.viewers.toLocaleString('pt-BR')}
+                            </td>
+                            <td style={{ padding: '12px', color: item.dropoff > 0 ? '#f87171' : 'var(--text-muted)' }}>
+                              {item.dropoff > 0 ? `-${item.dropoff.toLocaleString('pt-BR')}` : '0'}
+                            </td>
+                            <td style={{ padding: '12px', textAlign: 'right' }}>
+                              {isPitchHighlighted ? (
+                                <span style={{ fontSize: 11, background: '#fb923c', color: '#000', padding: '2px 8px', borderRadius: 4, fontWeight: 900 }}>
+                                  🛒 MOMENTO PITCH
+                                </span>
+                              ) : (
+                                <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>—</span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}
