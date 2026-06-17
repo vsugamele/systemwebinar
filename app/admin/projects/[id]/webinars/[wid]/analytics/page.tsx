@@ -470,8 +470,6 @@ export default function AnalyticsPage() {
 
   useEffect(() => { load() }, [load])
 
-  if (loading) return <div className="loading-screen"><div className="spinner" /></div>
-
   const attendanceRate = summary.totalLeads > 0
     ? ((summary.joined / summary.totalLeads) * 100).toFixed(1) : '0.0'
 
@@ -683,6 +681,8 @@ export default function AnalyticsPage() {
     }
     return intervals
   }, [retentionData, summary.pitchAtMinute])
+
+  if (loading) return <div className="loading-screen"><div className="spinner" /></div>
 
   return (
     <div style={{ maxWidth: 1160, margin: '0 auto', padding: '32px 24px' }}>
