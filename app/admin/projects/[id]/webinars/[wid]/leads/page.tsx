@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { Lead } from '@/types'
+import { toast } from 'react-hot-toast'
 
 const PAGE_SIZE = 50
 
@@ -114,6 +115,57 @@ export default function LeadsPage() {
   const [tagInputOpen, setTagInputOpen] = useState(false)
   const [newBulkTag, setNewBulkTag] = useState('')
   const [updatingTags, setUpdatingTags] = useState(false)
+
+  const [activeTab, setActiveTab] = useState<'crm' | 'banned'>('crm')
+
+  interface BannedLead {
+    id: string
+    webinar_id: string
+    lead_email: string | null
+    session_id: string
+    created_at: string
+  }
+
+  const [bannedLeads, setBannedLeads] = useState<BannedLead[]>([])
+  const [loadingBanned, setLoadingBanned] = useState(false)
+
+  async function fetchBannedLeads() {
+    setLoadingBanned(true)
+    try {
+      const { data, error } = await supabase
+        .from('webi_banned_leads')
+        .select('*')
+        .eq('webinar_id', wid)
+        .order('created_at', { ascending: false })
+      if (error) throw error
+      setBannedLeads((data || []) as BannedLead[])
+    } catch (err) {
+      console.error('Failed to load banned leads:', err)
+    } finally {
+      setLoadingBanned(false)
+    }
+  }
+
+  async function handleUnban(id: string) {
+    if (!window.confirm('Deseja realmente revogar o banimento deste participante?')) return
+    try {
+      const { error } = await supabase
+        .from('webi_banned_leads')
+        .delete()
+        .eq('id', id)
+      
+      if (error) throw error
+      toast.success('Banimento revogado com sucesso!')
+      fetchBannedLeads()
+    } catch (err: any) {
+      console.error(err)
+      toast.error('Erro ao revogar banimento.')
+    }
+  }
+
+  useEffect(() => {
+    fetchBannedLeads()
+  }, [wid])
 
   // Debounce search
   useEffect(() => {
@@ -523,7 +575,38 @@ export default function LeadsPage() {
         </div>
       </div>
 
-      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+      {/* TABS SELECTOR */}
+      <div style={{ display: 'flex', gap: 16, borderBottom: '1px solid var(--border)', marginBottom: 20, paddingBottom: 0 }}>
+        <button
+          type="button"
+          onClick={() => setActiveTab('crm')}
+          style={{
+            background: 'none', border: 'none', color: activeTab === 'crm' ? 'var(--text-primary)' : 'var(--text-muted)',
+            fontWeight: 700, padding: '10px 16px', cursor: 'pointer', borderBottom: activeTab === 'crm' ? '2px solid var(--brand)' : '2px solid transparent',
+            fontSize: 14, outline: 'none', transition: 'all 0.2s'
+          }}
+        >
+          📇 CRM de Leads
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setActiveTab('banned')
+            fetchBannedLeads()
+          }}
+          style={{
+            background: 'none', border: 'none', color: activeTab === 'banned' ? 'var(--text-primary)' : 'var(--text-muted)',
+            fontWeight: 700, padding: '10px 16px', cursor: 'pointer', borderBottom: activeTab === 'banned' ? '2px solid var(--brand)' : '2px solid transparent',
+            fontSize: 14, outline: 'none', transition: 'all 0.2s'
+          }}
+        >
+          🚫 Leads Banidos ({bannedLeads.length})
+        </button>
+      </div>
+
+      {activeTab === 'crm' ? (
+        <>
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         
         {/* FILTERS BAR */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '20px', borderBottom: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
@@ -897,6 +980,78 @@ export default function LeadsPage() {
               Limpar seleção
             </button>
           </div>
+        </div>
+      )}
+        </>
+      ) : null}
+
+      {activeTab === 'banned' && (
+        <div className="card" style={{ padding: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+            <div>
+              <h3 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>🚫 Lista de Participantes Banidos</h3>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+                Estes leads foram suspensos do chat e não conseguirão enviar mensagens ou perguntas.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={fetchBannedLeads}
+              disabled={loadingBanned}
+            >
+              {loadingBanned ? '⏳' : '🔄 Atualizar'}
+            </button>
+          </div>
+
+          {loadingBanned ? (
+            <div style={{ padding: 48, textAlign: 'center' }}>
+              <div className="spinner" style={{ margin: '0 auto' }} />
+            </div>
+          ) : bannedLeads.length === 0 ? (
+            <div style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: 40, marginBottom: 12 }}>🕊️</div>
+              <p>Nenhum participante banido neste webinar.</p>
+            </div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.02)', borderBottom: '1px solid var(--border)' }}>
+                    <th style={{ padding: '12px 20px', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>E-MAIL</th>
+                    <th style={{ padding: '12px 20px', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>SESSION ID</th>
+                    <th style={{ padding: '12px 20px', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600 }}>DATA DO BANIMENTO</th>
+                    <th style={{ padding: '12px 20px', fontSize: 13, color: 'var(--text-muted)', fontWeight: 600, textAlign: 'right' }}>AÇÕES</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bannedLeads.map(banned => (
+                    <tr key={banned.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                      <td style={{ padding: '14px 20px', fontSize: 14, color: '#fff', fontWeight: 600 }}>
+                        {banned.lead_email || <span style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>Sem e-mail cadastrado</span>}
+                      </td>
+                      <td style={{ padding: '14px 20px', fontSize: 13, color: 'var(--text-muted)', fontFamily: 'monospace' }}>
+                        {banned.session_id}
+                      </td>
+                      <td style={{ padding: '14px 20px', fontSize: 13, color: 'var(--text-muted)' }}>
+                        {new Date(banned.created_at).toLocaleString('pt-BR')}
+                      </td>
+                      <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          style={{ borderColor: 'rgba(239, 68, 68, 0.4)', color: '#ef4444' }}
+                          onClick={() => handleUnban(banned.id)}
+                        >
+                          Revogar Banimento
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

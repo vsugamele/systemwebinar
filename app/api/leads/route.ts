@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { imperioSend } from '@/lib/imperio'
+import { fireAndLogWebhook } from '@/lib/webhook-logger'
 
 // Use anon client — leads public insert + webinars public read are allowed by RLS
 // No service role key required
@@ -43,13 +44,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: leadError.message }, { status: 500 })
     }
 
-    // Fire webhook if configured (fire-and-forget)
-    const webhookUrl = webinar.webi_projects?.webhook_url
+    // Fire webhook if configured (fire-and-forget log)
+    const webhookUrl = webinar.webhook_url || webinar.webi_projects?.webhook_url
     if (webhookUrl) {
-      fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
+      fireAndLogWebhook({
+        webinarId: webinar_id,
+        eventType: 'lead_registered',
+        webhookUrl,
+        payload: {
           event: 'lead_registered',
           name,
           email,
@@ -57,8 +59,8 @@ export async function POST(req: NextRequest) {
           webinar_id,
           webinar_name: webinar.name,
           timestamp: new Date().toISOString(),
-        }),
-      }).catch(() => {}) // swallow errors — does not block lead registration
+        },
+      })
     }
 
     // Imperio HQ — dispatch lead_cadastrado

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
+import { fireAndLogWebhook } from '@/lib/webhook-logger'
 
 export async function POST(req: Request) {
   try {
@@ -48,13 +49,14 @@ export async function POST(req: Request) {
       }
     }
 
-    // Trigger webhook asynchronously (fire and forget)
+    // Trigger webhook asynchronously (fire and forget log)
     if (webhookUrl) {
-      fetch(webhookUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      }).catch(e => console.error('Webhook error:', e))
+      fireAndLogWebhook({
+        webinarId,
+        eventType: 'pitch_clicked',
+        webhookUrl,
+        payload
+      })
     }
 
     // Trigger WhatsApp Pitch Notification

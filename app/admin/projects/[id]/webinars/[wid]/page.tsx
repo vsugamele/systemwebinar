@@ -137,6 +137,19 @@ export default function WebinarOverviewPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [focusParam, setFocusParam] = useState<string | null>(null)
 
+  interface WebhookLog {
+    id: string
+    event_type: string
+    webhook_url: string
+    payload: any
+    response_status: number
+    response_body: string
+    created_at: string
+  }
+
+  const [webhookLogs, setWebhookLogs] = useState<WebhookLog[]>([])
+  const [loadingLogs, setLoadingLogs] = useState(false)
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search)
@@ -184,6 +197,20 @@ export default function WebinarOverviewPage() {
       .eq('type', 'pitch_button')
 
     setPitchConfigured((count ?? 0) > 0)
+
+    // Load Webhook logs
+    try {
+      const { data: logs } = await supabase
+        .from('webi_webhook_logs')
+        .select('*')
+        .eq('webinar_id', wid)
+        .order('created_at', { ascending: false })
+        .limit(20)
+      setWebhookLogs((logs || []) as WebhookLog[])
+    } catch (err) {
+      console.error('Failed to load webhook logs:', err)
+    }
+
     setLoading(false)
   }
 
@@ -646,6 +673,73 @@ export default function WebinarOverviewPage() {
                 onChange={e => setIntegrations(f => ({ ...f, webhook_url: e.target.value }))}
                 placeholder="https://hook.us1.make.com/... (opcional)"
               />
+
+              {/* WEBHOOK LOGS SECTION */}
+              <div style={{ marginTop: 16, background: 'rgba(255,255,255,0.02)', padding: 16, borderRadius: 12, border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)' }}>📊 Histórico de Envios (Logs)</span>
+                  <button
+                    type="button"
+                    className="btn btn-ghost btn-sm"
+                    onClick={async () => {
+                      setLoadingLogs(true)
+                      const { data: logs } = await supabase
+                        .from('webi_webhook_logs')
+                        .select('*')
+                        .eq('webinar_id', wid)
+                        .order('created_at', { ascending: false })
+                        .limit(20)
+                      setWebhookLogs((logs || []) as WebhookLog[])
+                      setLoadingLogs(false)
+                      toast.success('Logs atualizados!')
+                    }}
+                    disabled={loadingLogs}
+                    style={{ fontSize: 11, padding: '4px 8px' }}
+                  >
+                    {loadingLogs ? '⏳' : '🔄 Atualizar'}
+                  </button>
+                </div>
+
+                {webhookLogs.length === 0 ? (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '12px 0' }}>
+                    Nenhum disparo de webhook registrado ainda.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 240, overflowY: 'auto', paddingRight: 4 }}>
+                    {webhookLogs.map(log => {
+                      const isSuccess = log.response_status >= 200 && log.response_status < 300
+                      const statusColor = isSuccess ? '#10b981' : '#ef4444'
+                      const statusBg = isSuccess ? 'rgba(16,185,129,0.1)' : 'rgba(239,68,68,0.1)'
+                      
+                      return (
+                        <div key={log.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, padding: 10, background: 'var(--bg-elevated)', borderRadius: 8, border: '1px solid var(--border)', fontSize: 12 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                              <span style={{
+                                padding: '2px 6px', borderRadius: 4, background: statusBg, color: statusColor, fontWeight: 700, fontSize: 11
+                              }}>
+                                {log.response_status || 'ERR'}
+                              </span>
+                              <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                                {log.event_type === 'lead_registered' ? '📥 Cadastro' : '🛒 Clique CTA'}
+                              </span>
+                            </div>
+                            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                              {new Date(log.created_at).toLocaleString('pt-BR')}
+                            </span>
+                          </div>
+                          
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', wordBreak: 'break-all', fontFamily: 'monospace', background: 'rgba(0,0,0,0.2)', padding: '6px 8px', borderRadius: 4 }}>
+                            <strong>URL:</strong> {log.webhook_url}
+                            <br />
+                            <strong>Response:</strong> {log.response_body || '(sem corpo de resposta)'}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* WHATSAPP */}
