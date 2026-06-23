@@ -1,10 +1,11 @@
 'use client'
-
+ 
 import { useEffect, useMemo, useState, useRef, startTransition } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { toast } from 'react-hot-toast'
+import { LineChart, Line, ResponsiveContainer, XAxis, YAxis, Tooltip as ChartTooltip } from 'recharts'
 
 function elapsedLabel(iso: string | null): string {
   if (!iso) return ''
@@ -58,6 +59,7 @@ export default function LivePage() {
   const [scheduleTimeUntil, setScheduleTimeUntil] = useState('')
   const [projectTimezone, setProjectTimezone] = useState('America/Sao_Paulo')
   const [showGuide, setShowGuide] = useState(false)
+  const [pitchMinute, setPitchMinute] = useState<number | null>(null)
 
   // Panic Button states
   const [isPanicActive, setIsPanicActive] = useState(false)
@@ -75,11 +77,24 @@ export default function LivePage() {
   const [realtimeLoading, setRealtimeLoading] = useState(false)
   const isFirstLoadRef = useRef(true)
   const seenClicksRef = useRef<Set<string>>(new Set())
+  const [audienceHistory, setAudienceHistory] = useState<{ time: string; viewers: number }[]>([])
+  const [assistantAlerts, setAssistantAlerts] = useState<string[]>([])
+  const prevOnlineNowRef = useRef<number | null>(null)
+  const ctaAlertTriggeredRef = useRef(false)
+
+  useEffect(() => {
+    if (!sessionStartedAt) {
+      setAudienceHistory([])
+      setAssistantAlerts([])
+      ctaAlertTriggeredRef.current = false
+      prevOnlineNowRef.current = null
+    }
+  }, [sessionStartedAt])
 
   useEffect(() => {
     supabase
       .from('webi_webinars')
-      .select('name, slug, display_name, session_started_at, current_run_id, scheduled_start_at, schedule_recurrence, schedule_time, schedule_days, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct, is_panic_active, fallback_url, webi_projects(timezone)')
+      .select('name, slug, display_name, session_started_at, current_run_id, scheduled_start_at, schedule_recurrence, schedule_time, schedule_days, fake_viewers_start, fake_viewers_peak, fake_viewers_end, fake_viewers_peak_at_pct, is_panic_active, fallback_url, analytics_pitch_minute, webi_projects(timezone)')
       .eq('id', wid)
       .single()
       .then(({ data, error }) => {
@@ -89,6 +104,7 @@ export default function LivePage() {
           setWebinarSlug(data.slug)
           setDisplayName(data.display_name || '')
           setSessionStartedAt(data.session_started_at ?? null)
+          setPitchMinute(data.analytics_pitch_minute ?? null)
           setCurrentRunId(data.current_run_id ?? null)
           setScheduleRecurrence((data.schedule_recurrence as 'once' | 'daily' | 'weekly' | 'monthly') || 'once')
           setScheduleTime(data.schedule_time || '20:00')
@@ -117,7 +133,7 @@ export default function LivePage() {
       })
   }, [supabase, wid])
 
-  // Poll realtime stats every 30s
+  // Poll realtime stats: 15s if live, 30s if offline
   useEffect(() => {
     async function fetchRealtime() {
       setRealtimeLoading(true)
@@ -148,14 +164,79 @@ export default function LivePage() {
               })
             })
           }
+
+          // 1. Audience History (trend sparkline)
+          const nowStr = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+          setAudienceHistory(prev => {
+            const updated = [...prev, { time: nowStr, viewers: data.online_now }]
+            if (updated.length > 10) updated.shift()
+            return updated
+          })
+
+          // 2. Alert Monitoring
+          const alertsList: string[] = []
+
+          // Condition A: Retention drop > 20%
+          const prevViewers = prevOnlineNowRef.current
+          const currentViewers = data.online_now
+          if (prevViewers !== null && prevViewers > 5) {
+            const dropRatio = (prevViewers - currentViewers) / prevViewers
+            if (dropRatio >= 0.20) {
+              const dropPct = Math.round(dropRatio * 100)
+              const msg = `⚠️ Queda brusca de audiência detectada: queda de ${dropPct}% nos espectadores ativos (${prevViewers} → ${currentViewers}).`
+              alertsList.push(msg)
+              toast.error(msg, {
+                duration: 10000,
+                icon: '⚠️',
+                style: {
+                  background: '#450a0a',
+                  color: '#fca5a5',
+                  border: '1px solid #ef4444',
+                }
+              })
+            }
+          }
+          prevOnlineNowRef.current = currentViewers
+
+          // Condition B: No CTA clicks 5 minutes after pitch
+          if (sessionStartedAt && pitchMinute !== null) {
+            const pitchSeconds = pitchMinute * 60
+            const elapsedSeconds = (Date.now() - new Date(sessionStartedAt).getTime()) / 1000
+            
+            if (elapsedSeconds > pitchSeconds + 300) {
+              if (data.recent_cta_clicks === 0) {
+                const msg = `🚨 Alerta de Pitch: Nenhum clique na oferta registrado 5 minutos após o pitch. Considere fixar o CTA ou fazer uma chamada extra no chat!`
+                alertsList.push(msg)
+                
+                if (!ctaAlertTriggeredRef.current) {
+                  ctaAlertTriggeredRef.current = true
+                  toast.error(msg, {
+                    duration: 15000,
+                    icon: '🚨',
+                    style: {
+                      background: '#451a03',
+                      color: '#fb923c',
+                      border: '1px solid #ea580c',
+                    }
+                  })
+                }
+              }
+            }
+          }
+
+          setAssistantAlerts(alertsList)
         }
       } catch {}
       setRealtimeLoading(false)
     }
+
+    const isLive = !!sessionStartedAt
+    const pollInterval = isLive ? 15_000 : 30_000
+
     fetchRealtime()
-    const interval = setInterval(fetchRealtime, 30_000)
+    const interval = setInterval(fetchRealtime, pollInterval)
     return () => clearInterval(interval)
-  }, [wid])
+  }, [wid, sessionStartedAt, pitchMinute])
 
   // Scheduled countdown ticker
   useEffect(() => {
@@ -575,6 +656,67 @@ export default function LivePage() {
             </div>
           )}
         </div>
+
+        {/* ASSISTANT ALERTS AND AUDIENCE TREND PANEL */}
+        {isLive && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+            {/* Audience Trend sparkline */}
+            <div className="card" style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <div style={{ fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', gap: 6 }}>
+                📈 Histórico & Tendência da Audiência
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+                Visualização em tempo real das oscilações de espectadores simultâneos nos últimos minutos.
+              </p>
+              
+              {audienceHistory.length < 2 ? (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 120, fontSize: 12, color: 'var(--text-muted)', background: 'var(--bg-elevated)', border: '1px dashed var(--border)', borderRadius: 10 }}>
+                  Coletando primeiras amostras de audiência... 📊
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={140}>
+                  <LineChart data={audienceHistory} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+                    <XAxis dataKey="time" stroke="var(--text-muted)" fontSize={9} tickLine={false} />
+                    <YAxis stroke="var(--text-muted)" fontSize={9} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <ChartTooltip contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)' }} labelStyle={{ color: '#fff', fontSize: 11 }} itemStyle={{ fontSize: 11 }} />
+                    <Line type="monotone" dataKey="viewers" name="Espectadores" stroke="#10b981" strokeWidth={3} dot={{ r: 3 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+
+            {/* Assistant Alerts Dashboard */}
+            <div className="card" style={{
+              padding: 24,
+              border: assistantAlerts.length > 0 ? '1px solid rgba(239,68,68,0.3)' : '1px solid var(--border)',
+              background: assistantAlerts.length > 0 ? 'rgba(239,68,68,0.01)' : 'var(--bg-card)',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14
+            }}>
+              <div style={{ fontWeight: 800, fontSize: 15, display: 'flex', alignItems: 'center', gap: 6, color: assistantAlerts.length > 0 ? '#ef4444' : '#fff' }}>
+                🚨 Alertas do Assistente
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+                Alertas automáticos para quedas bruscas de atenção ou baixo engajamento com a oferta.
+              </p>
+
+              {assistantAlerts.length === 0 ? (
+                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: 120, fontSize: 12, color: '#10b981', background: 'rgba(16,185,129,0.04)', border: '1px dashed rgba(16,185,129,0.2)', borderRadius: 10, fontWeight: 600 }}>
+                  ✅ Tudo normal. Nenhum alerta crítico ativo.
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, overflowY: 'auto', maxHeight: 160 }}>
+                  {assistantAlerts.map((alert, idx) => (
+                    <div key={idx} style={{ background: 'var(--bg-elevated)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 10, padding: 12, fontSize: 12, color: '#fca5a5', lineHeight: 1.4 }}>
+                      {alert}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* SCHEDULING */}
         <div className="card">

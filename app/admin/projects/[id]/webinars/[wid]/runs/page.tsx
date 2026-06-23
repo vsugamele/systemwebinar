@@ -15,6 +15,89 @@ interface WebinarRun {
   metadata: Record<string, any>
 }
 
+function SessionScoreBadge({
+  run,
+  webinarId,
+  supabase,
+}: {
+  run: WebinarRun
+  webinarId: string
+  supabase: any
+}) {
+  const [score, setScore] = useState<number | null>(run.metadata?.quality_score ?? null)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (score !== null && run.status !== 'active') return
+
+    setLoading(true)
+    fetch(`/api/analytics?webinar_id=${webinarId}&run_id=${run.id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (typeof data.session_quality_score === 'number') {
+          const s = data.session_quality_score
+          setScore(s)
+          
+          // Cache the score in Supabase metadata if this run has ended and doesn't have it
+          if (run.status === 'ended' && run.metadata?.quality_score === undefined) {
+            const updatedMeta = { ...(run.metadata || {}), quality_score: s }
+            supabase
+              .from('webi_webinar_runs')
+              .update({ metadata: updatedMeta })
+              .eq('id', run.id)
+              .then(({ error }: any) => {
+                if (error) console.error('Erro ao salvar score em cache:', error)
+              })
+          }
+        }
+      })
+      .catch((err) => console.error('Erro ao carregar score:', err))
+      .finally(() => setLoading(false))
+  }, [run.id, run.status, webinarId, supabase])
+
+  if (loading && score === null) {
+    return (
+      <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <span style={{
+          width: 10,
+          height: 10,
+          border: '1.5px solid var(--border)',
+          borderTopColor: 'var(--brand)',
+          borderRadius: '50%',
+          display: 'inline-block',
+          animation: 'spin 1s linear infinite'
+        }} />
+        Nota...
+      </span>
+    )
+  }
+
+  if (score === null) return null
+
+  const color = score >= 80 ? '#10b981' : score >= 50 ? '#f59e0b' : '#ef4444'
+  const bg = score >= 80 ? 'rgba(16,185,129,0.1)' : score >= 50 ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)'
+
+  return (
+    <span
+      style={{
+        fontSize: 11,
+        fontWeight: 800,
+        padding: '2px 8px',
+        borderRadius: 8,
+        background: bg,
+        color: color,
+        border: `1px solid ${color}30`,
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 4,
+      }}
+      title={`Score de Qualidade: ${score}/100`}
+    >
+      ⭐ {score} pts
+    </span>
+  )
+}
+
 export default function WebinarRunsPage() {
   const { id: projectId, wid } = useParams() as { id: string; wid: string }
   const supabase = createClient()
@@ -158,7 +241,7 @@ export default function WebinarRunsPage() {
                     }}
                   >
                     <div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                         <strong style={{ fontSize: 14, color: 'var(--text-primary)' }}>{run.title || 'Sem título'}</strong>
                         <span
                           style={{
@@ -173,6 +256,7 @@ export default function WebinarRunsPage() {
                         >
                           {isActive ? 'Ativo' : 'Finalizado'}
                         </span>
+                        <SessionScoreBadge run={run} webinarId={wid} supabase={supabase} />
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                         Início: {new Date(run.started_at).toLocaleString('pt-BR')}
@@ -244,6 +328,12 @@ export default function WebinarRunsPage() {
           )}
         </div>
       </div>
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   )
 }

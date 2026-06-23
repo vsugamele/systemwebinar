@@ -13,7 +13,7 @@ import { getMetricDelta } from '@/lib/analytics-metrics.mjs'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
-type SegTab = 'retention' | 'countries' | 'devices' | 'os' | 'browsers' | 'utm' | 'leads'
+type SegTab = 'retention' | 'countries' | 'devices' | 'os' | 'browsers' | 'utm' | 'leads' | 'comparison'
 type AnalyticsMode = 'all' | 'live' | 'replay' | 'evergreen'
 
 interface ComparisonDelta {
@@ -30,6 +30,13 @@ interface WebinarRun {
   status: 'active' | 'ended' | 'cancelled'
   started_at: string
   ended_at: string | null
+}
+
+interface SelectedRunMeta {
+  id: string
+  started_at: string
+  ended_at: string | null
+  status: string
 }
 
 interface SessionEventDetail {
@@ -220,6 +227,8 @@ export default function AnalyticsPage() {
   const [campaign, setCampaign] = useState('')
   const [runs, setRuns] = useState<WebinarRun[]>([])
   const [selectedRunId, setSelectedRunId] = useState('all')
+  const [selectedRunMeta, setSelectedRunMeta] = useState<SelectedRunMeta | null>(null)
+  const [sessionQualityScore, setSessionQualityScore] = useState<number | null>(null)
   const [compareRunId, setCompareRunId] = useState('')
   const [compareEnabled, setCompareEnabled] = useState(false)
   const [compareDateFrom, setCompareDateFrom] = useState('')
@@ -232,6 +241,7 @@ export default function AnalyticsPage() {
   const [retentionData, setRetentionData] = useState<RetentionPoint[]>([])
   const [criticalDropoffs, setCriticalDropoffs] = useState<CriticalDropoff[]>([])
   const [selectedSession, setSelectedSession] = useState<SessionDetail | null>(null)
+  const [leadFilter, setLeadFilter] = useState<'all' | 'hot' | 'warm' | 'cold'>('all')
 
   const [summary, setSummary] = useState<AnalyticsSummary>({
     totalLeads: 0, totalAttended: 0, ctaClicks: 0,
@@ -368,6 +378,9 @@ export default function AnalyticsPage() {
     setRuns(loadedRuns)
 
     const apiRes = await fetch(buildAnalyticsUrl()).then(r => r.json())
+    // Capturar metadados da run selecionada (vindos da API)
+    setSelectedRunMeta(apiRes.selected_run ?? null)
+    setSessionQualityScore(apiRes.session_quality_score ?? null)
     let compareRes: any = null
     const currentRunIndex = loadedRuns.findIndex(run => run.id === selectedRunId)
     const fallbackPreviousRunId = selectedRunId !== 'all' && currentRunIndex >= 0
@@ -470,6 +483,59 @@ export default function AnalyticsPage() {
 
   useEffect(() => { load() }, [load])
 
+  const [compareRunsData, setCompareRunsData] = useState<any[]>([])
+  const [compareRunsList, setCompareRunsList] = useState<WebinarRun[]>([])
+  const [loadingCompare, setLoadingCompare] = useState(false)
+
+  useEffect(() => {
+    if (activeTab !== 'comparison' || runs.length === 0) return
+
+    async function loadCompareCurves() {
+      setLoadingCompare(true)
+      const targets = runs.filter(r => r.status === 'ended').slice(0, 5)
+      setCompareRunsList(targets)
+      
+      try {
+        const fetchPromises = targets.map(run =>
+          fetch(`/api/analytics?webinar_id=${wid}&run_id=${run.id}&bucket_seconds=10`)
+            .then(r => r.json())
+            .then(data => ({
+              runId: run.id,
+              title: run.title || new Date(run.started_at).toLocaleDateString('pt-BR'),
+              viewers: data.viewers_by_interval || []
+            }))
+        )
+        const results = await Promise.all(fetchPromises)
+
+        // Find the maximum duration across all curves
+        let maxSeconds = 0
+        results.forEach(res => {
+          res.viewers.forEach((pt: any) => {
+            if (pt.time_seconds > maxSeconds) maxSeconds = pt.time_seconds
+          })
+        })
+
+        // Merge by 10s intervals
+        const merged: any[] = []
+        for (let sec = 0; sec <= maxSeconds; sec += 10) {
+          const point: any = { time_seconds: sec }
+          results.forEach(res => {
+            const found = res.viewers.find((pt: any) => pt.time_seconds === sec)
+            point[res.title] = found ? found.retention_pct : undefined
+          })
+          merged.push(point)
+        }
+        setCompareRunsData(merged)
+      } catch (err) {
+        console.error(err)
+      } finally {
+        setLoadingCompare(false)
+      }
+    }
+
+    loadCompareCurves()
+  }, [activeTab, runs, wid])
+
   const attendanceRate = summary.totalLeads > 0
     ? ((summary.joined / summary.totalLeads) * 100).toFixed(1) : '0.0'
 
@@ -569,6 +635,7 @@ export default function AnalyticsPage() {
     { id: 'browsers', label: 'Navegadores' },
     { id: 'utm', label: 'Origem do Tráfego' },
     { id: 'leads', label: '👥 Linha do Tempo dos Leads' },
+    { id: 'comparison', label: '📊 Comparativo de Runs' },
   ]
 
   const totalJoined = summary.joined || 1
@@ -660,9 +727,8 @@ export default function AnalyticsPage() {
       const endSec = Math.min(maxSeconds, sec + intervalSeconds)
       
       const point = retentionData.find(d => d.time_seconds === endSec) || retentionData[retentionData.length - 1]
-      const startPoint = retentionData.find(d => d.time_seconds === startSec) || retentionData[0]
-      
-      const dropoffVal = Math.max(0, (startPoint?.viewers || 0) - (point?.viewers || 0))
+      const intervalBuckets = retentionData.filter(d => d.time_seconds > startSec && d.time_seconds <= endSec)
+      const dropoffVal = intervalBuckets.reduce((sum, d) => sum + (d.dropoff || 0), 0)
       const startMin = startSec / 60
       const endMin = endSec / 60
       const hasPitch = pitchMin >= startMin && pitchMin < endMin
@@ -758,7 +824,7 @@ export default function AnalyticsPage() {
         border: '1px solid var(--border)',
         borderRadius: 12,
         padding: 14,
-        marginBottom: 28,
+        marginBottom: selectedRunMeta ? 8 : 28,
       }}>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
           Execucao
@@ -768,12 +834,26 @@ export default function AnalyticsPage() {
             onChange={e => {
               setSelectedRunId(e.target.value)
               setCompareRunId('')
+              setSelectedRunMeta(null)
             }}
           >
-            <option value="all">Todas as execucoes</option>
-            {runs.map(run => (
-              <option key={run.id} value={run.id}>{formatRunLabel(run)}</option>
-            ))}
+            <option value="all">📊 Todas as execucoes</option>
+            {runs.map(run => {
+              const startDate = new Date(run.started_at).toLocaleString('pt-BR', {
+                day: '2-digit', month: '2-digit', year: '2-digit',
+                hour: '2-digit', minute: '2-digit',
+              })
+              const endDate = run.ended_at
+                ? new Date(run.ended_at).toLocaleString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                : 'em andamento'
+              const statusIcon = run.status === 'active' ? '🔴' : '✅'
+              const label = run.title && run.title !== startDate ? run.title : startDate
+              return (
+                <option key={run.id} value={run.id}>
+                  {statusIcon} {label} ({startDate} → {endDate})
+                </option>
+              )
+            })}
           </select>
         </label>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, fontSize: 12, color: 'var(--text-muted)', fontWeight: 700 }}>
@@ -839,6 +919,73 @@ export default function AnalyticsPage() {
           </>
         )}
       </div>
+
+      {/* Banner informativo da run selecionada */}
+      {selectedRunMeta && (
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          flexWrap: 'wrap', gap: 10,
+          background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.2)',
+          borderRadius: 10, padding: '10px 14px', marginBottom: 28, fontSize: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span style={{ fontSize: 16 }}>{selectedRunMeta.status === 'active' ? '🔴' : '📅'}</span>
+            <div>
+              <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: 13 }}>
+                {selectedRunMeta.status === 'active' ? 'Sessão em andamento' : 'Sessão encerrada'}
+              </div>
+              <div style={{ color: 'var(--text-muted)' }}>
+                Início: <strong>{new Date(selectedRunMeta.started_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong>
+                {selectedRunMeta.ended_at && (
+                  <> · Fim: <strong>{new Date(selectedRunMeta.ended_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong></>
+                )}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            {sessionQualityScore !== null && (
+              <div style={{
+                background: sessionQualityScore >= 80 ? 'rgba(16,185,129,0.1)' : sessionQualityScore >= 50 ? 'rgba(245,158,11,0.1)' : 'rgba(239,68,68,0.1)',
+                color: sessionQualityScore >= 80 ? '#10b981' : sessionQualityScore >= 50 ? '#f59e0b' : '#ef4444',
+                border: `1px solid ${sessionQualityScore >= 80 ? '#10b981' : sessionQualityScore >= 50 ? '#f59e0b' : '#ef4444'}30`,
+                padding: '5px 12px',
+                borderRadius: 8,
+                fontWeight: 800,
+                fontSize: 12,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}>
+                ⭐ Nota da Sessão: {sessionQualityScore}/100
+              </div>
+            )}
+            {summary.joined === 0 && (
+              <div style={{ color: '#f59e0b', fontSize: 11, fontWeight: 600, background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.2)', borderRadius: 8, padding: '4px 10px' }}>
+                ⚠️ Nenhum dado de audiência encontrado nesta run
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Aviso para sessoes agendadas sem run associada (sem dados) */}
+      {selectedRunId === 'all' && !dateFrom && !dateTo && summary.joined === 0 && !loading && (
+        <div style={{
+          background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.2)',
+          borderRadius: 12, padding: '14px 18px', marginBottom: 24, fontSize: 13,
+          display: 'flex', gap: 12, alignItems: 'flex-start',
+        }}>
+          <span style={{ fontSize: 20 }}>💡</span>
+          <div>
+            <strong style={{ color: 'var(--text-primary)' }}>Sem dados ainda.</strong>
+            {runs.length === 0 ? (
+              <span style={{ color: 'var(--text-muted)' }}> Nenhuma sessão foi realizada ou os dados não foram registrados. Se o webinar está em modo agendado, as sessions anteriores ao sistema de runs precisam ser filtradas por data.</span>
+            ) : (
+              <span style={{ color: 'var(--text-muted)' }}> Selecione uma execução específica no filtro acima, ou use os campos "De" e "Ate" para filtrar por data da sessão.</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {mode === 'live' && !isLiveActive && (
         <div style={{
@@ -990,6 +1137,140 @@ export default function AnalyticsPage() {
           </div>
         </div>
       </div>
+
+      {/* ── Análise por Seção do Webinar ── */}
+      {retentionHasData && minuteIntervals.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 800, margin: 0 }}>📋 Análise por Seção do Webinar</h2>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 3 }}>
+                Desempenho da audiência dividido em blocos de 5 minutos · {minuteIntervals.length} seções
+              </div>
+            </div>
+            {selectedRunMeta && (
+              <div style={{ fontSize: 11, color: 'var(--brand-light)', background: 'rgba(99,102,241,0.08)', border: '1px solid rgba(99,102,241,0.2)', borderRadius: 8, padding: '4px 10px', fontWeight: 700 }}>
+                Sessão: {new Date(selectedRunMeta.started_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+              </div>
+            )}
+          </div>
+
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ borderBottom: '2px solid var(--border)' }}>
+                  <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' }}>Seção</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' }}>Intervalo</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-muted)', fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' }}>Audiência Início</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-muted)', fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' }}>Audiência Fim</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-muted)', fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' }}>Saídas</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 700, fontSize: 11, whiteSpace: 'nowrap' }}>Retenção</th>
+                  <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 700, fontSize: 11 }}>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {minuteIntervals.map((interval, idx) => {
+                  const retPct = interval.retentionPct
+                  const retColor = retPct >= 80 ? '#22c55e' : retPct >= 60 ? '#f59e0b' : '#ef4444'
+                  const startViewers = retentionData.find(d => d.time_seconds === interval.startSec)?.viewers ?? 0
+                  const sectionNames = ['🎯 Abertura', '📖 Conteúdo', '📖 Conteúdo', '📖 Conteúdo', '📖 Conteúdo', '📖 Conteúdo', '🔥 Pitch', '🔥 Pitch', '🎁 Oferta', '🎁 Oferta', '🏁 Encerramento']
+                  const sectionLabel = interval.hasPitch
+                    ? '🎯 Momento do Pitch'
+                    : sectionNames[Math.min(idx, sectionNames.length - 1)]
+                  const isWorst = maxDropoffMinute !== null && Math.abs(interval.startSec / 60 - maxDropoffMinute.minute) <= 5
+                  return (
+                    <tr
+                      key={interval.label}
+                      style={{
+                        borderBottom: '1px solid rgba(255,255,255,0.04)',
+                        background: interval.hasPitch
+                          ? 'rgba(245,158,11,0.04)'
+                          : isWorst
+                          ? 'rgba(239,68,68,0.04)'
+                          : 'transparent',
+                        transition: 'background 0.15s',
+                      }}
+                    >
+                      {/* Nº + barra de cor */}
+                      <td style={{ padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ width: 4, height: 28, borderRadius: 4, background: retColor, flexShrink: 0 }} />
+                          <div>
+                            <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: 12 }}>
+                              #{idx + 1}
+                              {interval.hasPitch && <span style={{ color: '#f59e0b', fontSize: 10, marginLeft: 4 }}>⭐ PITCH</span>}
+                              {isWorst && !interval.hasPitch && <span style={{ color: '#ef4444', fontSize: 10, marginLeft: 4 }}>⚠️ QUEDA</span>}
+                            </div>
+                            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 1 }}>{sectionLabel}</div>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Intervalo */}
+                      <td style={{ padding: '10px 12px', textAlign: 'center', fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                        {interval.label}
+                      </td>
+
+                      {/* Audiência início */}
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: 'var(--text-primary)' }}>
+                        {startViewers.toLocaleString('pt-BR')}
+                      </td>
+
+                      {/* Audiência fim */}
+                      <td style={{ padding: '10px 12px', textAlign: 'right', fontWeight: 700, color: retColor }}>
+                        {interval.viewers.toLocaleString('pt-BR')}
+                      </td>
+
+                      {/* Saídas */}
+                      <td style={{ padding: '10px 12px', textAlign: 'right' }}>
+                        {interval.dropoff > 0 ? (
+                          <span style={{ color: '#ef4444', fontWeight: 700 }}>−{interval.dropoff.toLocaleString('pt-BR')}</span>
+                        ) : (
+                          <span style={{ color: 'var(--text-muted)' }}>—</span>
+                        )}
+                      </td>
+
+                      {/* Barra de retenção */}
+                      <td style={{ padding: '10px 12px' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 100 }}>
+                          <div style={{ flex: 1, height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 99, overflow: 'hidden' }}>
+                            <div style={{
+                              width: `${retPct}%`, height: '100%',
+                              background: retColor, borderRadius: 99,
+                              transition: 'width 0.6s ease',
+                            }} />
+                          </div>
+                          <span style={{ fontSize: 12, fontWeight: 800, color: retColor, minWidth: 36, textAlign: 'right' }}>{retPct}%</span>
+                        </div>
+                      </td>
+
+                      {/* Status badge */}
+                      <td style={{ padding: '10px 12px', textAlign: 'center' }}>
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                          background: `${retColor}15`, color: retColor,
+                          border: `1px solid ${retColor}30`, whiteSpace: 'nowrap',
+                        }}>
+                          {retPct >= 80 ? '✅ Excelente' : retPct >= 60 ? '⚡ Normal' : '⚠️ Crítico'}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Legenda */}
+          <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#22c55e', display: 'inline-block' }} /> Retenção &gt;80%</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#f59e0b', display: 'inline-block' }} /> 60–80%</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: 2, background: '#ef4444', display: 'inline-block' }} /> &lt;60% — Revisar conteúdo</span>
+            <span>⭐ Momento do Pitch</span>
+            <span>⚠️ Maior queda de audiência</span>
+          </div>
+        </div>
+      )}
 
       <div style={{ marginBottom: 28 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
@@ -1374,35 +1655,45 @@ export default function AnalyticsPage() {
                   borderRadius: 12,
                   padding: 16,
                 }}>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 10 }}>
-                    Trechos para revisar no video
+                  <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    🚨 Alertas de Queda e Recomendações
                   </div>
-                  <div style={{ display: 'grid', gap: 8 }}>
-                    {criticalDropoffs.map((item, index) => (
-                      <div
-                        key={`${item.time_seconds}-${index}`}
-                        style={{
-                          display: 'grid',
-                          gridTemplateColumns: '74px 1fr auto',
-                          gap: 10,
-                          alignItems: 'center',
-                          padding: '9px 10px',
-                          borderRadius: 9,
-                          background: 'rgba(255,255,255,0.025)',
-                          border: '1px solid rgba(255,255,255,0.04)',
-                        }}
-                      >
-                        <strong style={{ color: '#fca5a5', fontSize: 13 }}>{formatChartTime(item.time_seconds)}</strong>
-                        <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>
-                          {item.previous_viewers} -&gt; {item.viewers} espectadores
-                          {item.clicks > 0 ? ` | ${item.clicks} cliques no CTA` : ''}
-                          {item.chatMessages > 0 ? ` | ${item.chatMessages} msgs no chat` : ''}
-                        </span>
-                        <span style={{ color: '#f87171', fontWeight: 900, fontSize: 12 }}>
-                          -{item.dropoff} ({item.dropoff_pct}%)
-                        </span>
-                      </div>
-                    ))}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {criticalDropoffs.slice(0, 3).map((item, index) => {
+                      const isPitchArea = pitchSecond !== null && Math.abs(item.time_seconds - pitchSecond) <= 120
+                      const action = isPitchArea
+                        ? 'Perda antes da oferta. Considere trabalhar melhor o gancho de transição, reduzir a enrolação ou criar um bônus irresistível de ancoragem.'
+                        : item.dropoff_pct > 30
+                        ? 'Queda severa de atenção. Considere revisar o conteúdo neste trecho: acelerar o ritmo, remover silêncios ou inserir uma pergunta de engajamento no chat.'
+                        : 'Oscilação na retenção. Considere revisar o conteúdo neste trecho ou animar o chat com uma enquete para recuperar atenção.'
+                      
+                      return (
+                        <div
+                          key={`${item.time_seconds}-${index}`}
+                          style={{
+                            padding: '12px 14px',
+                            borderRadius: 10,
+                            background: 'rgba(255,255,255,0.015)',
+                            border: '1px solid rgba(255,255,255,0.03)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 6
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontWeight: 800, color: '#f87171', fontSize: 12 }}>
+                              ⚠️ Queda de {item.dropoff_pct}% aos {formatChartTime(item.time_seconds)}
+                            </span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                              {item.previous_viewers} → {item.viewers} esp.
+                            </span>
+                          </div>
+                          <div style={{ fontSize: 11, color: 'var(--text-secondary)', lineHeight: 1.4 }}>
+                            💡 <strong>Ação sugerida:</strong> {action}
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               </div>
@@ -1581,35 +1872,74 @@ export default function AnalyticsPage() {
         )}
 
         {/* ── Tab: Linha do Tempo dos Leads ── */}
-        {activeTab === 'leads' && (
-          <>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 700 }}>👥 Linha do Tempo dos Leads ({summary.sessions.length})</div>
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Exibindo até 100 leads mais ativos</span>
-            </div>
-            
-            {summary.sessions.length === 0 ? (
-              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '60px 0', fontSize: 13 }}>
-                Nenhum lead com atividade registrada nesta sessão.
+        {activeTab === 'leads' && (() => {
+          const getLeadQualification = (watchTime: number, duration: number, clickedCta: boolean) => {
+            const ratio = duration > 0 ? watchTime / duration : 0
+            if (ratio >= 0.7 && clickedCta) {
+              return { label: '🔥 Hot', color: '#f87171', bg: 'rgba(239,68,68,0.1)', border: 'rgba(239,68,68,0.2)' }
+            } else if (ratio >= 0.4) {
+              return { label: '🟡 Warm', color: '#fb923c', bg: 'rgba(251,146,60,0.1)', border: 'rgba(251,146,60,0.2)' }
+            } else {
+              return { label: '❄️ Cold', color: '#60a5fa', bg: 'rgba(96,165,250,0.1)', border: 'rgba(96,165,250,0.2)' }
+            }
+          }
+
+          const filteredSessions = summary.sessions.filter(session => {
+            const qual = getLeadQualification(session.watch_time, durationSeconds, session.clicked_cta)
+            if (leadFilter === 'all') return true
+            if (leadFilter === 'hot') return qual.label.includes('Hot')
+            if (leadFilter === 'warm') return qual.label.includes('Warm')
+            if (leadFilter === 'cold') return qual.label.includes('Cold')
+            return true
+          })
+
+          return (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700 }}>👥 Linha do Tempo dos Leads ({filteredSessions.length})</div>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Exibindo até 100 leads mais ativos</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Qualificação:</span>
+                  <select
+                    value={leadFilter}
+                    onChange={(e) => setLeadFilter(e.target.value as any)}
+                    className="form-input"
+                    style={{ fontSize: 12, padding: '4px 8px', width: 140, height: 'auto', borderRadius: 8, background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                  >
+                    <option value="all">Todos os Leads</option>
+                    <option value="hot">🔥 Hot ({'>'}70% + CTA)</option>
+                    <option value="warm">🟡 Warm ({'>'}40%)</option>
+                    <option value="cold">❄️ Cold (≤40%)</option>
+                  </select>
+                </div>
               </div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                      <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>Lead</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>Local / Disp.</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600 }}>Tempo Assistido</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600 }}>CTA Clicado</th>
-                      <th style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-muted)', fontWeight: 600 }}>Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {summary.sessions.map((session) => {
-                      const minutes = Math.floor(session.watch_time / 60)
-                      const seconds = session.watch_time % 60
-                      const watchStr = minutes > 0 ? `${minutes} min ${seconds}s` : `${seconds}s`
-                      const deviceIcon = session.device === 'Mobile' ? '📱' : session.device === 'Tablet' ? '📟' : '💻'
+              
+              {filteredSessions.length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '60px 0', fontSize: 13 }}>
+                  Nenhum lead correspondente a esta qualificação.
+                </div>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>Lead</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'left', color: 'var(--text-muted)', fontWeight: 600 }}>Local / Disp.</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600 }}>Tempo Assistido</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600 }}>Qualificação</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600 }}>CTA Clicado</th>
+                        <th style={{ padding: '10px 12px', textAlign: 'right', color: 'var(--text-muted)', fontWeight: 600 }}>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredSessions.map((session) => {
+                        const minutes = Math.floor(session.watch_time / 60)
+                        const seconds = session.watch_time % 60
+                        const watchStr = minutes > 0 ? `${minutes} min ${seconds}s` : `${seconds}s`
+                        const deviceIcon = session.device === 'Mobile' ? '📱' : session.device === 'Tablet' ? '📟' : '💻'
+                        const qual = getLeadQualification(session.watch_time, durationSeconds, session.clicked_cta)
                       
                       return (
                         <tr key={session.session_id} style={{ borderBottom: '1px solid rgba(255,255,255,0.03)', transition: 'background 0.2s' }} className="hover-row">
@@ -1628,6 +1958,15 @@ export default function AnalyticsPage() {
                           </td>
                           <td style={{ padding: '12px', textAlign: 'center', fontWeight: 700 }}>
                             {watchStr}
+                          </td>
+                          <td style={{ padding: '12px', textAlign: 'center' }}>
+                            <span style={{
+                              background: qual.bg, color: qual.color, border: `1px solid ${qual.border}`,
+                              padding: '3px 8px', borderRadius: 20, fontSize: 11, fontWeight: 700,
+                              whiteSpace: 'nowrap'
+                            }}>
+                              {qual.label}
+                            </span>
                           </td>
                           <td style={{ padding: '12px', textAlign: 'center' }}>
                             {session.clicked_cta ? (
@@ -1684,6 +2023,94 @@ export default function AnalyticsPage() {
                     })}
                   </tbody>
                 </table>
+              </div>
+            )}
+          </>
+          )
+        })()}
+
+        {/* ── Tab: Comparativo de Runs ── */}
+        {activeTab === 'comparison' && (
+          <>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 700 }}>📊 Comparativo de Retenção Multisseção</div>
+                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Comparação direta das curvas de retenção das últimas 5 runs encerradas</span>
+              </div>
+            </div>
+
+            {loadingCompare ? (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: 260, gap: 10 }}>
+                <span className="spinner" style={{ width: 30, height: 30, border: '3px solid var(--border)', borderTopColor: 'var(--brand)', borderRadius: '50%', display: 'inline-block', animation: 'spin 1s linear infinite' }} />
+                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>Carregando dados das sessões...</span>
+              </div>
+            ) : compareRunsList.length === 0 ? (
+              <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '60px 0', fontSize: 13 }}>
+                Não há execuções anteriores encerradas registradas para comparar.
+              </div>
+            ) : (
+              <div>
+                {/* Legenda colorida para cada linha do comparativo */}
+                <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 20, justifyContent: 'center', background: 'var(--bg-elevated)', borderRadius: 10, padding: '10px 16px', border: '1px solid var(--border)' }}>
+                  {compareRunsList.map((run, idx) => {
+                    const colors = ['#38bdf8', '#34d399', '#facc15', '#f472b6', '#a78bfa']
+                    const color = colors[idx % colors.length]
+                    return (
+                      <span key={run.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                        <span style={{ width: 12, height: 3, background: color, display: 'inline-block', borderRadius: 2 }} />
+                        <strong>{run.title || new Date(run.started_at).toLocaleDateString('pt-BR')}</strong>
+                      </span>
+                    )
+                  })}
+                </div>
+
+                <ResponsiveContainer width="100%" height={320}>
+                  <ComposedChart data={compareRunsData} margin={{ top: 15, right: 10, left: -10, bottom: 0 }}>
+                    <CartesianGrid stroke="#1f2937" strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="time_seconds" stroke="#4b5563" fontSize={11} tickLine={false} axisLine={false} dy={10} tickFormatter={formatChartTime} minTickGap={28} />
+                    <YAxis domain={[0, 100]} stroke="#4b5563" fontSize={11} tickLine={false} axisLine={false} dx={-5} tickFormatter={v => `${v}%`} />
+                    <Tooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null
+                        return (
+                          <div style={{
+                            background: 'rgba(10,12,20,0.97)', backdropFilter: 'blur(12px)',
+                            border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12,
+                            padding: '12px 16px', fontSize: 12, color: '#fff',
+                            boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+                          }}>
+                            <div style={{ fontWeight: 700, marginBottom: 8, borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 6 }}>
+                              Tempo: {formatChartTime(label ?? 0)}
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+                              {payload.map((p, idx) => (
+                                <span key={idx} style={{ color: p.color }}>
+                                  {p.name}: <b>{p.value}%</b>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      }}
+                    />
+                    {compareRunsList.map((run, idx) => {
+                      const colors = ['#38bdf8', '#34d399', '#facc15', '#f472b6', '#a78bfa']
+                      const color = colors[idx % colors.length]
+                      const title = run.title || new Date(run.started_at).toLocaleDateString('pt-BR')
+                      return (
+                        <Line
+                          key={run.id}
+                          type="monotone"
+                          dataKey={title}
+                          name={title}
+                          stroke={color}
+                          strokeWidth={2.5}
+                          dot={false}
+                        />
+                      )
+                    })}
+                  </ComposedChart>
+                </ResponsiveContainer>
               </div>
             )}
           </>

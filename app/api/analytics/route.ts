@@ -207,58 +207,93 @@ export async function GET(req: NextRequest) {
     const dateFromIso = toDateStartIso(dateFrom)
     const dateToIso = toDateEndIso(dateTo)
 
-    // 1. Obter informações de início de sessão para filtrar testes/dados antigos se a sessão estiver ativa
-    const { data: webinar } = await supabase
-      .from('webi_webinars')
-      .select('session_started_at, duration_seconds, analytics_pitch_minute')
-      .eq('id', webinarId)
-      .single()
+    // 1. Obter informações do webinar e da run selecionada (se houver)
+    const [{ data: webinar }, runLookup] = await Promise.all([
+      supabase
+        .from('webi_webinars')
+        .select('session_started_at, duration_seconds, analytics_pitch_minute')
+        .eq('id', webinarId)
+        .single(),
+      runId && runId !== 'all'
+        ? supabase
+            .from('webi_webinar_runs')
+            .select('id, started_at, ended_at, status')
+            .eq('id', runId)
+            .single()
+        : Promise.resolve({ data: null }),
+    ])
+
+    // Janela temporal da run selecionada (para filtrar leads e eventos por horário)
+    const selectedRun = (runLookup as { data: { id: string; started_at: string; ended_at: string | null; status: string } | null }).data
+    const runStartedAt = selectedRun?.started_at ?? null
+    // Para runs ainda ativas, usa current time como limite superior
+    const runEndedAt = selectedRun?.ended_at
+      ?? (selectedRun?.status === 'active' ? new Date().toISOString() : null)
 
     const sessionStart = mode === 'live' && (!runId || runId === 'all') ? webinar?.session_started_at : null
+    // Quando run específica está selecionada, run_id já isola a sessão — session_mode é ignorado
+    const hasSpecificRun = !!(runId && runId !== 'all')
 
     const applyEventFilters = (query: any) => {
       let filtered = query
-      if (runId && runId !== 'all') filtered = filtered.eq('run_id', runId)
-      if (sessionStart) filtered = filtered.gte('created_at', sessionStart)
-      if (dateFromIso) filtered = filtered.gte('created_at', dateFromIso)
-      if (dateToIso) filtered = filtered.lte('created_at', dateToIso)
-      if (mode === 'replay' || mode === 'evergreen') {
-        filtered = filtered.filter('metadata->>session_mode', 'eq', mode)
-      }
-      if (mode === 'live' && !sessionStart) {
-        filtered = filtered.filter('metadata->>session_mode', 'eq', 'live')
+      if (runId && runId !== 'all') {
+        // run_id já identifica a sessão de forma única — não aplicar session_mode redundante
+        filtered = filtered.eq('run_id', runId)
+      } else {
+        if (sessionStart) filtered = filtered.gte('created_at', sessionStart)
+        if (dateFromIso) filtered = filtered.gte('created_at', dateFromIso)
+        if (dateToIso) filtered = filtered.lte('created_at', dateToIso)
+        if (mode === 'replay' || mode === 'evergreen') {
+          filtered = filtered.filter('metadata->>session_mode', 'eq', mode)
+        }
+        if (mode === 'live' && !sessionStart) {
+          filtered = filtered.filter('metadata->>session_mode', 'eq', 'live')
+        }
       }
       return filtered
     }
 
     const applyCreatedAtFilters = (query: any) => {
       let filtered = query
-      if (runId && runId !== 'all') filtered = filtered.eq('run_id', runId)
-      if (sessionStart) filtered = filtered.gte('created_at', sessionStart)
-      if (dateFromIso) filtered = filtered.gte('created_at', dateFromIso)
-      if (dateToIso) filtered = filtered.lte('created_at', dateToIso)
+      if (runId && runId !== 'all') {
+        filtered = filtered.eq('run_id', runId)
+      } else {
+        if (sessionStart) filtered = filtered.gte('created_at', sessionStart)
+        if (dateFromIso) filtered = filtered.gte('created_at', dateFromIso)
+        if (dateToIso) filtered = filtered.lte('created_at', dateToIso)
+      }
       return filtered
     }
 
     const applyRetentionFilters = (query: any) => {
       let filtered = query
-      if (runId && runId !== 'all') filtered = filtered.eq('run_id', runId)
-      if (sessionStart) filtered = filtered.gte('updated_at', sessionStart)
-      if (dateFromIso) filtered = filtered.gte('updated_at', dateFromIso)
-      if (dateToIso) filtered = filtered.lte('updated_at', dateToIso)
-      if (mode === 'replay' || mode === 'evergreen') {
-        filtered = filtered.eq('session_mode', mode)
-      }
-      if (mode === 'live' && !sessionStart) {
-        filtered = filtered.eq('session_mode', 'live')
+      if (runId && runId !== 'all') {
+        // run_id já isola a sessão — não filtrar por session_mode adicionalmente
+        filtered = filtered.eq('run_id', runId)
+      } else {
+        if (sessionStart) filtered = filtered.gte('updated_at', sessionStart)
+        if (dateFromIso) filtered = filtered.gte('updated_at', dateFromIso)
+        if (dateToIso) filtered = filtered.lte('updated_at', dateToIso)
+        if (mode === 'replay' || mode === 'evergreen') {
+          filtered = filtered.eq('session_mode', mode)
+        }
+        if (mode === 'live' && !sessionStart) {
+          filtered = filtered.eq('session_mode', 'live')
+        }
       }
       return filtered
     }
 
     const applyLeadFilters = (query: any) => {
       let filtered = query
-      if (dateFromIso) filtered = filtered.gte('registered_at', dateFromIso)
-      if (dateToIso) filtered = filtered.lte('registered_at', dateToIso)
+      // Quando uma run específica está selecionada, filtrar leads pela janela temporal da run
+      if (hasSpecificRun && runStartedAt) {
+        filtered = filtered.gte('registered_at', runStartedAt)
+        if (runEndedAt) filtered = filtered.lte('registered_at', runEndedAt)
+      } else {
+        if (dateFromIso) filtered = filtered.gte('registered_at', dateFromIso)
+        if (dateToIso) filtered = filtered.lte('registered_at', dateToIso)
+      }
       return filtered
     }
 
@@ -870,10 +905,26 @@ export async function GET(req: NextRequest) {
       : { audience: 0, retention_pct: 0 }
     const averageEngagementPct = getAverageEngagementPct(sessionsArray, webinar?.duration_seconds || 3600)
 
-    const scopedTotalLeads = runId && runId !== 'all' ? uniquePageViews : totalLeads
-    const scopedTotalAttended = runId && runId !== 'all' ? uniqueJoined : totalAttended
+    const scopedTotalLeads = hasSpecificRun ? uniquePageViews : totalLeads
+    const scopedTotalAttended = hasSpecificRun ? uniqueJoined : totalAttended
+
+    const ctaRate = uniqueJoined > 0 ? (ctaClicks / uniqueJoined) * 100 : 0
+    const sessionQualityScore = Math.round(
+      (playRate * 0.2) +
+      ((pitchAudience?.retention_pct || 0) * 0.35) +
+      (ctaRate * 0.35) +
+      ((averageEngagementPct || 0) * 0.1)
+    )
 
     return NextResponse.json({
+      session_quality_score: sessionQualityScore,
+      // Metadados da run selecionada (para exibição no frontend)
+      selected_run: selectedRun ? {
+        id: selectedRun.id,
+        started_at: selectedRun.started_at,
+        ended_at: selectedRun.ended_at,
+        status: selectedRun.status,
+      } : null,
       total_leads: scopedTotalLeads,
       total_attended: scopedTotalAttended,
       joined: uniqueJoined || 0,

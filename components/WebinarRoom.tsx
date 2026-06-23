@@ -1275,6 +1275,32 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         setElapsedSeconds(0)
         elapsedRef.current = 0
 
+        // Criar run automática para sessões agendadas, para que os eventos desta sessão
+        // sejam associados a um run_id e possam ser filtrados corretamente no analytics.
+        if (!currentRunId) {
+          const sessionDate = new Date(nextScheduledStart).toLocaleString('pt-BR', {
+            day: '2-digit', month: '2-digit', year: 'numeric',
+            hour: '2-digit', minute: '2-digit',
+          })
+          fetch('/api/webinar-runs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              webinar_id: webinar.id,
+              action: 'start',
+              title: `Sessão ${sessionDate}`,
+              metadata: { auto_created: true, scheduled_start: nextScheduledStart },
+            }),
+          })
+            .then(r => r.json())
+            .then(data => {
+              if (data?.run?.id) {
+                setCurrentRunId(data.run.id)
+              }
+            })
+            .catch(() => {}) // fire-and-forget, nunca bloqueia a UI
+        }
+
         // Delay the server refresh slightly to guarantee the server's clock has safely
         // crossed the threshold, avoiding the edge case where it returns tomorrow's schedule.
         setTimeout(() => {
@@ -1283,7 +1309,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       }
     }, 1000)
     return () => clearInterval(tick)
-  }, [nextScheduledStart, router])
+  }, [nextScheduledStart, router, currentRunId, webinar.id])
 
   // ---- Fix mobile viewport height ----
   // visualViewport.height is the most accurate measure: it excludes the Android nav bar
