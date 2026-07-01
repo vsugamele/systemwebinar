@@ -1,12 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-function getAnonClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
+import { createServiceClient } from '@/lib/supabase/server'
 
 const QUESTION_KEYWORDS = [
   '?', 'como', 'quando', 'onde', 'qual', 'quanto', 'por que', 'porque',
@@ -26,7 +19,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
     }
 
-    const supabase = getAnonClient()
+    const supabase = await createServiceClient()
 
     // Get webinar AI config + project openrouter key
     const { data: webinar } = await supabase

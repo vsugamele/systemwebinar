@@ -1,21 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { createServiceClient } from '@/lib/supabase/server'
 import { imperioSend } from '@/lib/imperio'
 import { fireAndLogWebhook } from '@/lib/webhook-logger'
-
-// Use anon client — leads public insert + webinars public read are allowed by RLS
-// No service role key required
-function getAnonClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  return createClient(url, key)
-}
 
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { webinar_id, email, name, phone, utm_source, utm_medium, utm_campaign, page_url, ...extraFields } = body
-    const supabase = getAnonClient()
+    const supabase = await createServiceClient()
 
     // Get webinar + project data (allowed by webi_webinars_public_read RLS)
     const { data: webinar, error: webinarError } = await supabase

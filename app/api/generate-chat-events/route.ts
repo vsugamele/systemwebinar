@@ -1,12 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-function getAnonClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
+import { createServiceClient } from '@/lib/supabase/server'
 
 export interface GeneratedChatEvent {
   timestamp_seconds: number
@@ -22,7 +15,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'webinar_id e script são obrigatórios' }, { status: 400 })
     }
 
-    const supabase = getAnonClient()
+    const supabase = await createServiceClient()
 
     const { data: webinar } = await supabase
       .from('webi_webinars')

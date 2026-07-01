@@ -1,12 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
-
-function getAnonClient() {
-  return createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
+import { createServiceClient } from '@/lib/supabase/server'
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,7 +8,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Faltam campos obrigatórios' }, { status: 400 })
     }
 
-    const supabase = getAnonClient()
+    const supabase = await createServiceClient()
 
     // Resgatar API Key do Projeto
     const { data: project } = await supabase
