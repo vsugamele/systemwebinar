@@ -637,7 +637,7 @@ export default function ChatPanel({
               )
             }
 
-            const isAi = msg.author?.startsWith('🤖')
+            const isAi = msg.author?.startsWith('🤖') || msg.author === displayName || msg.session_id?.startsWith('ai-moderator') || msg.session_id === 'ai-moderator'
             const isPitchCard = msg.id?.startsWith('pitch-chat-')
             return (
               <div key={msg.id || i} className="chat-message" style={isPitchCard ? {
@@ -648,15 +648,15 @@ export default function ChatPanel({
                 background: 'rgba(34,197,94,0.08)', borderRadius: 8, padding: '6px 8px',
                 border: '1px solid rgba(34,197,94,0.2)', margin: '2px 0'
               } : isAi ? {
-                background: 'rgba(99,102,241,0.08)', borderRadius: 8, padding: '6px 8px',
-                border: '1px solid rgba(99,102,241,0.2)', margin: '2px 0'
+                background: 'rgba(239, 68, 68, 0.08)', borderRadius: 8, padding: '6px 8px',
+                border: '1px solid rgba(239, 68, 68, 0.25)', margin: '2px 0'
               } : {}}>
                 {!isBroadcast && (
                   <div
                     className="chat-avatar"
                     style={{
                       background: isPitchCard ? 'linear-gradient(135deg, #22c55e, #6366f1)'
-                        : isAi ? 'var(--brand)'
+                        : isAi ? '#ef4444'
                         : msg.isSimulated
                           ? `hsl(${(msg.author.charCodeAt(0) * 37) % 360}, 70%, 40%)`
                           : 'var(--brand)',
@@ -674,7 +674,7 @@ export default function ChatPanel({
                     <div style={{ display: 'inline', alignItems: 'baseline', fontSize: 13, lineHeight: '1.4' }}>
                       <span style={{
                         fontWeight: 600,
-                        color: isPitchCard ? '#22c55e' : isAi ? '#3ea6ff' : (msg.author.charCodeAt(0) % 5 === 0 ? '#2ba640' : '#aaaaaa'),
+                        color: isPitchCard ? '#22c55e' : isAi ? '#ff4d4d' : (msg.author.charCodeAt(0) % 5 === 0 ? '#2ba640' : '#aaaaaa'),
                         marginRight: 8,
                         cursor: 'pointer'
                       }}>
@@ -713,7 +713,7 @@ export default function ChatPanel({
                       alignItems: 'center',
                       gap: 6,
                       flexWrap: 'wrap',
-                      ...(isPitchCard ? { color: '#22c55e' } : isAi ? { color: 'var(--brand)' } : {})
+                      ...(isPitchCard ? { color: '#22c55e' } : isAi ? { color: '#ef4444' } : {})
                     }}>
                       <span>{msg.author}{isPitchCard && ' 🎯'}</span>
 
@@ -821,11 +821,11 @@ export default function ChatPanel({
             )
           })}
           {aiTyping && (
-            <div className="chat-message" style={isAiDefaultOrEmoji ? { background: 'rgba(99,102,241,0.05)', borderRadius: 8, padding: '6px 8px' } : {}}>
+            <div className="chat-message" style={{ background: 'rgba(239, 68, 68, 0.08)', borderRadius: 8, padding: '6px 8px', border: '1px solid rgba(239, 68, 68, 0.25)', margin: '2px 0' }}>
               <div
                 className="chat-avatar"
                 style={{
-                  background: isAiDefaultOrEmoji ? 'var(--brand)' : `hsl(${(displayName.charCodeAt(0) * 37) % 360}, 70%, 40%)`,
+                  background: '#ef4444',
                   backgroundImage: displayAvatar ? `url(${displayAvatar})` : undefined,
                   backgroundSize: 'cover',
                   width: theme === 'youtube' ? 24 : undefined,
@@ -835,7 +835,7 @@ export default function ChatPanel({
                 {!displayAvatar && (isAiDefaultOrEmoji ? '🤖' : getInitials(displayName))}
               </div>
               <div>
-                <div className="chat-msg-author" style={isAiDefaultOrEmoji ? { color: 'var(--brand)' } : {}}>
+                <div className="chat-msg-author" style={{ color: '#ef4444', fontWeight: 600 }}>
                   {displayName}
                 </div>
                 <div className="chat-msg-text" style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>digitando...</div>

@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     const text = message.text || ''
     const isQ = text.endsWith('?') || /como|quando|qual|quanto|posso|consigo|funciona|o que|por que|porque|dúvida|ajuda|não entendi/i.test(text)
     if (isQ) {
-      respondWithAI(webinar_id, session_id, text).catch(err => {
+      respondWithAI(webinar_id, session_id, text, message.author).catch(err => {
         console.error('Error initiating background AI response:', err)
       })
     }
@@ -84,7 +84,7 @@ export async function POST(req: NextRequest) {
 }
 
 // Background AI response helper function
-async function respondWithAI(webinarId: string, userSessionId: string, questionText: string) {
+async function respondWithAI(webinarId: string, userSessionId: string, questionText: string, userDisplayName?: string) {
   try {
     const supabase = await createServiceClient()
 
@@ -188,13 +188,21 @@ Siga estas diretrizes de escrita estritas:
     const aiName = webinar.ai_persona_name || '🤖 Assistente'
     const aiAvatar = webinar.ai_persona_avatar || ''
 
+    let finalAnswer = answer
+    if (userDisplayName) {
+      const cleanName = userDisplayName.trim()
+      if (cleanName && !answer.startsWith('@') && !answer.includes(cleanName)) {
+        finalAnswer = `@${cleanName} ${answer}`
+      }
+    }
+
     // 6. Insert AI response into the database with prefixed session_id
     await supabase.from('webi_live_chat').insert({
       webinar_id: webinarId,
       session_id: `ai-moderator:${userSessionId}`,
       author: aiName,
       avatar: aiAvatar || null,
-      text: answer,
+      text: finalAnswer,
       timestamp_video: 0,
       is_simulated: true,
       is_broadcast: false,
