@@ -242,6 +242,7 @@ export interface ChatMessage {
   link_url?: string
   link_text?: string
   quiz_card?: QuizCardData
+  session_id?: string
 }
 
 // Analytics

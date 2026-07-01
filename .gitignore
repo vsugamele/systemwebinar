@@ -42,3 +42,6 @@ next-env.d.ts
 
 # webinar template sharing project
 /webinar-system-template/
+
+.vercel
+.env*
