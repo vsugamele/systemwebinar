@@ -379,6 +379,8 @@ interface ChatPanelProps {
   disableQa?: boolean
   className?: string
   lang?: 'pt' | 'en' | 'es'
+  aiPersonaName?: string
+  aiPersonaAvatar?: string
 }
 
 function formatYtHandle(name: string): string {
@@ -417,12 +419,18 @@ export default function ChatPanel({
   disableQa = false,
   className = '',
   lang = 'pt',
+  aiPersonaName,
+  aiPersonaAvatar,
 }: ChatPanelProps) {
   const t = TRANSLATIONS[lang]
   const [chatTab, setChatTab] = useState<ChatTab>(defaultTab)
   const [chatInput, setChatInput] = useState('')
   const [qaInput, setQaInput] = useState('')
   const chatEndRef = useRef<HTMLDivElement>(null)
+
+  const displayName = aiPersonaName || '🤖 Assistente'
+  const displayAvatar = aiPersonaAvatar || ''
+  const isAiDefaultOrEmoji = displayName.startsWith('🤖') || !aiPersonaName
 
   // Auto scroll chat
   useEffect(() => {
@@ -813,10 +821,23 @@ export default function ChatPanel({
             )
           })}
           {aiTyping && (
-            <div className="chat-message" style={{ background: 'rgba(99,102,241,0.05)', borderRadius: 8, padding: '6px 8px' }}>
-              <div className="chat-avatar" style={{ background: 'var(--brand)' }}>🤖</div>
+            <div className="chat-message" style={isAiDefaultOrEmoji ? { background: 'rgba(99,102,241,0.05)', borderRadius: 8, padding: '6px 8px' } : {}}>
+              <div
+                className="chat-avatar"
+                style={{
+                  background: isAiDefaultOrEmoji ? 'var(--brand)' : `hsl(${(displayName.charCodeAt(0) * 37) % 360}, 70%, 40%)`,
+                  backgroundImage: displayAvatar ? `url(${displayAvatar})` : undefined,
+                  backgroundSize: 'cover',
+                  width: theme === 'youtube' ? 24 : undefined,
+                  height: theme === 'youtube' ? 24 : undefined,
+                }}
+              >
+                {!displayAvatar && (isAiDefaultOrEmoji ? '🤖' : getInitials(displayName))}
+              </div>
               <div>
-                <div className="chat-msg-author" style={{ color: 'var(--brand)' }}>🤖 Assistente</div>
+                <div className="chat-msg-author" style={isAiDefaultOrEmoji ? { color: 'var(--brand)' } : {}}>
+                  {displayName}
+                </div>
                 <div className="chat-msg-text" style={{ color: 'var(--text-muted)', fontStyle: 'italic' }}>digitando...</div>
               </div>
             </div>

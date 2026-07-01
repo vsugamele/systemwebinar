@@ -3801,6 +3801,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         disableQa={!!webinar.disable_qa}
         className={webinar.theme === 'youtube' && activeMobileTab !== 'chat' ? 'mobile-hidden' : ''}
         lang={lang}
+        aiPersonaName={webinar.ai_persona_name}
+        aiPersonaAvatar={webinar.ai_persona_avatar}
       />
       {/* Mobile landscape chat toggle button */}
       <button

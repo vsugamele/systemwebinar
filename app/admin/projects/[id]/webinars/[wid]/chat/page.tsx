@@ -1622,7 +1622,17 @@ export default function ChatConfigPage() {
 
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, opacity: aiEnabled ? 1 : 0.5, pointerEvents: aiEnabled ? 'auto' : 'none' }}>
           <div style={{ fontWeight: 700, marginBottom: 4 }}>OpenRouter API Key</div>
-          <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Você pode gerenciar e adicionar as chaves de inteligência artificial unificadas na página <strong>Ajustes do Projeto</strong>. Essa chave será detectada pela IA do webinar automaticamente e utilizada.</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 12 }}>
+            Esta chave é compartilhada por todos os webinars deste projeto. Você também pode alterá-la na listagem de projetos.
+          </div>
+          <input
+            type="password"
+            className="form-input"
+            placeholder="sk-or-v1-..."
+            value={projectApiKey}
+            onChange={e => setProjectApiKey(e.target.value)}
+            style={{ width: '100%' }}
+          />
         </div>
 
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20, opacity: aiEnabled ? 1 : 0.5, pointerEvents: aiEnabled ? 'auto' : 'none' }}>

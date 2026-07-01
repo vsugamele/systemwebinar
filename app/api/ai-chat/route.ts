@@ -56,9 +56,15 @@ export async function POST(req: NextRequest) {
     const transcript = overrides?.video_transcript !== undefined ? overrides.video_transcript : (webinar?.video_transcript || '')
     
     let systemPrompt = (overrides?.ai_system_prompt !== undefined ? overrides.ai_system_prompt : webinar?.ai_system_prompt) ||
-      `Você é um assistente inteligente do webinar "${webinar?.name || 'Webinar'}". 
-Responda dúvidas dos participantes de forma concisa, simpática e direta (máximo 2-3 frases).
-Baseie suas respostas nas informações do produto/conteúdo e no roteiro do vídeo abaixo. Se não souber, diga "Boa pergunta! Fiquem atentos que o apresentador vai abordar isso!" e não invente informações.`
+      `Você é um membro da equipe de suporte do webinar "${webinar?.name || 'Webinar'}".
+Responda às dúvidas dos participantes de forma 100% natural, conversacional e direta, como se fosse um humano real digitando rapidamente.
+
+Siga estas diretrizes de escrita estritas:
+1. Converse como uma pessoa de verdade: use artigos e conectivos completos (evite cortar termos para parecer direto, pois soa robótico/tradução de IA).
+2. Não use títulos de blocos (como "Problema:", "Solução:") nem formatações artificiais como tópicos com marcadores/bullets (• ou 1.), a menos que seja estritamente necessário.
+3. Remova adjetivos vagos ("muito bom", "extremamente prático") e substitua por fatos ou dê contexto direto aos números.
+4. Se precisar direcionar o usuário para alguma ação, faça um convite fluido que continue o fluxo da conversa natural.
+5. Baseie suas respostas unicamente nas informações do produto/conteúdo e no roteiro do vídeo fornecidos abaixo.`
 
     if (knowledgeBase) {
       systemPrompt += `\n\nINFORMAÇÕES DO PRODUTO/WEBINAR:\n${knowledgeBase}`
@@ -67,6 +73,8 @@ Baseie suas respostas nas informações do produto/conteúdo e no roteiro do ví
     if (transcript) {
       systemPrompt += `\n\nROTEIRO/TRANSCRIÇÃO DO VÍDEO DO EXPERT:\n${transcript}`
     }
+
+    systemPrompt += `\n\nDIRETRIZ DE SEGURANÇA E ESCAPE: Se você não souber a resposta com absoluta certeza com base apenas nas informações fornecidas acima, ou se a pergunta for vaga/desconexa, responda APENAS com a palavra "PULAR" (sem aspas, sem pontuação, sem explicações). Não invente nenhuma informação.`
 
     let historyMessages: { role: 'user' | 'assistant'; content: string }[] = []
 
@@ -125,7 +133,9 @@ Baseie suas respostas nas informações do produto/conteúdo e no roteiro do ví
     const data = await response.json()
     const answer = data.choices?.[0]?.message?.content?.trim()
 
-    if (!answer) return NextResponse.json({ skip: true })
+    if (!answer || answer.toUpperCase() === 'PULAR' || answer.toUpperCase().includes('PULAR')) {
+      return NextResponse.json({ skip: true })
+    }
 
     return NextResponse.json({ answer })
   } catch (error) {
