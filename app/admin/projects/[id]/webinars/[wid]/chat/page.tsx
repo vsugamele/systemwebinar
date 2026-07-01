@@ -17,12 +17,17 @@ import {
 const ALL_PHRASES = [...CHAT_PHRASES_ELOGIOS, ...CHAT_PHRASES_VAGA, ...CHAT_PHRASES_ENGAJAMENTO]
 
 const OPENROUTER_MODELS = [
-  { value: 'google/gemini-flash-1.5', label: 'Gemini 1.5 Flash (Google) — Mais rápido e barato' },
-  { value: 'openai/gpt-4o-mini', label: 'GPT-4o Mini (OpenAI) — Excelente custo-benefício' },
-  { value: 'anthropic/claude-3-haiku', label: 'Claude 3 Haiku (Anthropic) — Respostas naturais' },
-  { value: 'mistralai/mistral-7b-instruct', label: 'Mistral 7B — Open source, muito barato' },
+  { value: 'google/gemini-flash-1.5', label: 'Gemini 1.5 Flash (Google) — Rápido e barato' },
+  { value: 'google/gemini-2.5-flash', label: 'Gemini 2.5 Flash (Google) — Nova geração' },
   { value: 'google/gemini-pro-1.5', label: 'Gemini 1.5 Pro (Google) — Mais avançado' },
+  { value: 'google/gemini-2.5-pro', label: 'Gemini 2.5 Pro (Google) — Nova geração Pro' },
+  { value: 'openai/gpt-4o-mini', label: 'GPT-4o Mini (OpenAI) — Excelente custo-benefício' },
   { value: 'openai/gpt-4o', label: 'GPT-4o (OpenAI) — Maior qualidade' },
+  { value: 'anthropic/claude-3-haiku', label: 'Claude 3 Haiku (Anthropic) — Respostas rápidas' },
+  { value: 'anthropic/claude-3.5-haiku', label: 'Claude 3.5 Haiku (Anthropic) — Respostas naturais' },
+  { value: 'anthropic/claude-3.5-sonnet', label: 'Claude 3.5 Sonnet (Anthropic) — Extrema qualidade' },
+  { value: 'deepseek/deepseek-chat', label: 'DeepSeek V3 (DeepSeek) — Altíssima qualidade, super barato' },
+  { value: 'meta-llama/llama-3.3-70b-instruct', label: 'Llama 3.3 70B (Meta) — Excelente e inteligente' },
 ]
 
 const PHRASE_OPTIONS = [
