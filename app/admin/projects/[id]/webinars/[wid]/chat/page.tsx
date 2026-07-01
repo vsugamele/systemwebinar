@@ -833,35 +833,50 @@ export default function ChatConfigPage() {
     setSaving(true)
     const namesArray = chatNamesRaw.split('\n').map(n => n.trim()).filter(Boolean)
     const endSec = chatEndSeconds.trim() !== '' ? Number(chatEndSeconds) : null
-    await Promise.all([
-      supabase.from('webi_webinars').update({
-        chat_cpm: chatMode === 'cpm' ? chatCpm : 0,
-        chat_names: namesArray,
-        chat_default_tab: chatDefaultTab,
-        chat_mode: chatMode,
-        chat_interval_minutes: chatIntervalMinutes,
-        chat_interval_messages: chatIntervalMessages,
-        chat_start_seconds: chatStartSeconds,
-        chat_end_seconds: endSec,
-        chat_phrases: chatPhrasesMix.length > 0 ? chatPhrasesMix : null,
-        chat_phrases_elogios: chatPhrasesElogios.length > 0 ? chatPhrasesElogios : null,
-        chat_phrases_vaga: chatPhrasesVaga.length > 0 ? chatPhrasesVaga : null,
-        chat_phrases_engajamento: chatPhrasesEngajamento.length > 0 ? chatPhrasesEngajamento : null,
-        chat_segments: useSegments && segments.length > 0 ? segments : null,
-        ai_enabled: aiEnabled,
-        ai_model: aiModel,
-        ai_knowledge_base: aiKnowledgeBase,
-        video_transcript: videoTranscript,
-        ai_system_prompt: aiSystemPrompt,
-        ai_persona_name: aiPersonaName,
-        ai_persona_avatar: aiPersonaAvatar,
-        bad_words_filter: badWordsFilter,
-        disable_qa: disableQa,
-      }).eq('id', webinarId),
-      supabase.from('webi_projects').update({ openrouter_api_key: projectApiKey }).eq('id', projectId)
-    ])
-    setSaving(false)
-    toast.success('Chat salvo!')
+    try {
+      const [webinarRes, projectRes] = await Promise.all([
+        supabase.from('webi_webinars').update({
+          chat_cpm: chatMode === 'cpm' ? chatCpm : 0,
+          chat_names: namesArray,
+          chat_default_tab: chatDefaultTab,
+          chat_mode: chatMode,
+          chat_interval_minutes: chatIntervalMinutes,
+          chat_interval_messages: chatIntervalMessages,
+          chat_start_seconds: chatStartSeconds,
+          chat_end_seconds: endSec,
+          chat_phrases: chatPhrasesMix.length > 0 ? chatPhrasesMix : null,
+          chat_phrases_elogios: chatPhrasesElogios.length > 0 ? chatPhrasesElogios : null,
+          chat_phrases_vaga: chatPhrasesVaga.length > 0 ? chatPhrasesVaga : null,
+          chat_phrases_engajamento: chatPhrasesEngajamento.length > 0 ? chatPhrasesEngajamento : null,
+          chat_segments: useSegments && segments.length > 0 ? segments : null,
+          ai_enabled: aiEnabled,
+          ai_model: aiModel,
+          ai_knowledge_base: aiKnowledgeBase,
+          video_transcript: videoTranscript,
+          ai_system_prompt: aiSystemPrompt,
+          ai_persona_name: aiPersonaName,
+          ai_persona_avatar: aiPersonaAvatar,
+          bad_words_filter: badWordsFilter,
+          disable_qa: disableQa,
+        }).eq('id', webinarId),
+        supabase.from('webi_projects').update({ openrouter_api_key: projectApiKey }).eq('id', projectId)
+      ])
+
+      if (webinarRes.error) {
+        toast.error(`Erro ao salvar webinar: ${webinarRes.error.message}`)
+        console.error('Webinar update error:', webinarRes.error)
+      } else if (projectRes.error) {
+        toast.error(`Erro ao salvar chave do projeto: ${projectRes.error.message}`)
+        console.error('Project update error:', projectRes.error)
+      } else {
+        toast.success('Chat salvo com sucesso!')
+      }
+    } catch (err: any) {
+      toast.error(`Erro inesperado ao salvar: ${err.message || err}`)
+      console.error('Unexpected save error:', err)
+    } finally {
+      setSaving(false)
+    }
   }
 
   function addSegment() {
