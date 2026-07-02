@@ -197,16 +197,18 @@ Siga estas diretrizes de escrita estritas:
     }
 
     // 6. Insert AI response into the database with prefixed session_id
-    await supabase.from('webi_live_chat').insert({
+    const { error: insertError } = await supabase.from('webi_live_chat').insert({
       webinar_id: webinarId,
       session_id: `ai-moderator:${userSessionId}`,
       author: aiName,
-      avatar: aiAvatar || null,
       text: finalAnswer,
       timestamp_video: 0,
       is_simulated: true,
       is_broadcast: false,
     })
+    if (insertError) {
+      console.error('Failed to insert AI response into DB:', insertError)
+    }
   } catch (err) {
     console.error('Error in background AI moderator:', err)
   }
