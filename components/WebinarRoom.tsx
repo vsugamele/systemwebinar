@@ -870,13 +870,27 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   )
 
   // Base time for converting relative video seconds into absolute UNIX timestamps for simulated messages.
-  const sessionBaseTime = useMemo(() => {
-    if (webinar.is_evergreen) {
-      return Math.floor(Date.now() / 1000)
+  // IMPORTANT: Do NOT call Date.now() inside useMemo — it runs on the server during SSR and produces
+  // a different value than on the client, causing React hydration error #418.
+  // We use useState(0) as the SSR-safe default and set the real value in a useEffect (client-only).
+  const [sessionBaseTime, setSessionBaseTime] = useState<number>(() => {
+    // On server this will be 0; on client (when state is initialised) it's also 0 initially.
+    // The real value is computed in the effect below, which only runs on the client.
+    if (liveSessionStartedAt && !webinar.is_evergreen) {
+      return Math.floor(new Date(liveSessionStartedAt).getTime() / 1000)
     }
-    return liveSessionStartedAt
-      ? Math.floor(new Date(liveSessionStartedAt).getTime() / 1000)
-      : Math.floor(Date.now() / 1000)
+    return 0
+  })
+  useEffect(() => {
+    if (webinar.is_evergreen) {
+      setSessionBaseTime(Math.floor(Date.now() / 1000))
+    } else {
+      setSessionBaseTime(
+        liveSessionStartedAt
+          ? Math.floor(new Date(liveSessionStartedAt).getTime() / 1000)
+          : Math.floor(Date.now() / 1000)
+      )
+    }
   }, [liveSessionStartedAt, webinar.is_evergreen])
   
   // ---- O(1) Deduplication and Fast-Forward Buffering ----
