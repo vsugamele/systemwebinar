@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
     const text = message.text || ''
     const isQ = text.endsWith('?') || /como|quando|qual|quanto|posso|consigo|funciona|o que|por que|porque|dúvida|ajuda|não entendi/i.test(text)
     if (isQ) {
-      respondWithAI(webinar_id, session_id, text, message.author).catch(err => {
+      await respondWithAI(webinar_id, session_id, text, message.author).catch(err => {
         console.error('Error initiating background AI response:', err)
       })
     }
