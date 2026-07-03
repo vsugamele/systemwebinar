@@ -1055,30 +1055,37 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
 
   // Waiting room + session clock
   const brandColor = webinar.brand_color || '#6366f1'
-  const searchParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
-  const tMatch = searchParams?.get('t')
-  const devTMatch = searchParams?.get('dev_t')
-  
-  // Priority: 
-  // 1. ?t=X (seconds)
-  // 2. ?dev_t=X (minutes)
-  // 3. Normal scheduled time
-  const tOffset = tMatch ? parseInt(tMatch) : null
-  const devOffset = devTMatch ? parseInt(devTMatch) * 60 : null
-  
-  const startOffsetOverride = tOffset !== null ? tOffset : (devOffset !== null ? devOffset : 0)
-  
-  // isDevMode: true when ?t or ?dev_t is explicitly present in the URL.
-  // Only affects the local developer/admin view — leads arriving without these
-  // params always follow the normal scheduling logic.
-  const isDevMode = tOffset !== null || devOffset !== null
-  
-  const startOffset = startOffsetOverride > 0
-    ? startOffsetOverride
-    : (webinar.is_evergreen ? 0 : getStartOffset(webinar.session_started_at))
+  // HYDRATION-SAFE: All window.location / URL param access must live in useEffect, never at render time.
+  // On the server these are null/0; the useEffect sets the real values after client mount.
+  const [tOffset, setTOffset]       = useState<number | null>(null)
+  const [devOffset, setDevOffset]   = useState<number | null>(null)
+  const [isDevMode, setIsDevMode]   = useState(false)
+  const [startOffset, setStartOffset] = useState(0)
   const waitDelay = webinar.waiting_delay_seconds ?? 120
+
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search)
+    const tRaw   = sp.get('t')
+    const devRaw = sp.get('dev_t')
+    const tOff   = tRaw   ? parseInt(tRaw)        : null
+    const devOff = devRaw ? parseInt(devRaw) * 60  : null
+    setTOffset(tOff)
+    setDevOffset(devOff)
+    setIsDevMode(tOff !== null || devOff !== null)
+    const override = tOff !== null ? tOff : (devOff !== null ? devOff : 0)
+    const computed = override > 0
+      ? override
+      : (webinar.is_evergreen ? 0 : getStartOffset(webinar.session_started_at))
+    setStartOffset(computed)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const startOffsetOverride = tOffset !== null ? tOffset : (devOffset !== null ? devOffset : 0)
   const waitEnabled = !!webinar.waiting_room_enabled && startOffset > 0 && startOffset < waitDelay
-  const [waitingDone, setWaitingDone] = useState(!waitEnabled)
+  const [waitingDone, setWaitingDone] = useState(true) // start as done; corrected in effect below
+  useEffect(() => {
+    setWaitingDone(!waitEnabled)
+  }, [waitEnabled])
 
   // ---- YouTube Player API state ----
   // ytPlayerRef: holds the YT.Player instance from the official Iframe API
