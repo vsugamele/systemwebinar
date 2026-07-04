@@ -984,11 +984,18 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [descriptionExpanded, setDescriptionExpanded] = useState(false)
   const [hasLiked, setHasLiked] = useState(false)
+  // HYDRATION-SAFE: Math.random() cannot be used in useState initializer (server and client produce
+  // different values → React #418). Start with a deterministic value; randomise in a useEffect.
   const [likeCount, setLikeCount] = useState(() => {
     const vPeak = webinar.fake_viewers_peak ?? Math.max(50, webinar.peak_viewers_max || 50)
-    const base = vPeak * 2.4
-    return Math.floor(base + Math.random() * (base * 0.15))
+    return Math.floor(vPeak * 2.4) // deterministic — no Math.random() here
   })
+  useEffect(() => {
+    const vPeak = webinar.fake_viewers_peak ?? Math.max(50, webinar.peak_viewers_max || 50)
+    const base = vPeak * 2.4
+    setLikeCount(Math.floor(base + Math.random() * (base * 0.15)))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const handleLike = () => {
     if (hasLiked) {
@@ -1017,18 +1024,21 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // from the very first render. Without this, the video player initialises and
   // starts auto-playing before the elapsed counter effect can set the true value,
   // causing audio to leak through the "Encerrado" overlay when a lead returns.
-  const [elapsedSeconds, setElapsedSeconds] = useState(() => {
-    if (typeof window === 'undefined') return 0
+  // HYDRATION-SAFE: window.location and Date.now() cannot be used in useState initializer.
+  // Start at 0 (safe for SSR); a useEffect sets the real offset on the client after mount.
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
+  useEffect(() => {
     const sp = new URLSearchParams(window.location.search)
     const t = sp.get('t')
     const dt = sp.get('dev_t')
     const tOff = t ? parseInt(t) : null
     const dtOff = dt ? parseInt(dt) * 60 : null
     const override = tOff !== null ? tOff : (dtOff !== null ? dtOff : 0)
-    if (override > 0) return override
-    if (webinar.is_evergreen) return 0
-    return getStartOffset(webinar.session_started_at)
-  })
+    if (override > 0) { setElapsedSeconds(override); return }
+    if (webinar.is_evergreen) { setElapsedSeconds(0); return }
+    setElapsedSeconds(getStartOffset(webinar.session_started_at))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   const [actualDuration, setActualDuration] = useState<number | null>(null)
   const [aiTyping, setAiTyping] = useState(false)
   const aiTypingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
