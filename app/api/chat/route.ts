@@ -97,6 +97,26 @@ async function respondWithAI(webinarId: string, userSessionId: string, questionT
 
     if (!webinar || !webinar.ai_enabled) return
 
+    // 2a. Lag/technical cooldown: if a lag-related AI response was already sent
+    //     in the last 4 minutes for this webinar, skip — avoids flooding the chat
+    //     when many users complain about buffering simultaneously.
+    const lagKeywords = /lag|travando|travou|congelou|carregando|buffering|lento|caiu|caindo|não tá|nao ta|não está|nao esta|problema técnico|problema tecnico/i
+    if (lagKeywords.test(questionText)) {
+      const fourMinutesAgo = new Date(Date.now() - 4 * 60 * 1000).toISOString()
+      const { data: recentLagReply } = await supabase
+        .from('webi_live_chat')
+        .select('id')
+        .eq('webinar_id', webinarId)
+        .like('session_id', 'ai-moderator:%')
+        .or('text.ilike.%lag%,text.ilike.%travand%,text.ilike.%buffering%,text.ilike.%atualizar%,text.ilike.%F5%,text.ilike.%instabilidade%')
+        .gte('created_at', fourMinutesAgo)
+        .limit(1)
+      if (recentLagReply && recentLagReply.length > 0) {
+        // Already replied about lag recently — skip to avoid chat pollution
+        return
+      }
+    }
+
     // 2. Fetch project OpenRouter API key
     const { data: project } = await supabase
       .from('webi_projects')

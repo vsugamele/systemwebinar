@@ -10,7 +10,7 @@ import {
   shouldEmitProgressMilestone,
   shouldEmitWatchSample,
 } from '@/lib/analytics-metrics.mjs'
-import { createClient } from '@/lib/supabase/client'
+import { createAnonViewerClient } from '@/lib/supabase/client'
 import type { RealtimeChannel } from '@supabase/supabase-js'
 import type { Webinar, WebinarEvent, ChatMessage, ChatMessagePayload, OfferPopupPayload, PitchButtonPayload, ChatSegment, PollPayload, PinnedMessagePayload } from '@/types'
 import dynamic from 'next/dynamic'
@@ -812,7 +812,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   const progressMilestonesFiredRef = useRef<Set<number>>(new Set())
   const milestone30FiredRef = useRef(false)
   const sentWatchSecondsRef = useRef<Set<number>>(new Set())
-  const supabaseRef = useRef(createClient())
+  const supabaseRef = useRef(createAnonViewerClient())
   const channelRef = useRef<RealtimeChannel | null>(null)
 
   const [messages, setMessages] = useState<ChatMessage[]>([])
