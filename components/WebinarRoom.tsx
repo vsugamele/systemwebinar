@@ -2802,6 +2802,8 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       console.warn('Failed to send message via API:', err)
     }
 
+  }
+
   function handleCTAClick() {
     if (!pitchPayload) return
     trackEvent('cta_clicked', getCurrentAnalyticsTimestamp(), { 
