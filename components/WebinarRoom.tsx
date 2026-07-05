@@ -1937,11 +1937,20 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     channel
       .on('broadcast', { event: 'chat-message' }, ({ payload }) => {
         if (payload.session_id !== sessionId.current) {
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-          const { session_id: _sid, ...msg } = payload as ChatMessage & { session_id: string }
-          // Ensure the broadcast message also uses absolute Unix epoch timestamp
+          // Clear typing indicator if this is the AI moderator responding
+          if (typeof payload.session_id === 'string' && payload.session_id.startsWith('ai-moderator:')) {
+            setAiTyping(false)
+            if (aiTypingTimeoutRef.current) {
+              clearTimeout(aiTypingTimeoutRef.current)
+              aiTypingTimeoutRef.current = null
+            }
+          }
+          // Keep session_id in the message so it renders as AI message
           const tsNow = Math.floor(Date.now() / 1000)
-          appendMessages([{ ...msg, timestamp: (msg as ChatMessage).timestamp > 1_000_000_000 ? (msg as ChatMessage).timestamp : tsNow } as ChatMessage])
+          appendMessages([{
+            ...payload as ChatMessage & { session_id: string },
+            timestamp: (payload as ChatMessage).timestamp > 1_000_000_000 ? (payload as ChatMessage).timestamp : tsNow,
+          } as ChatMessage])
         }
       })
       .on('broadcast', { event: 'delete-message' }, ({ payload }) => {

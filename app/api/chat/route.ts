@@ -197,17 +197,43 @@ Siga estas diretrizes de escrita estritas:
     }
 
     // 6. Insert AI response into the database with prefixed session_id
-    const { error: insertError } = await supabase.from('webi_live_chat').insert({
+    const aiSessionId = `ai-moderator:${userSessionId}`
+    const { data: insertedRows, error: insertError } = await supabase.from('webi_live_chat').insert({
       webinar_id: webinarId,
-      session_id: `ai-moderator:${userSessionId}`,
+      session_id: aiSessionId,
       author: aiName,
       text: finalAnswer,
       timestamp_video: 0,
       is_simulated: true,
       is_broadcast: false,
-    })
+    }).select('id, created_at').single()
     if (insertError) {
       console.error('Failed to insert AI response into DB:', insertError)
+    }
+
+    // 7. Broadcast the AI message explicitly via Supabase Realtime so the client
+    //    always receives it — postgres_changes events from server-side inserts
+    //    can be filtered out by RLS for the anon role.
+    try {
+      const channel = supabase.channel(`webinar-${webinarId}`)
+      await channel.send({
+        type: 'broadcast',
+        event: 'chat-message',
+        payload: {
+          id: insertedRows?.id ?? `ai-${Date.now()}`,
+          session_id: aiSessionId,
+          author: aiName,
+          text: finalAnswer,
+          timestamp: insertedRows?.created_at
+            ? Math.floor(new Date(insertedRows.created_at).getTime() / 1000)
+            : Math.floor(Date.now() / 1000),
+          isSimulated: true,
+          isBroadcast: false,
+        },
+      })
+      await supabase.removeChannel(channel)
+    } catch (broadcastErr) {
+      console.error('Failed to broadcast AI response:', broadcastErr)
     }
   } catch (err) {
     console.error('Error in background AI moderator:', err)
