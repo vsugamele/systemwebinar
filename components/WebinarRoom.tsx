@@ -2777,6 +2777,20 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       }).catch(err => console.warn('Failed to broadcast directly:', err))
     }
 
+    // If AI is enabled and the message is a question or support request, show typing indicator
+    // IMPORTANT: must be set BEFORE the fetch so it shows immediately.
+    // The fetch awaits the full AI response (respondWithAI is awaited server-side),
+    // meaning the broadcast can arrive BEFORE this line if placed after the fetch.
+    const isQ = finalText.endsWith('?')
+      || /como|quando|qual|quanto|posso|consigo|funciona|o que|por que|porque|dúvida|ajuda|não entendi|lag|travando|travou|congelou|carregando|buffering|lento|caiu|caindo|não tá|nao ta|não está|nao esta/i.test(finalText)
+    if (isQ && webinar.ai_enabled) {
+      setAiTyping(true)
+      if (aiTypingTimeoutRef.current) clearTimeout(aiTypingTimeoutRef.current)
+      aiTypingTimeoutRef.current = setTimeout(() => {
+        setAiTyping(false)
+      }, 30000)
+    }
+
     // Proxy through secure API to save in database
     try {
       await fetch('/api/chat', {
@@ -2787,17 +2801,6 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
     } catch (err) {
       console.warn('Failed to send message via API:', err)
     }
-
-    // If AI is enabled and it is a question, show typing indicator
-    const isQ = finalText.endsWith('?') || /como|quando|qual|quanto|posso|consigo|funciona|o que|por que|porque|dúvida|ajuda|não entendi/i.test(finalText)
-    if (isQ && webinar.ai_enabled) {
-      setAiTyping(true)
-      if (aiTypingTimeoutRef.current) clearTimeout(aiTypingTimeoutRef.current)
-      aiTypingTimeoutRef.current = setTimeout(() => {
-        setAiTyping(false)
-      }, 12000)
-    }
-  }
 
   function handleCTAClick() {
     if (!pitchPayload) return

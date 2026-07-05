@@ -133,6 +133,8 @@ Siga estas diretrizes de escrita estritas:
 
     systemPrompt += `\n\nDIRETRIZ DE SEGURANÇA E ESCAPE: Se você não souber a resposta com absoluta certeza com base apenas nas informações fornecidas acima, ou se a pergunta for vaga/desconexa, responda APENAS com a palavra "PULAR" (sem aspas, sem pontuação, sem explicações). Não invente nenhuma informação.`
 
+    systemPrompt += `\n\nPROBLEMAS TÉCNICOS DE VÍDEO (lag, travamento, buffering, congelamento): Quando alguém reclamar que o vídeo está travando, com lag, carregando devagar, congelado ou com qualidade ruim, siga esta ordem: 1) Peça para aguardar alguns instantes, pois pode ser instabilidade momentânea na internet. 2) Se persistir, oriente a atualizar a página (F5 ou recarregar). 3) Se ainda assim não resolver, sugira trocar para uma rede mais estável (Wi-Fi ou dados móveis). Seja empática, rápida e não entre em pânico — transmissões ao vivo podem ter variações pontuais.`
+
     // 4. Fetch the last 10 messages from the database matching the user's session for context
     const { data: chatHistory } = await supabase
       .from('webi_live_chat')
