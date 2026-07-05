@@ -20,14 +20,16 @@ export async function POST(req: NextRequest) {
       : typeof metadata.run_id === 'string'
         ? metadata.run_id
         : null
+    let projectId = typeof body.project_id === 'string' ? body.project_id : null
 
-    if (!runId && body.webinar_id) {
-      const { data: webinarRun } = await supabase
+    if ((!runId || !projectId) && body.webinar_id) {
+      const { data: webinarData } = await supabase
         .from('webi_webinars')
-        .select('current_run_id')
+        .select('current_run_id, project_id')
         .eq('id', body.webinar_id)
         .single()
-      runId = webinarRun?.current_run_id || null
+      if (!runId) runId = webinarData?.current_run_id || null
+      if (!projectId) projectId = webinarData?.project_id || null
     }
 
     if (body.event_type === 'watch_second') {
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest) {
         .upsert({
           session_id: body.session_id,
           webinar_id: body.webinar_id,
-          project_id: body.project_id,
+          project_id: projectId,
           run_id: runId,
           bucket_seconds: bucketSeconds,
           bucket_start_seconds: bucketStartSeconds,
@@ -70,7 +72,7 @@ export async function POST(req: NextRequest) {
       const { error: eventError } = await supabase.from('webi_session_events').insert({
         session_id: body.session_id,
         webinar_id: body.webinar_id,
-        project_id: body.project_id,
+        project_id: projectId,
         run_id: runId,
         event_type: body.event_type,
         timestamp_video: body.timestamp_video,
