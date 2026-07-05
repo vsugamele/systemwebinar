@@ -171,7 +171,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ ok: true })
   } catch (error) {
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    const msg = error instanceof Error ? error.message : JSON.stringify(error)
+    console.error('[analytics] POST 500:', msg, error)
+    return NextResponse.json({ error: 'Internal Server Error', detail: msg }, { status: 500 })
   }
 }
 
