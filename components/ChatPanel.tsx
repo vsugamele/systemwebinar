@@ -30,23 +30,27 @@ function getSuperChatColors(amount: string) {
   }
 }
 
-function parseMarkdownLinks(text: string) {
+function renderMessageText(text: string) {
+  if (!text) return ''
+
+  // First check if there are markdown links
+  const markdownRegex = /\[([^\]]+)\]\(([^)]+)\)/g
   const parts: any[] = []
   let lastIndex = 0
-  const regex = /\[([^\]]+)\]\(([^)]+)\)/g
   let match
-  while ((match = regex.exec(text)) !== null) {
+
+  while ((match = markdownRegex.exec(text)) !== null) {
     if (match.index > lastIndex) {
       parts.push(text.substring(lastIndex, match.index))
     }
     parts.push(
       <a
-        key={match.index}
+        key={`md-${match.index}`}
         href={match[2]}
         target="_blank"
         rel="noopener noreferrer"
         style={{
-          color: 'inherit',
+          color: '#38bdf8',
           textDecoration: 'underline',
           fontWeight: 700,
         }}
@@ -54,12 +58,52 @@ function parseMarkdownLinks(text: string) {
         {match[1]}
       </a>
     )
-    lastIndex = regex.lastIndex
+    lastIndex = markdownRegex.lastIndex
   }
+
   if (lastIndex < text.length) {
     parts.push(text.substring(lastIndex))
   }
-  return parts.length > 0 ? parts : text
+
+  // Now, for any plain text parts, check for plain URLs and convert them
+  const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi
+  const finalParts: any[] = []
+
+  const processPart = (part: any) => {
+    if (typeof part !== 'string') {
+      finalParts.push(part)
+      return
+    }
+
+    const subParts = part.split(urlRegex)
+    subParts.forEach((subPart, subIdx) => {
+      if (subPart.match(urlRegex)) {
+        const href = subPart.startsWith('http') ? subPart : `https://${subPart}`
+        finalParts.push(
+          <a
+            key={`url-${subIdx}`}
+            href={href}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: '#38bdf8', textDecoration: 'underline', wordBreak: 'break-all' }}
+            className="chat-link"
+          >
+            {subPart}
+          </a>
+        )
+      } else if (subPart) {
+        finalParts.push(subPart)
+      }
+    })
+  }
+
+  if (parts.length > 0) {
+    parts.forEach(processPart)
+  } else {
+    processPart(text)
+  }
+
+  return finalParts.length > 0 ? finalParts : text
 }
 
 const TRANSLATIONS = {
@@ -543,7 +587,7 @@ export default function ChatPanel({
           <span className="pinned-message-icon">📌</span>
           <div className="pinned-message-body">
             <div className="pinned-message-label">Mensagem Fixada</div>
-            <div className="pinned-message-text">{pinnedMessage.text}</div>
+            <div className="pinned-message-text">{renderMessageText(pinnedMessage.text)}</div>
             {pinnedMessage.author && (
               <div className="pinned-message-author">— {pinnedMessage.author}</div>
             )}
@@ -630,7 +674,7 @@ export default function ChatPanel({
                       lineHeight: 1.45,
                       borderTop: '1px solid rgba(255,255,255,0.05)',
                     }}>
-                      {parseMarkdownLinks(messageText)}
+                      {renderMessageText(messageText)}
                     </div>
                   )}
                 </div>
@@ -680,7 +724,7 @@ export default function ChatPanel({
                       }}>
                         {formatYtHandle(msg.author)}
                       </span>
-                      <span style={{ color: '#f1f1f1', whiteSpace: 'pre-line' }}>{msg.text}</span>
+                      <span style={{ color: '#f1f1f1', whiteSpace: 'pre-line' }}>{renderMessageText(msg.text)}</span>
                       {isAdmin && !isPitchCard && (
                         <span style={{ display: 'inline-flex', gap: 6, marginLeft: 8, verticalAlign: 'middle' }}>
                           <button
@@ -778,13 +822,13 @@ export default function ChatPanel({
                       ...(isBroadcast ? { color: 'var(--success)', fontWeight: 600 } : {}),
                       whiteSpace: 'pre-line',
                     }}>
-                      {msg.text}
+                      {renderMessageText(msg.text)}
                     </div>
                   )}
 
                   {isBroadcast && theme === 'youtube' && (
                     <div style={{ fontSize: 13, color: 'var(--success)', fontWeight: 600, whiteSpace: 'pre-line' }}>
-                      {msg.text}
+                      {renderMessageText(msg.text)}
                     </div>
                   )}
 
