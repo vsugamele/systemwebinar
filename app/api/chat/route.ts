@@ -34,7 +34,8 @@ export async function POST(req: NextRequest) {
     const text = message.text || ''
     const isQ = text.endsWith('?') || /como|quando|qual|quanto|posso|consigo|funciona|o que|por que|porque|dúvida|ajuda|não entendi/i.test(text)
     if (isQ) {
-      await respondWithAI(webinar_id, session_id, text, message.author).catch(err => {
+      const timestampVideo = typeof body.timestamp_video === 'number' ? body.timestamp_video : null
+      await respondWithAI(webinar_id, session_id, text, message.author, timestampVideo).catch(err => {
         console.error('Error initiating background AI response:', err)
       })
     }
@@ -84,14 +85,14 @@ export async function POST(req: NextRequest) {
 }
 
 // Background AI response helper function
-async function respondWithAI(webinarId: string, userSessionId: string, questionText: string, userDisplayName?: string) {
+async function respondWithAI(webinarId: string, userSessionId: string, questionText: string, userDisplayName?: string, timestampVideo?: number | null) {
   try {
     const supabase = await createServiceClient()
 
     // 1. Fetch webinar configuration
     const { data: webinar } = await supabase
       .from('webi_webinars')
-      .select('name, ai_enabled, ai_persona_name, ai_persona_avatar, ai_model, ai_knowledge_base, ai_system_prompt, project_id, video_transcript')
+      .select('name, ai_enabled, ai_persona_name, ai_persona_avatar, ai_model, ai_knowledge_base, ai_system_prompt, project_id, video_transcript, analytics_pitch_minute')
       .eq('id', webinarId)
       .single()
 
@@ -126,6 +127,57 @@ async function respondWithAI(webinarId: string, userSessionId: string, questionT
 
     const apiKey = project?.openrouter_api_key
     if (!apiKey) return
+
+    // 2b. Pitch restriction: if current video time is before the scheduled pitch,
+    //     do not reveal price/links. Instead, reply with a friendly redirect message.
+    const hasPitchConfig = typeof webinar.analytics_pitch_minute === 'number' && webinar.analytics_pitch_minute > 0
+    if (hasPitchConfig && typeof timestampVideo === 'number') {
+      const pitchSeconds = webinar.analytics_pitch_minute * 60
+      if (timestampVideo < pitchSeconds) {
+        const commercialKeywords = /preço|preco|valor|comprar|link|desconto|formação|formacao|matricula|matrícula|custa|custar|boleto|cartao|cartão|pagar|pagamento|cupom|investimento/i
+        if (commercialKeywords.test(questionText)) {
+          const aiName = webinar.ai_persona_name || '🤖 Assistente'
+          const finalAnswer = userDisplayName?.trim() 
+            ? `@${userDisplayName.trim()} O JP vai abrir as vagas e explicar todos os detalhes daqui a pouco na aula, fica ligada!`
+            : `O JP vai abrir as vagas e explicar todos os detalhes daqui a pouco na aula, fica ligada!`
+
+          // Save and broadcast directly without calling OpenRouter
+          const aiSessionId = `ai-moderator:${userSessionId}`
+          const { data: insertedRows } = await supabase.from('webi_live_chat').insert({
+            webinar_id: webinarId,
+            session_id: aiSessionId,
+            author: aiName,
+            text: finalAnswer,
+            timestamp_video: timestampVideo,
+            is_simulated: true,
+            is_broadcast: false,
+          }).select('id, created_at').single()
+
+          try {
+            const channel = supabase.channel(`webinar-${webinarId}`)
+            await channel.send({
+              type: 'broadcast',
+              event: 'chat-message',
+              payload: {
+                id: insertedRows?.id ?? `ai-${Date.now()}`,
+                session_id: aiSessionId,
+                author: aiName,
+                text: finalAnswer,
+                timestamp: insertedRows?.created_at
+                  ? Math.floor(new Date(insertedRows.created_at).getTime() / 1000)
+                  : Math.floor(Date.now() / 1000),
+                isSimulated: true,
+                isBroadcast: false,
+              },
+            })
+            await supabase.removeChannel(channel)
+          } catch (broadcastErr) {
+            console.error('Failed to broadcast friendly pitch restrict reply:', broadcastErr)
+          }
+          return
+        }
+      }
+    }
 
     // 3. Prepare AI system prompt and model
     const model = webinar.ai_model || 'google/gemini-flash-1.5'

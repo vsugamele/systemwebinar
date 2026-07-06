@@ -2796,7 +2796,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
       await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...msg, webinar_id: webinar.id, session_id: sessionId.current, run_id: currentRunId || undefined }),
+        body: JSON.stringify({ 
+          ...msg, 
+          webinar_id: webinar.id, 
+          session_id: sessionId.current, 
+          run_id: currentRunId || undefined,
+          timestamp_video: Math.max(0, Math.floor(elapsedSeconds))
+        }),
       })
     } catch (err) {
       console.warn('Failed to send message via API:', err)
