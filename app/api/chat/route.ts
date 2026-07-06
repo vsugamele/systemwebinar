@@ -248,7 +248,7 @@ FORMATO DA RESPOSTA: Seja concisa e direta. Responda em no máximo 3 frases curt
       body: JSON.stringify({
         model,
         messages: apiMessages,
-        max_tokens: 350,
+        max_tokens: 2000,
         temperature: 0.7,
       }),
     })

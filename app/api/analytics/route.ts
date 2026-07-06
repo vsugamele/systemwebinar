@@ -238,6 +238,21 @@ export async function GET(req: NextRequest) {
     // Quando run específica está selecionada, run_id já isola a sessão — session_mode é ignorado
     const hasSpecificRun = !!(runId && runId !== 'all')
 
+    // Determinar o fim da run anterior para delimitar o início do cadastro dos leads da run atual
+    let prevRunEndedAt: string | null = null
+    if (hasSpecificRun && selectedRun) {
+      const { data: prevRun } = await supabase
+        .from('webi_webinar_runs')
+        .select('ended_at, started_at')
+        .eq('webinar_id', webinarId)
+        .lt('started_at', selectedRun.started_at)
+        .order('started_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      prevRunEndedAt = prevRun?.ended_at || prevRun?.started_at || null
+    }
+
     const applyEventFilters = (query: any) => {
       let filtered = query
       if (runId && runId !== 'all') {
@@ -290,10 +305,15 @@ export async function GET(req: NextRequest) {
 
     const applyLeadFilters = (query: any) => {
       let filtered = query
-      // Quando uma run específica está selecionada, filtrar leads pela janela temporal da run
-      if (hasSpecificRun && runStartedAt) {
-        filtered = filtered.gte('registered_at', runStartedAt)
-        if (runEndedAt) filtered = filtered.lte('registered_at', runEndedAt)
+      // Quando uma run específica está selecionada, filtra por run_id OU pela janela temporal da run
+      if (hasSpecificRun && runId) {
+        if (prevRunEndedAt) {
+          const lteVal = runEndedAt ? `,registered_at.lte.${runEndedAt}` : ''
+          filtered = filtered.or(`run_id.eq.${runId},and(run_id.is.null,registered_at.gte.${prevRunEndedAt}${lteVal})`)
+        } else {
+          const lteVal = runEndedAt ? `,registered_at.lte.${runEndedAt}` : ''
+          filtered = filtered.or(`run_id.eq.${runId},and(run_id.is.null${lteVal})`)
+        }
       } else {
         if (dateFromIso) filtered = filtered.gte('registered_at', dateFromIso)
         if (dateToIso) filtered = filtered.lte('registered_at', dateToIso)
@@ -909,8 +929,8 @@ export async function GET(req: NextRequest) {
       : { audience: 0, retention_pct: 0 }
     const averageEngagementPct = getAverageEngagementPct(sessionsArray, webinar?.duration_seconds || 3600)
 
-    const scopedTotalLeads = hasSpecificRun ? uniquePageViews : totalLeads
-    const scopedTotalAttended = hasSpecificRun ? uniqueJoined : totalAttended
+    const scopedTotalLeads = totalLeads
+    const scopedTotalAttended = totalAttended
 
     const ctaRate = uniqueJoined > 0 ? (ctaClicks / uniqueJoined) * 100 : 0
     const sessionQualityScore = Math.round(

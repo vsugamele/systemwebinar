@@ -4,7 +4,7 @@ import { cookies } from 'next/headers'
 
 export async function POST(req: Request) {
   try {
-    const { webinarId, projectId, name, email, phone, metadata } = await req.json()
+    const { webinarId, projectId, name, email, phone, metadata, runId, run_id } = await req.json()
 
     if (!webinarId || !projectId || !email || !name) {
       return NextResponse.json({ message: 'Campos obrigatórios faltando.' }, { status: 400 })
@@ -22,6 +22,7 @@ export async function POST(req: Request) {
       p_name: name,
       p_phone: phone || null,
       p_metadata: metadata || null,
+      p_run_id: runId || run_id || null,
     })
 
     if (leadError) {

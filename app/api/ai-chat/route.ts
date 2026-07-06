@@ -112,7 +112,7 @@ Siga estas diretrizes de escrita estritas:
       body: JSON.stringify({
         model,
         messages: apiMessages,
-        max_tokens: 1000,
+        max_tokens: 2000,
         temperature: 0.7,
       }),
     })

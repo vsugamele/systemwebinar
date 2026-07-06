@@ -6,7 +6,7 @@ import { fireAndLogWebhook } from '@/lib/webhook-logger'
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { webinar_id, email, name, phone, utm_source, utm_medium, utm_campaign, page_url, ...extraFields } = body
+    const { webinar_id, email, name, phone, utm_source, utm_medium, utm_campaign, page_url, run_id, runId, ...extraFields } = body
     const supabase = await createServiceClient()
 
     // Get webinar + project data (allowed by webi_webinars_public_read RLS)
@@ -29,6 +29,7 @@ export async function POST(req: NextRequest) {
       p_name: name || '',
       p_phone: phone || null,
       p_metadata: metadata || null,
+      p_run_id: run_id || runId || null,
     })
 
     if (leadError) {
