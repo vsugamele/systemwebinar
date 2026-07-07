@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createPureServiceClient } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'webinar_id required' }, { status: 400 })
     }
 
-    const supabase = await createServiceClient()
+    const supabase = createPureServiceClient()
 
     // 1. Obter início da sessão ativa para filtrar testes
     const { data: webinar } = await supabase

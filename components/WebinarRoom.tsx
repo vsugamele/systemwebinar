@@ -3071,7 +3071,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 )}
               </div>
             )}
-            <span style={{ 
+            <span className="webinar-title-text" style={{ 
               fontSize: 14, fontWeight: 600, 
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', 
               maxWidth: '30vw' 

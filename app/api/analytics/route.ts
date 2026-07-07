@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient } from '@/lib/supabase/server'
+import { createPureServiceClient } from '@/lib/supabase/server'
 import { imperioSend } from '@/lib/imperio'
 import { getResend } from '@/lib/resend'
 import {
@@ -13,7 +13,7 @@ import {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const supabase = await createServiceClient()
+    const supabase = createPureServiceClient()
     const metadata = body.metadata || {}
     let runId = typeof body.run_id === 'string'
       ? body.run_id
@@ -185,7 +185,7 @@ export async function GET(req: NextRequest) {
     const webinarId = searchParams.get('webinar_id')
     if (!webinarId) return NextResponse.json({ error: 'webinar_id required' }, { status: 400 })
 
-    const supabase = await createServiceClient()
+    const supabase = createPureServiceClient()
 
     const rawMode = searchParams.get('session_mode') || searchParams.get('mode') || 'all'
     const mode = ['all', 'live', 'replay', 'evergreen'].includes(rawMode) ? rawMode : 'all'

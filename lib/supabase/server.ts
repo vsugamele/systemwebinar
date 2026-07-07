@@ -57,3 +57,24 @@ export async function createServiceClient() {
     }
   )
 }
+
+import { createClient as createSupabaseClient } from '@supabase/supabase-js'
+
+export function createPureServiceClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+
+  const keyToUse = (!serviceKey || serviceKey === 'your-service-role-key') ? anonKey : serviceKey
+  
+  if (!url || !keyToUse) {
+    throw new Error('Supabase URL or Key not configured')
+  }
+
+  return createSupabaseClient(url, keyToUse, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    }
+  })
+}

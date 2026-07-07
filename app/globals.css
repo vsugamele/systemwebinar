@@ -2140,6 +2140,8 @@ tbody tr:hover td { background: var(--bg-hover); }
   gap: 6px;
   font-size: 13px;
   color: var(--text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .viewer-dot {
@@ -2767,6 +2769,12 @@ tbody tr:hover td { background: var(--bg-hover); }
     position: relative;
   }
 
+  .webinar-page-wrapper:not([data-layout="vertical"]) .video-section {
+    position: sticky;
+    top: 52px;
+    z-index: 150;
+  }
+
   /* Fixed header: always on top */
   .video-header {
     position: fixed !important;
@@ -2836,6 +2844,10 @@ tbody tr:hover td { background: var(--bg-hover); }
      The OfferBar at the bottom already provides the CTA.
      The card was covering the chat input area and blocking interaction. */
   .pitch-button {
+    display: none !important;
+  }
+
+  .webinar-title-text {
     display: none !important;
   }
 }
