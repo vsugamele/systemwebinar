@@ -66,7 +66,7 @@ export interface Webinar {
   schedule_time?: string | null
   schedule_days?: number[] | null
   // Appearance
-  theme?: 'dark' | 'light' | 'youtube'
+  theme?: 'dark' | 'light' | 'youtube' | 'clear_vsl'
   display_name?: string
   disable_qa?: boolean
   is_evergreen?: boolean

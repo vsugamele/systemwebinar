@@ -52,7 +52,7 @@ interface WebinarConfig {
   fake_viewers_end?: number
   fake_viewers_peak_at_pct?: number
   chat_default_tab?: 'chat' | 'qa'
-  theme?: 'dark' | 'light' | 'youtube'
+  theme?: 'dark' | 'light' | 'youtube' | 'clear_vsl'
   display_name?: string
   bad_words_filter?: boolean
   fallback_url?: string | null
@@ -429,6 +429,8 @@ const TRANSLATIONS = {
     replyText: 'Responder',
     pinnedBy: 'Fixado por',
     addCommentPlaceholder: 'Adicione um comentário público...',
+    share: 'Compartilhar',
+    save: 'Salvar',
   },
   en: {
     live: 'LIVE',
@@ -470,6 +472,8 @@ const TRANSLATIONS = {
     replyText: 'Reply',
     pinnedBy: 'Pinned by',
     addCommentPlaceholder: 'Add a public comment...',
+    share: 'Share',
+    save: 'Save',
   },
   es: {
     live: 'EN VIVO',
@@ -511,6 +515,8 @@ const TRANSLATIONS = {
     replyText: 'Responder',
     pinnedBy: 'Fijado por',
     addCommentPlaceholder: 'Añade un comentario...',
+    share: 'Compartir',
+    save: 'Guardar',
   },
 }
 
@@ -651,40 +657,65 @@ const YouTubeHeader = ({
   lang, 
   onChangeLang,
   isLive,
-  isScheduled
+  isScheduled,
+  theme = 'youtube',
 }: { 
   userName: string; 
   lang: 'pt' | 'en' | 'es'; 
   onChangeLang: (l: 'pt' | 'en' | 'es') => void;
   isLive: boolean;
   isScheduled: boolean;
+  theme?: 'youtube' | 'clear_vsl';
 }) => {
+  const isClearVslTheme = theme === 'clear_vsl'
+  const colors = isClearVslTheme
+    ? {
+      base: '#ffffff',
+      search: '#ffffff',
+      searchButton: '#f8f8f8',
+      mic: '#f2f2f2',
+      border: '#d9d9d9',
+      text: '#0f0f0f',
+      softText: '#606060',
+      offlineBg: '#f2f2f2',
+    }
+    : {
+      base: '#0f0f0f',
+      search: '#121212',
+      searchButton: '#222222',
+      mic: '#272727',
+      border: '#303030',
+      text: '#ffffff',
+      softText: '#aaaaaa',
+      offlineBg: '#333333',
+    }
+
   return (
     <header className="yt-header" style={{
       height: 56,
-      background: '#0f0f0f',
+      background: colors.base,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
       padding: '0 16px',
-      color: '#fff',
+      color: colors.text,
       userSelect: 'none',
       flexShrink: 0,
       zIndex: 100,
     }}>
       {/* Left: Logo */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-        <button style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 4 }} disabled>
+        <button style={{ background: 'none', border: 'none', color: colors.text, cursor: 'pointer', padding: 4 }} disabled>
           <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
             <path d="M21 6H3V5h18v1zm0 5H3v1h18v-1zm0 6H3v1h18v-1z" />
           </svg>
         </button>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 'bold', fontSize: 18, color: '#fff', letterSpacing: '-0.5px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 'bold', fontSize: 18, color: colors.text, letterSpacing: '-0.5px' }}>
           <svg viewBox="0 0 24 24" width="28" height="28" fill="#FF0000" style={{ display: 'block' }}>
             <path d="M23.498 6.163a3.003 3.003 0 0 0-2.11-2.108C19.524 3.545 12 3.545 12 3.545s-7.524 0-9.388.51a3.002 3.002 0 0 0-2.11 2.108C0 8.029 0 12 0 12s0 3.971.502 5.837a3.003 3.003 0 0 0 2.11 2.108c1.864.51 9.388.51 9.388.51s7.524 0 9.388-.51a3.002 3.002 0 0 0 2.11-2.108c.502-1.866.502-5.837.502-5.837s0-3.971-.502-5.837zM9.545 15.568V8.432L15.818 12l-6.273 3.568z" />
           </svg>
           <span style={{ fontFamily: '"Roboto", sans-serif', fontWeight: 900, fontSize: 18, letterSpacing: '-0.8px' }}>YouTube</span>
-          <span style={{ fontSize: 10, color: '#aaaaaa', alignSelf: 'flex-start', marginTop: 2, marginLeft: 2, fontWeight: 400 }}>Premium</span>
+          <span style={{ fontSize: 10, color: colors.softText, alignSelf: 'flex-start', marginTop: 2, marginLeft: 2, fontWeight: 400 }}>Premium</span>
           {isLive ? (
             <span style={{ fontSize: 9, background: '#FF0000', color: '#fff', padding: '1px 4px', borderRadius: 2, marginLeft: 6, fontWeight: 700, letterSpacing: '0px' }}>
               {lang === 'pt' ? 'AO VIVO' : lang === 'es' ? 'EN VIVO' : 'LIVE'}
@@ -694,7 +725,7 @@ const YouTubeHeader = ({
               {lang === 'pt' ? 'EM BREVE' : lang === 'es' ? 'PRÓXIMAMENTE' : 'UPCOMING'}
             </span>
           ) : (
-            <span style={{ fontSize: 9, background: '#333333', color: '#aaaaaa', padding: '1px 4px', borderRadius: 2, marginLeft: 6, fontWeight: 700, letterSpacing: '0px' }}>
+            <span style={{ fontSize: 9, background: colors.offlineBg, color: colors.softText, padding: '1px 4px', borderRadius: 2, marginLeft: 6, fontWeight: 700, letterSpacing: '0px' }}>
               {lang === 'pt' ? 'OFFLINE' : lang === 'es' ? 'DESCONECTADO' : 'OFFLINE'}
             </span>
           )}
@@ -703,20 +734,20 @@ const YouTubeHeader = ({
 
       {/* Center: Search */}
       <div className="hidden-mobile" style={{ display: 'flex', alignItems: 'center', width: '100%', maxWidth: 600, margin: '0 16px' }}>
-        <div style={{ display: 'flex', flex: 1, background: '#121212', borderRadius: '40px 0 0 40px', border: '1px solid #303030', borderRight: 'none', padding: '0 16px', height: 40, alignItems: 'center' }}>
+        <div style={{ display: 'flex', flex: 1, background: colors.search, borderRadius: '40px 0 0 40px', border: `1px solid ${colors.border}`, borderRight: 'none', padding: '0 16px', height: 40, alignItems: 'center' }}>
           <input
             type="text"
             placeholder={lang === 'pt' ? 'Pesquisar' : lang === 'es' ? 'Buscar' : 'Search'}
-            style={{ background: 'transparent', border: 'none', color: '#fff', width: '100%', outline: 'none', fontSize: 14 }}
+            style={{ background: 'transparent', border: 'none', color: colors.text, width: '100%', outline: 'none', fontSize: 14 }}
             disabled
           />
         </div>
-        <button style={{ width: 64, height: 40, background: '#222222', border: '1px solid #303030', borderRadius: '0 40px 40px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }} disabled>
+        <button style={{ width: 64, height: 40, background: colors.searchButton, border: `1px solid ${colors.border}`, borderRadius: '0 40px 40px 0', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: colors.text }} disabled>
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
           </svg>
         </button>
-        <button style={{ width: 40, height: 40, background: '#272727', border: 'none', borderRadius: '50%', marginLeft: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }} disabled>
+        <button style={{ width: 40, height: 40, background: colors.mic, border: 'none', borderRadius: '50%', marginLeft: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: colors.text }} disabled>
           <svg viewBox="0 0 24 24" width="20" height="20" fill="currentColor">
             <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z" />
           </svg>
@@ -725,12 +756,12 @@ const YouTubeHeader = ({
 
       {/* Right: Actions */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-        <button className="hidden-mobile" style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 8, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Criar" disabled>
+        <button className="hidden-mobile" style={{ background: 'none', border: 'none', color: colors.text, cursor: 'pointer', padding: 8, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={lang === 'en' ? 'Create' : lang === 'es' ? 'Crear' : 'Criar'} disabled>
           <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
             <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4zM14 13h-3v3H9v-3H6v-2h3V8h2v3h3v2z" />
           </svg>
         </button>
-        <button style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 8, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title="Notificações" disabled>
+        <button style={{ background: 'none', border: 'none', color: colors.text, cursor: 'pointer', padding: 8, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }} title={lang === 'en' ? 'Notifications' : lang === 'es' ? 'Notificaciones' : 'Notificações'} disabled>
           <svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor">
             <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
           </svg>
@@ -741,9 +772,9 @@ const YouTubeHeader = ({
           value={lang} 
           onChange={(e) => onChangeLang(e.target.value as any)}
           style={{
-            background: 'rgba(255,255,255,0.08)',
-            border: '1px solid rgba(255,255,255,0.15)',
-            color: '#fff',
+            background: isClearVslTheme ? '#f8f8f8' : 'rgba(255,255,255,0.08)',
+            border: isClearVslTheme ? '1px solid #d9d9d9' : '1px solid rgba(255,255,255,0.15)',
+            color: colors.text,
             borderRadius: 6,
             padding: '3px 8px',
             fontSize: 12,
@@ -753,9 +784,9 @@ const YouTubeHeader = ({
             marginLeft: 4,
           }}
         >
-          <option value="pt" style={{ background: '#222', color: '#fff' }}>PT</option>
-          <option value="en" style={{ background: '#222', color: '#fff' }}>EN</option>
-          <option value="es" style={{ background: '#222', color: '#fff' }}>ES</option>
+          <option value="pt" style={{ background: colors.searchButton, color: colors.text }}>PT</option>
+          <option value="en" style={{ background: colors.searchButton, color: colors.text }}>EN</option>
+          <option value="es" style={{ background: colors.searchButton, color: colors.text }}>ES</option>
         </select>
 
         <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--brand)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: 13, marginLeft: 8 }}>
@@ -2913,6 +2944,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
   // YouTube thumbnail for iOS poster (shows video frame so it looks live before user taps)
   const ytVideoId = webinar.video_url?.match(/(?:youtube\.com\/.*[?&]v=|youtu\.be\/)([^&?/]+)/)?.[1]
   const ytThumb   = ytVideoId ? `https://img.youtube.com/vi/${ytVideoId}/maxresdefault.jpg` : ''
+  const isYouTubeTheme = webinar.theme === 'youtube' || webinar.theme === 'clear_vsl'
+  const isClearVslTheme = webinar.theme === 'clear_vsl'
+  const ytColors = isClearVslTheme
+    ? { base: '#ffffff', elevated: '#f2f2f2', hover: '#e8e8e8', border: '#d9d9d9', text: '#0f0f0f', softText: '#606060', muted: '#737373', accent: '#065fd4' }
+    : { base: '#0f0f0f', elevated: '#272727', hover: '#3f3f3f', border: '#3f3f3f', text: '#ffffff', softText: '#aaaaaa', muted: '#717171', accent: '#3ea6ff' }
 
   return (
     <>
@@ -3035,19 +3071,20 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           backgroundAttachment: 'fixed'
         } : undefined}
       >
-        {webinar.theme === 'youtube' && (
+        {isYouTubeTheme && (
           <YouTubeHeader 
             userName={userName} 
             lang={lang} 
             onChangeLang={setLang} 
             isLive={isSessionActive} 
             isScheduled={sessionIsScheduledFuture} 
+            theme={webinar.theme === 'clear_vsl' ? 'clear_vsl' : 'youtube'}
           />
         )}
         <div className="webinar-room">
       {/* VIDEO SECTION */}
-      <div className={`video-section ${webinar.theme === 'youtube' && activeMobileTab === 'info' ? 'info-active' : ''}`} ref={sectionRef}>
-        {webinar.theme !== 'youtube' && (
+      <div className={`video-section ${isYouTubeTheme && activeMobileTab === 'info' ? 'info-active' : ''}`} ref={sectionRef}>
+        {!isYouTubeTheme && (
         <div className="video-header">
           <div className="webinar-title-bar">
             {isSessionEnded ? (
@@ -3190,10 +3227,10 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
             }}>
               <div style={{ fontSize: 48 }}>✅</div>
               <div style={{ fontSize: 24, fontWeight: 800, color: '#fff', letterSpacing: '0.04em', textAlign: 'center' }}>
-                Transmissão Encerrada
+                {t.endedTitle}
               </div>
               <div style={{ fontSize: 15, color: 'rgba(255,255,255,0.6)', textAlign: 'center' }}>
-                Obrigado por participar! Fique atento às próximas sessões.
+                {t.endedDesc}
               </div>
             </div>
           )}
@@ -3518,7 +3555,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
           ) : null}
 
           {/* Live red progress bar */}
-          {webinar.theme === 'youtube' && (
+          {isYouTubeTheme && (
             <div style={{
               position: 'absolute',
               bottom: 0,
@@ -3534,7 +3571,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         </div>
 
         {/* YOUTUBE THEME: MOBILE TABS */}
-        {webinar.theme === 'youtube' && (
+        {isYouTubeTheme && (
           <div className="yt-mobile-tabs">
             <button 
               className={`yt-mobile-tab-btn ${activeMobileTab === 'chat' ? 'active' : ''}`}
@@ -3552,7 +3589,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         )}
 
         {/* YOUTUBE THEME: VIDEO DETAILS */}
-        {webinar.theme === 'youtube' && (
+        {isYouTubeTheme && (
           <div className={`yt-video-details-container ${activeMobileTab === 'chat' ? 'mobile-hidden' : 'mobile-visible'}`}>
             <h1 className="yt-video-title">
               {webinar.display_name || webinar.name}
@@ -3576,7 +3613,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 <div className="yt-channel-info">
                   <div className="yt-channel-name">
                     <span>{webinar.display_name || webinar.name}</span>
-                    <svg viewBox="0 0 24 24" width="14" height="14" fill="#aaa" style={{ marginLeft: 4 }}>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill={ytColors.softText} style={{ marginLeft: 4 }}>
                       <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zM10 17l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
                     </svg>
                   </div>
@@ -3611,7 +3648,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 <div style={{
                   display: 'flex',
                   alignItems: 'center',
-                  background: '#272727',
+                  background: ytColors.elevated,
                   borderRadius: 18,
                   overflow: 'hidden',
                   height: 36,
@@ -3621,7 +3658,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     style={{
                       background: 'none',
                       border: 'none',
-                      color: '#fff',
+                      color: ytColors.text,
                       padding: '0 12px 0 16px',
                       display: 'flex',
                       alignItems: 'center',
@@ -3637,13 +3674,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                     </svg>
                     <span>{formatLikeCount(likeCount)}</span>
                   </button>
-                  <div style={{ width: 1, height: 18, background: '#3f3f3f' }} />
+                  <div style={{ width: 1, height: 18, background: ytColors.border }} />
                   <button
                     disabled
                     style={{
                       background: 'none',
                       border: 'none',
-                      color: '#fff',
+                      color: ytColors.text,
                       padding: '0 12px',
                       display: 'flex',
                       alignItems: 'center',
@@ -3671,13 +3708,13 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                     <path d="M14 9V5l7 7-7 7v-4.1c-5 0-8.5 1.6-11 5.1 1-5 4-10 11-11z" />
                   </svg>
-                  <span>Compartilhar</span>
+                  <span>{t.share}</span>
                 </button>
                 <button className="yt-action-btn" disabled style={{ cursor: 'not-allowed', opacity: 0.8 }}>
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                     <path d="M17 3H7c-1.1 0-1.99.9-1.99 2L5 21l7-3 7 3V5c0-1.1-.9-2-2-2z" />
                   </svg>
-                  <span>Salvar</span>
+                  <span>{t.save}</span>
                 </button>
                 <button className="yt-action-btn-more" disabled style={{ cursor: 'not-allowed', opacity: 0.8 }}>
                   •••
@@ -3699,11 +3736,11 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
                 WebkitLineClamp: descriptionExpanded ? 'unset' : 2,
                 WebkitBoxOrient: 'vertical',
                 overflow: 'hidden',
-                color: '#f1f1f1'
+                color: ytColors.text
               }}>
                 {webinar.description || t.descriptionDefault}
               </p>
-              <div style={{ fontSize: 12, fontWeight: 'bold', marginTop: 8, color: '#aaa' }}>
+              <div style={{ fontSize: 12, fontWeight: 'bold', marginTop: 8, color: ytColors.softText }}>
                 {descriptionExpanded ? t.showLess : t.showMore}
               </div>
             </div>
@@ -3850,7 +3887,7 @@ export default function WebinarRoom({ webinar, events, initialCountdownSeconds =
         theme={webinar.theme}
         userName={userName}
         disableQa={!!webinar.disable_qa}
-        className={webinar.theme === 'youtube' && activeMobileTab !== 'chat' ? 'mobile-hidden' : ''}
+        className={isYouTubeTheme && activeMobileTab !== 'chat' ? 'mobile-hidden' : ''}
         lang={lang}
         aiPersonaName={webinar.ai_persona_name}
         aiPersonaAvatar={webinar.ai_persona_avatar}

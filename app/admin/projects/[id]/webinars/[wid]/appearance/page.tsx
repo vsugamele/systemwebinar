@@ -22,7 +22,7 @@ interface WebinarData {
   fake_viewers_peak_at_pct?: number | null
 }
 
-type RoomTheme = 'dark' | 'light' | 'youtube'
+type RoomTheme = 'dark' | 'light' | 'youtube' | 'clear_vsl'
 type VideoOrientation = 'horizontal' | 'vertical'
 
 const THEMES = [
@@ -43,6 +43,12 @@ const THEMES = [
     label: 'YouTube',
     desc: 'Semelhante a um vídeo público',
     preview: { bg: '#0f0f0f', header: '#0f0f0f', chat: '#212121', accent: '#cc0000', text: '#ffffff', chatText: '#aaaaaa' },
+  },
+  {
+    id: 'clear_vsl' as const,
+    label: 'Clear VSL',
+    desc: 'Branco + YouTube, estilo Cardio Clear/VSL',
+    preview: { bg: '#ffffff', header: '#ffffff', chat: '#f7f7f7', accent: '#cc0000', text: '#0f0f0f', chatText: '#606060' },
   },
 ]
 
@@ -65,9 +71,9 @@ const ROOM_TEMPLATES = [
   {
     id: 'en-clear-vsl',
     label: 'English Clear/VSL',
-    desc: 'Ambiente 100% ingles, estilo YouTube, ideal para trafego frio e VSL longa.',
+    desc: 'White YouTube-style VSL room inspired by Cardio Clear, with the participant interface in English.',
     settings: {
-      theme: 'youtube' as RoomTheme,
+      theme: 'clear_vsl' as RoomTheme,
       orientation: 'horizontal' as VideoOrientation,
       language: 'en',
       fakeViewersStart: 63,
@@ -102,6 +108,8 @@ export default function AppearancePage() {
   const [fakeViewersPeak, setFakeViewersPeak] = useState<number>(500)
   const [fakeViewersEnd, setFakeViewersEnd] = useState<number>(150)
   const [fakeViewersPeakAtPct, setFakeViewersPeakAtPct] = useState<number>(30)
+  const isEnglish = language === 'en'
+  const isYouTubeTheme = theme === 'youtube' || theme === 'clear_vsl'
 
   function applyRoomTemplate(template: (typeof ROOM_TEMPLATES)[number]) {
     const settings = template.settings
@@ -113,7 +121,7 @@ export default function AppearancePage() {
     setFakeViewersEnd(settings.fakeViewersEnd)
     setFakeViewersPeakAtPct(settings.fakeViewersPeakAtPct)
     setYtCommentsEnabled(settings.ytCommentsEnabled)
-    toast.success(`Template "${template.label}" aplicado. Salve para gravar.`)
+    toast.success(isEnglish ? `Template "${template.label}" applied. Save to persist.` : `Template "${template.label}" aplicado. Salve para gravar.`)
   }
 
   useEffect(() => {
@@ -205,17 +213,19 @@ export default function AppearancePage() {
             <Link href={`/admin/projects/${projectId}/webinars`} style={{ color: 'var(--brand-light)' }}>Webinars</Link>
             {' / '}{webinar.name}
           </div>
-          <h1 className="page-title">🎨 Aparência da Sala</h1>
-          <p className="page-subtitle">Configure o tema de cores, orientação e imagem de fundo da sala de transmissão.</p>
+          <h1 className="page-title">🎨 {isEnglish ? 'Room Appearance' : 'Aparência da Sala'}</h1>
+          <p className="page-subtitle">
+            {isEnglish ? 'Configure the color theme, orientation, and background image for the attendee room.' : 'Configure o tema de cores, orientação e imagem de fundo da sala de transmissão.'}
+          </p>
         </div>
       </div>
 
       <form onSubmit={save} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {/* ROOM TEMPLATE PRESETS */}
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>🧩 Template de Ambiente</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>🧩 {isEnglish ? 'Room Template' : 'Template de Ambiente'}</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-            Aplique rapidamente um conjunto coerente de idioma, tema, orientacao e curva de audiencia.
+            {isEnglish ? 'Apply a coherent set of language, theme, orientation, and audience curve settings.' : 'Aplique rapidamente um conjunto coerente de idioma, tema, orientacao e curva de audiencia.'}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
             {ROOM_TEMPLATES.map(template => {
@@ -274,14 +284,14 @@ export default function AppearancePage() {
         
         {/* VIDEO ORIENTATION */}
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>📐 Orientação do Vídeo</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>📐 {isEnglish ? 'Video Orientation' : 'Orientação do Vídeo'}</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-            Escolha horizontal (16:9) para vídeos gravados deitados, ou vertical (9:16) para experts gravados em pé no celular.
+            {isEnglish ? 'Choose horizontal (16:9) for landscape recordings, or vertical (9:16) for standing phone recordings.' : 'Escolha horizontal (16:9) para vídeos gravados deitados, ou vertical (9:16) para experts gravados em pé no celular.'}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, maxWidth: 460 }}>
             {[
-              { id: 'horizontal' as const, label: '📺 Horizontal', desc: '16:9 — padrão', ratio: '16 / 9' },
-              { id: 'vertical' as const, label: '📱 Vertical', desc: '9:16 — expert em pé', ratio: '9 / 16' },
+              { id: 'horizontal' as const, label: '📺 Horizontal', desc: isEnglish ? '16:9 — standard' : '16:9 — padrão', ratio: '16 / 9' },
+              { id: 'vertical' as const, label: '📱 Vertical', desc: isEnglish ? '9:16 — standing expert' : '9:16 — expert em pé', ratio: '9 / 16' },
             ].map(o => {
               const active = orientation === o.id
               return (
@@ -337,9 +347,9 @@ export default function AppearancePage() {
 
         {/* THEME SELECTOR */}
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>🎨 Tema de Cor</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>🎨 {isEnglish ? 'Color Theme' : 'Tema de Cor'}</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-            Selecione a identidade visual da sala. O tema escuro é ideal para elevar o tom de exclusividade.
+            {isEnglish ? 'Select the visual identity for the room. Clear VSL is the white YouTube-style template for English traffic.' : 'Selecione a identidade visual da sala. O tema escuro é ideal para elevar o tom de exclusividade.'}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
             {THEMES.map(t => {
@@ -392,9 +402,9 @@ export default function AppearancePage() {
 
         {/* CUSTOM BACKGROUND */}
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>🖼️ Imagem de Fundo (Custom Background)</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>🖼️ {isEnglish ? 'Background Image (Custom Background)' : 'Imagem de Fundo (Custom Background)'}</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-            Substitua o fundo escurecido da sala de aula e sala de espera por uma imagem personalizada.
+            {isEnglish ? 'Replace the default room or waiting-room background with a custom image.' : 'Substitua o fundo escurecido da sala de aula e sala de espera por uma imagem personalizada.'}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <input
@@ -434,9 +444,9 @@ export default function AppearancePage() {
 
         {/* IDIOMA PADRÃO */}
         <div>
-          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>🌐 Idioma da Sala</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>🌐 {isEnglish ? 'Room Language' : 'Idioma da Sala'}</div>
           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-            Defina o idioma principal da interface do participante (botões, enquetes, chat e contadores).
+            {isEnglish ? 'Set the primary attendee interface language for buttons, polls, chat, and counters.' : 'Defina o idioma principal da interface do participante (botões, enquetes, chat e contadores).'}
           </div>
           <select
             className="form-input"
@@ -642,11 +652,13 @@ export default function AppearancePage() {
         </div>
 
         {/* YOUTUBE CUSTOM FIELDS (Only shown if theme is 'youtube') */}
-        {theme === 'youtube' && (
+        {isYouTubeTheme && (
           <>
             <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '10px 0' }} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--brand-light)' }}>📺 Configurações do Tema YouTube</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--brand-light)' }}>
+                📺 {isEnglish ? 'YouTube Template Settings' : 'Configurações do Tema YouTube'}
+              </div>
               
               {/* Canal Avatar e Inscritos */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>

@@ -6,7 +6,7 @@ import type { WebinarEvent, ChatMessagePayload, PitchButtonPayload, OfferPopupPa
 interface WebinarMobilePreviewProps {
   currentTime: number // seconds
   events: WebinarEvent[]
-  theme?: 'dark' | 'light' | 'youtube'
+  theme?: 'dark' | 'light' | 'youtube' | 'clear_vsl'
   accentColor?: string
 }
 
