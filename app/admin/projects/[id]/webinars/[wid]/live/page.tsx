@@ -34,7 +34,42 @@ interface RealtimeStats {
   recent_dropoffs: number
   recent_cta_clicks: number
   recent_clicks_list?: RecentClick[]
+  duration_seconds?: number
+  elapsed_seconds?: number
+  current_video_minute?: number
+  current_retention_pct?: number
+  audience_delta_pct_2m?: number
+  average_watch_seconds?: number
+  pitch_at_minute?: number | null
+  pitch_viewers?: number
+  pitch_seen?: number
+  pitch_ctr?: number
+  cta_last_5m?: number
+  chat_messages_last_5m?: number
+  chat_messages_last_60s?: number
+  active_chatters_last_5m?: number
+  video_timeline?: {
+    minute: number
+    label: string
+    viewers: number
+    retention_pct: number
+    cta_clicks: number
+    chat_messages: number
+    is_pitch: boolean
+    is_current: boolean
+  }[]
+  alerts?: string[]
   updated_at: string
+}
+
+function formatMetricDuration(seconds: number | null | undefined) {
+  const total = Math.max(0, Math.round(Number(seconds) || 0))
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  const s = total % 60
+  if (h > 0) return `${h}h ${m}m`
+  if (m > 0) return `${m}m ${s}s`
+  return `${s}s`
 }
 
 export default function LivePage() {
@@ -174,7 +209,7 @@ export default function LivePage() {
           })
 
           // 2. Alert Monitoring
-          const alertsList: string[] = []
+          const alertsList: string[] = [...(data.alerts || [])]
 
           // Condition A: Retention drop > 20%
           const prevViewers = prevOnlineNowRef.current
@@ -526,18 +561,18 @@ export default function LivePage() {
           )}
         </div>
 
-        {/* Realtime Stats Block: 5 Horizontal Blocks */}
+        {/* Realtime Stats Block: operational video KPIs */}
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
           gap: 16,
         }} className="stats-horizontal-grid">
           {[
-            { label: 'Online Agora', value: realtime?.online_now ?? 0, icon: '🟢', color: '#10b981', bg: 'rgba(16,185,129,0.03)', border: 'rgba(16,185,129,0.15)', sub: 'espectadores ativos' },
-            { label: 'Pico Simultâneo', value: realtime?.peak_simultaneous ?? 0, icon: '📈', color: '#a78bfa', bg: 'rgba(167,139,250,0.03)', border: 'rgba(167,139,250,0.15)', sub: 'pico máximo de hoje' },
-            { label: 'Total Entraram', value: realtime?.total_joined ?? 0, icon: '👥', color: '#60a5fa', bg: 'rgba(96,165,250,0.03)', border: 'rgba(96,165,250,0.15)', sub: 'espectadores únicos' },
-            { label: 'Saíram (5m)', value: realtime?.recent_dropoffs ?? 0, icon: '🚪', color: '#f87171', bg: 'rgba(248,113,113,0.03)', border: 'rgba(248,113,113,0.15)', sub: 'últimos 5 minutos' },
-            { label: 'Cliques no CTA', value: realtime?.recent_cta_clicks ?? 0, icon: '🛒', color: '#f97316', bg: 'rgba(249,115,22,0.03)', border: 'rgba(249,115,22,0.15)', sub: 'Cliques no botão de vendas' },
+            { label: 'Online agora', value: realtime?.online_now ?? 0, icon: '🟢', color: '#10b981', bg: 'rgba(16,185,129,0.03)', border: 'rgba(16,185,129,0.15)', sub: `${realtime?.current_retention_pct ?? 0}% retencao atual` },
+            { label: 'Minuto do video', value: realtime?.current_video_minute ?? 0, suffix: 'm', icon: '▶️', color: '#60a5fa', bg: 'rgba(96,165,250,0.03)', border: 'rgba(96,165,250,0.15)', sub: `${formatMetricDuration(realtime?.elapsed_seconds)} de execucao` },
+            { label: 'Pitch CTR', value: realtime?.pitch_ctr ?? 0, suffix: '%', icon: '🎯', color: '#f97316', bg: 'rgba(249,115,22,0.03)', border: 'rgba(249,115,22,0.15)', sub: `${realtime?.recent_cta_clicks ?? 0} cliques / ${Math.max(realtime?.pitch_seen ?? 0, realtime?.pitch_viewers ?? 0)} expostos` },
+            { label: 'Chat 5m', value: realtime?.chat_messages_last_5m ?? 0, icon: '💬', color: '#a78bfa', bg: 'rgba(167,139,250,0.03)', border: 'rgba(167,139,250,0.15)', sub: `${realtime?.active_chatters_last_5m ?? 0} pessoas ativas` },
+            { label: 'Saíram 5m', value: realtime?.recent_dropoffs ?? 0, icon: '🚪', color: '#f87171', bg: 'rgba(248,113,113,0.03)', border: 'rgba(248,113,113,0.15)', sub: `${realtime?.audience_delta_pct_2m ?? 0}% em 2 min` },
           ].map(stat => (
             <div key={stat.label} style={{
               background: stat.bg,
@@ -561,7 +596,7 @@ export default function LivePage() {
                 lineHeight: 1.1,
                 textShadow: `0 4px 12px ${stat.color}15`
               }}>
-                {stat.value.toLocaleString('pt-BR')}
+                {stat.value.toLocaleString('pt-BR')}{'suffix' in stat ? stat.suffix : ''}
               </div>
               <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>{stat.sub}</span>
             </div>
@@ -583,24 +618,113 @@ export default function LivePage() {
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
               <span style={{ fontSize: 13, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                🔁 Retenção Atual: <strong style={{ color: '#10b981', fontSize: 14 }}>
-                  {realtime.total_joined > 0 ? Math.round((realtime.online_now / realtime.total_joined) * 100) : 0}%
+                🔁 Retenção agora: <strong style={{ color: '#10b981', fontSize: 14 }}>
+                  {realtime.current_retention_pct ?? 0}%
                 </strong>
               </span>
               <span style={{ fontSize: 13, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                🛒 Conversão ao Vivo: <strong style={{ color: '#f97316', fontSize: 14 }}>
-                  {realtime.total_joined > 0 ? Math.round((realtime.recent_cta_clicks / realtime.total_joined) * 100) : 0}%
+                🎯 Pitch: <strong style={{ color: '#f97316', fontSize: 14 }}>
+                  {realtime.pitch_at_minute != null ? `${realtime.pitch_at_minute}m` : 'não definido'}
                 </strong>
               </span>
               <span style={{ fontSize: 13, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                ⏱ Tempo Médio: <strong style={{ color: '#a78bfa', fontSize: 14 }}>
-                  {realtime.total_joined > 0 ? `${Math.round(20 * (realtime.online_now / realtime.total_joined))} min` : '0 min'}
+                ⏱ Tempo médio assistido: <strong style={{ color: '#a78bfa', fontSize: 14 }}>
+                  {formatMetricDuration(realtime.average_watch_seconds)}
+                </strong>
+              </span>
+              <span style={{ fontSize: 13, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                🛒 CTA 5m: <strong style={{ color: '#f97316', fontSize: 14 }}>
+                  {realtime.cta_last_5m ?? 0}
                 </strong>
               </span>
             </div>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               {realtimeLoading ? 'Atualizando dados...' : `Última atualização: ${new Date(realtime.updated_at).toLocaleTimeString('pt-BR')}`}
             </span>
+          </div>
+        )}
+
+        {/* Live video timeline */}
+        {realtime && (
+          <div className="card" style={{ padding: 24, borderRadius: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 16, marginBottom: 4 }}>📍 Timeline do vídeo em tempo real</div>
+                <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>
+                  Retenção por minuto com marcadores de agora, pitch, cliques no CTA e volume de chat.
+                </p>
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', fontSize: 11, color: 'var(--text-muted)' }}>
+                <span style={{ border: '1px solid var(--border)', borderRadius: 999, padding: '4px 8px' }}>● Agora</span>
+                <span style={{ border: '1px solid rgba(249,115,22,0.35)', borderRadius: 999, padding: '4px 8px', color: '#f97316' }}>🎯 Pitch</span>
+                <span style={{ border: '1px solid rgba(96,165,250,0.35)', borderRadius: 999, padding: '4px 8px', color: '#60a5fa' }}>🛒 CTA</span>
+                <span style={{ border: '1px solid rgba(167,139,250,0.35)', borderRadius: 999, padding: '4px 8px', color: '#a78bfa' }}>💬 Chat</span>
+              </div>
+            </div>
+
+            {!realtime.video_timeline || realtime.video_timeline.length === 0 ? (
+              <div style={{ minHeight: 140, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-elevated)', border: '1px dashed var(--border)', borderRadius: 12, color: 'var(--text-muted)', fontSize: 13 }}>
+                Aguardando amostras do player para montar a timeline.
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${realtime.video_timeline.length}, minmax(26px, 1fr))`, gap: 6, alignItems: 'end', minHeight: 190 }}>
+                {realtime.video_timeline.map(point => {
+                  const height = Math.max(8, Math.round((point.retention_pct || 0) * 1.25))
+                  const isHot = point.cta_clicks > 0 || point.chat_messages > 0
+                  return (
+                    <div key={point.minute} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                      <div style={{ height: 18, display: 'flex', alignItems: 'center', gap: 2, fontSize: 10 }}>
+                        {point.is_pitch && <span title="Pitch">🎯</span>}
+                        {point.cta_clicks > 0 && <span title={`${point.cta_clicks} cliques`}>🛒</span>}
+                        {point.chat_messages > 0 && <span title={`${point.chat_messages} mensagens`}>💬</span>}
+                      </div>
+                      <div
+                        title={`${point.minute}m: ${point.viewers} viewers, ${point.retention_pct}% retencao, ${point.cta_clicks} CTA, ${point.chat_messages} chat`}
+                        style={{
+                          width: '100%',
+                          height,
+                          minHeight: 8,
+                          borderRadius: '6px 6px 2px 2px',
+                          background: point.is_current
+                            ? '#10b981'
+                            : point.is_pitch
+                              ? '#f97316'
+                              : isHot
+                                ? '#60a5fa'
+                                : 'rgba(148,163,184,0.35)',
+                          border: point.is_current ? '2px solid #bbf7d0' : '1px solid rgba(255,255,255,0.08)',
+                          boxShadow: point.is_current ? '0 0 18px rgba(16,185,129,0.35)' : 'none',
+                          transition: 'height 0.2s ease',
+                        }}
+                      />
+                      <div style={{
+                        fontSize: 10,
+                        color: point.is_current ? '#10b981' : 'var(--text-muted)',
+                        fontWeight: point.is_current ? 800 : 600,
+                        whiteSpace: 'nowrap',
+                      }}>
+                        {point.label}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12, marginTop: 18 }}>
+              {[
+                { label: 'Viewers no pitch', value: realtime.pitch_viewers ?? 0, sub: realtime.pitch_at_minute != null ? `minuto ${realtime.pitch_at_minute}` : 'sem pitch definido', color: '#f97316' },
+                { label: 'Expostos ao pitch', value: realtime.pitch_seen ?? 0, sub: 'popup/CTA visto', color: '#f59e0b' },
+                { label: 'CTR do pitch', value: `${realtime.pitch_ctr ?? 0}%`, sub: 'cliques / expostos', color: '#10b981' },
+                { label: 'Chat por minuto', value: realtime.chat_messages_last_60s ?? 0, sub: 'últimos 60s', color: '#a78bfa' },
+              ].map(item => (
+                <div key={item.label} style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 12, padding: 14 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 6 }}>{item.label}</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: item.color }}>{item.value}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{item.sub}</div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
