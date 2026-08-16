@@ -9,8 +9,8 @@ import toast, { Toaster } from 'react-hot-toast'
 interface WebinarData {
   id: string
   name: string
-  theme: 'dark' | 'light' | 'youtube'
-  video_orientation: 'horizontal' | 'vertical'
+  theme: RoomTheme
+  video_orientation: VideoOrientation
   custom_background_url: string | null
   yt_subscriber_count: string | null
   yt_channel_avatar_url: string | null
@@ -21,6 +21,9 @@ interface WebinarData {
   fake_viewers_end?: number | null
   fake_viewers_peak_at_pct?: number | null
 }
+
+type RoomTheme = 'dark' | 'light' | 'youtube'
+type VideoOrientation = 'horizontal' | 'vertical'
 
 const THEMES = [
   {
@@ -43,6 +46,39 @@ const THEMES = [
   },
 ]
 
+const ROOM_TEMPLATES = [
+  {
+    id: 'pt-standard',
+    label: 'Webinar PT — Padrao',
+    desc: 'Ambiente em portugues com visual escuro e audiencia moderada.',
+    settings: {
+      theme: 'dark' as RoomTheme,
+      orientation: 'horizontal' as VideoOrientation,
+      language: 'pt',
+      fakeViewersStart: 75,
+      fakeViewersPeak: 320,
+      fakeViewersEnd: 90,
+      fakeViewersPeakAtPct: 30,
+      ytCommentsEnabled: true,
+    },
+  },
+  {
+    id: 'en-clear-vsl',
+    label: 'English Clear/VSL',
+    desc: 'Ambiente 100% ingles, estilo YouTube, ideal para trafego frio e VSL longa.',
+    settings: {
+      theme: 'youtube' as RoomTheme,
+      orientation: 'horizontal' as VideoOrientation,
+      language: 'en',
+      fakeViewersStart: 63,
+      fakeViewersPeak: 487,
+      fakeViewersEnd: 118,
+      fakeViewersPeakAtPct: 58,
+      ytCommentsEnabled: true,
+    },
+  },
+]
+
 export default function AppearancePage() {
   const { id: projectId, wid } = useParams() as { id: string; wid: string }
   const supabase = createClient()
@@ -55,8 +91,8 @@ export default function AppearancePage() {
 
   // Form State
   const [webinar, setWebinar] = useState<WebinarData | null>(null)
-  const [theme, setTheme] = useState<'dark' | 'light' | 'youtube'>('dark')
-  const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>('horizontal')
+  const [theme, setTheme] = useState<RoomTheme>('dark')
+  const [orientation, setOrientation] = useState<VideoOrientation>('horizontal')
   const [customBg, setCustomBg] = useState('')
   const [ytSubCount, setYtSubCount] = useState('')
   const [ytAvatar, setYtAvatar] = useState('')
@@ -66,6 +102,19 @@ export default function AppearancePage() {
   const [fakeViewersPeak, setFakeViewersPeak] = useState<number>(500)
   const [fakeViewersEnd, setFakeViewersEnd] = useState<number>(150)
   const [fakeViewersPeakAtPct, setFakeViewersPeakAtPct] = useState<number>(30)
+
+  function applyRoomTemplate(template: (typeof ROOM_TEMPLATES)[number]) {
+    const settings = template.settings
+    setTheme(settings.theme)
+    setOrientation(settings.orientation)
+    setLanguage(settings.language)
+    setFakeViewersStart(settings.fakeViewersStart)
+    setFakeViewersPeak(settings.fakeViewersPeak)
+    setFakeViewersEnd(settings.fakeViewersEnd)
+    setFakeViewersPeakAtPct(settings.fakeViewersPeakAtPct)
+    setYtCommentsEnabled(settings.ytCommentsEnabled)
+    toast.success(`Template "${template.label}" aplicado. Salve para gravar.`)
+  }
 
   useEffect(() => {
     async function load() {
@@ -162,6 +211,66 @@ export default function AppearancePage() {
       </div>
 
       <form onSubmit={save} className="card" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        {/* ROOM TEMPLATE PRESETS */}
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 4 }}>🧩 Template de Ambiente</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
+            Aplique rapidamente um conjunto coerente de idioma, tema, orientacao e curva de audiencia.
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            {ROOM_TEMPLATES.map(template => {
+              const active =
+                theme === template.settings.theme &&
+                orientation === template.settings.orientation &&
+                language === template.settings.language &&
+                fakeViewersStart === template.settings.fakeViewersStart &&
+                fakeViewersPeak === template.settings.fakeViewersPeak &&
+                fakeViewersEnd === template.settings.fakeViewersEnd &&
+                fakeViewersPeakAtPct === template.settings.fakeViewersPeakAtPct
+
+              return (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => applyRoomTemplate(template)}
+                  style={{
+                    background: active ? 'rgba(99, 102, 241, 0.12)' : 'var(--bg-elevated)',
+                    border: `2px solid ${active ? 'var(--brand)' : 'var(--border)'}`,
+                    borderRadius: 12,
+                    padding: '14px 16px',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'border-color 0.15s, background 0.15s',
+                    boxShadow: active ? '0 0 0 3px var(--brand-glow)' : 'none',
+                    position: 'relative',
+                  }}
+                >
+                  {active && (
+                    <div style={{
+                      position: 'absolute', top: 8, right: 8, width: 18, height: 18, borderRadius: '50%',
+                      background: 'var(--brand)', color: '#fff', fontSize: 10, fontWeight: 900,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>✓</div>
+                  )}
+                  <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 6 }}>
+                    {template.label}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.45, marginBottom: 10 }}>
+                    {template.desc}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, fontSize: 10, color: 'var(--text-muted)' }}>
+                    <span style={{ border: '1px solid var(--border)', borderRadius: 999, padding: '3px 7px' }}>{template.settings.language.toUpperCase()}</span>
+                    <span style={{ border: '1px solid var(--border)', borderRadius: 999, padding: '3px 7px' }}>{template.settings.theme}</span>
+                    <span style={{ border: '1px solid var(--border)', borderRadius: 999, padding: '3px 7px' }}>{template.settings.orientation}</span>
+                    <span style={{ border: '1px solid var(--border)', borderRadius: 999, padding: '3px 7px' }}>pico {template.settings.fakeViewersPeak}</span>
+                  </div>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '10px 0' }} />
         
         {/* VIDEO ORIENTATION */}
         <div>
