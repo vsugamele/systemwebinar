@@ -123,6 +123,15 @@ const TRANSLATIONS = {
     voted: 'Voto computado',
     voteText: 'voto',
     votesText: 'votos',
+    bannedPlaceholder: 'Você foi suspenso deste chat.',
+    saySomething: 'Diga algo...',
+    send: 'Enviar',
+    qaEmptyTitle: '❓ Envie sua dúvida aqui',
+    qaEmptyDesc: 'A IA ou o apresentador irá responder',
+    materialsEmptyTitle: '📂 Nenhum material disponível ainda',
+    materialsEmptyDesc: 'Os materiais serão liberados durante o webinar',
+    downloadMaterial: 'Clique para baixar / acessar',
+    lockedMaterials: 'material(is) ainda serão liberados...',
   },
   en: {
     liveChat: 'Live chat',
@@ -140,6 +149,15 @@ const TRANSLATIONS = {
     voted: 'Vote cast',
     voteText: 'vote',
     votesText: 'votes',
+    bannedPlaceholder: 'You have been suspended from this chat.',
+    saySomething: 'Say something...',
+    send: 'Send',
+    qaEmptyTitle: '❓ Ask your question here',
+    qaEmptyDesc: 'The AI or presenter will answer',
+    materialsEmptyTitle: '📂 No materials available yet',
+    materialsEmptyDesc: 'Materials will be released during the webinar',
+    downloadMaterial: 'Click to download / access',
+    lockedMaterials: 'material(s) will be released later...',
   },
   es: {
     liveChat: 'Chat en vivo',
@@ -157,6 +175,15 @@ const TRANSLATIONS = {
     voted: 'Voto computado',
     voteText: 'voto',
     votesText: 'votos',
+    bannedPlaceholder: 'Has sido suspendido de este chat.',
+    saySomething: 'Di algo...',
+    send: 'Enviar',
+    qaEmptyTitle: '❓ Envía tu pregunta aquí',
+    qaEmptyDesc: 'La IA o el presentador responderá',
+    materialsEmptyTitle: '📂 No hay materiales disponibles todavía',
+    materialsEmptyDesc: 'Los materiales se liberarán durante el webinar',
+    downloadMaterial: 'Haz clic para descargar / acceder',
+    lockedMaterials: 'material(es) se liberarán más tarde...',
   },
 }
 
@@ -166,7 +193,7 @@ interface QuizCardProps {
   userAnswer: number | null
   voteCounts: number[]
   onVote: (optionIdx: number) => void
-  theme?: 'dark' | 'light' | 'youtube'
+  theme?: 'dark' | 'light' | 'youtube' | 'clear_vsl'
   lang?: 'pt' | 'en' | 'es'
 }
 
@@ -174,12 +201,16 @@ function QuizCard({ card, userAnswer, voteCounts, onVote, theme, lang = 'pt' }: 
   const voted = userAnswer !== null
   const totalVotes = voteCounts.reduce((a, b) => a + b, 0)
   const t = TRANSLATIONS[lang]
+  const isYouTubeTheme = theme === 'youtube' || theme === 'clear_vsl'
+  const ytColors = theme === 'clear_vsl'
+    ? { base: '#ffffff', elevated: '#f2f2f2', hover: '#e8e8e8', border: '#e5e5e5', text: '#0f0f0f', softText: '#606060', accent: '#065fd4' }
+    : { base: '#0f0f0f', elevated: '#212121', hover: '#3e3e3e', border: '#303030', text: '#ffffff', softText: '#aaaaaa', accent: '#3ea6ff' }
 
-  if (theme === 'youtube') {
+  if (isYouTubeTheme) {
     return (
       <div style={{
-        background: '#212121',
-        border: '1px solid #303030',
+        background: ytColors.elevated,
+        border: `1px solid ${ytColors.border}`,
         borderRadius: 12,
         padding: '12px 16px',
         margin: '8px 0',
@@ -187,13 +218,13 @@ function QuizCard({ card, userAnswer, voteCounts, onVote, theme, lang = 'pt' }: 
         boxSizing: 'border-box',
       }}>
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 11, color: '#aaaaaa', fontWeight: 600 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 11, color: ytColors.softText, fontWeight: 600 }}>
           <span>📊</span>
           <span>{t.liveChatPoll}</span>
         </div>
 
         {/* Question */}
-        <p style={{ fontSize: 13, fontWeight: 600, color: '#ffffff', marginBottom: 12, lineHeight: 1.45, marginTop: 0 }}>
+        <p style={{ fontSize: 13, fontWeight: 600, color: ytColors.text, marginBottom: 12, lineHeight: 1.45, marginTop: 0 }}>
           {card.question}
         </p>
 
@@ -211,22 +242,22 @@ function QuizCard({ card, userAnswer, voteCounts, onVote, theme, lang = 'pt' }: 
                     position: 'relative',
                     height: 36,
                     borderRadius: 4,
-                    background: '#3e3e3e',
+                    background: ytColors.hover,
                     overflow: 'hidden',
                     display: 'flex',
                     alignItems: 'center',
                     padding: '0 12px',
                     fontSize: 12,
                     fontWeight: isSelected ? 700 : 500,
-                    color: '#ffffff',
-                    border: isSelected ? '1px solid #3ea6ff' : '1px solid transparent',
+                    color: ytColors.text,
+                    border: isSelected ? `1px solid ${ytColors.accent}` : '1px solid transparent',
                   }}
                 >
                   {/* progress bar */}
                   <div style={{
                     position: 'absolute', left: 0, top: 0, bottom: 0,
                     width: `${pct}%`,
-                    background: isSelected ? '#3ea6ff' : '#606060',
+                    background: isSelected ? ytColors.accent : ytColors.softText,
                     opacity: isSelected ? 0.35 : 0.2,
                     transition: 'width 0.6s ease',
                     zIndex: 0,
@@ -234,7 +265,7 @@ function QuizCard({ card, userAnswer, voteCounts, onVote, theme, lang = 'pt' }: 
                   <span style={{ position: 'relative', zIndex: 1, flex: 1, display: 'flex', alignItems: 'center', gap: 6 }}>
                     {opt} {isSelected && <span>✓</span>}
                   </span>
-                  <span style={{ position: 'relative', zIndex: 1, fontSize: 12, fontWeight: 700, color: isSelected ? '#3ea6ff' : '#aaaaaa' }}>
+                  <span style={{ position: 'relative', zIndex: 1, fontSize: 12, fontWeight: 700, color: isSelected ? ytColors.accent : ytColors.softText }}>
                     {pct}%
                   </span>
                 </div>
@@ -246,8 +277,8 @@ function QuizCard({ card, userAnswer, voteCounts, onVote, theme, lang = 'pt' }: 
                   onClick={() => onVote(i)}
                   style={{
                     background: 'none',
-                    border: '1px solid #3ea6ff',
-                    color: '#3ea6ff',
+                    border: `1px solid ${ytColors.accent}`,
+                    color: ytColors.accent,
                     borderRadius: 18,
                     padding: '8px 16px',
                     fontSize: 12,
@@ -272,7 +303,7 @@ function QuizCard({ card, userAnswer, voteCounts, onVote, theme, lang = 'pt' }: 
         </div>
 
         {/* Footer */}
-        <div style={{ fontSize: 11, color: '#aaaaaa', marginTop: 10, fontWeight: 500 }}>
+        <div style={{ fontSize: 11, color: ytColors.softText, marginTop: 10, fontWeight: 500 }}>
           {totalVotes} {totalVotes === 1 ? t.voteText : t.votesText}
         </div>
       </div>
@@ -418,7 +449,7 @@ interface ChatPanelProps {
   isBanned?: boolean
   onDeleteMessage?: (messageId: string) => void
   onBanUser?: (leadEmail: string | null, sessionId: string) => void
-  theme?: 'dark' | 'light' | 'youtube'
+  theme?: 'dark' | 'light' | 'youtube' | 'clear_vsl'
   userName?: string
   disableQa?: boolean
   className?: string
@@ -467,6 +498,29 @@ export default function ChatPanel({
   aiPersonaAvatar,
 }: ChatPanelProps) {
   const t = TRANSLATIONS[lang]
+  const isYouTubeTheme = theme === 'youtube' || theme === 'clear_vsl'
+  const isClearVslTheme = theme === 'clear_vsl'
+  const ytColors = isClearVslTheme
+    ? {
+      base: '#ffffff',
+      elevated: '#f2f2f2',
+      hover: '#e8e8e8',
+      border: '#e5e5e5',
+      text: '#0f0f0f',
+      softText: '#606060',
+      muted: '#737373',
+      accent: '#065fd4',
+    }
+    : {
+      base: '#0f0f0f',
+      elevated: '#272727',
+      hover: '#3e3e3e',
+      border: '#303030',
+      text: '#ffffff',
+      softText: '#aaaaaa',
+      muted: '#717171',
+      accent: '#3ea6ff',
+    }
   const [chatTab, setChatTab] = useState<ChatTab>(defaultTab)
   const [chatInput, setChatInput] = useState('')
   const [qaInput, setQaInput] = useState('')
@@ -503,24 +557,24 @@ export default function ChatPanel({
   return (
     <div className={`chat-section ${className} ${mobileChatOpen ? ' mobile-chat-open' : ''}`}>
       {/* YT CHAT HEADER */}
-      {theme === 'youtube' && (
+      {isYouTubeTheme && (
         <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           padding: '12px 16px',
-          borderBottom: '1px solid #303030',
-          background: '#0f0f0f',
+          borderBottom: `1px solid ${ytColors.border}`,
+          background: ytColors.base,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#fff' }}>{t.liveChat}</span>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="#fff">
+            <span style={{ fontSize: 14, fontWeight: 600, color: ytColors.text }}>{t.liveChat}</span>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill={ytColors.text}>
               <path d="M12 15.25L6 9.25L7.41 7.84L12 12.43L16.59 7.84L18 9.25L12 15.25Z" />
             </svg>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            <span style={{ fontSize: 11, color: '#aaaaaa' }}>{t.learnMore}</span>
-            <button style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 2 }} disabled>
+            <span style={{ fontSize: 11, color: ytColors.softText }}>{t.learnMore}</span>
+            <button style={{ background: 'none', border: 'none', color: ytColors.text, cursor: 'pointer', padding: 2 }} disabled>
               <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor">
                 <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
               </svg>
@@ -530,9 +584,9 @@ export default function ChatPanel({
       )}
 
       {/* TABS HEADER */}
-      <div style={theme === 'youtube' ? {
-        display: 'flex', gap: 8, padding: '12px 16px', borderBottom: '1px solid #303030',
-        background: '#0f0f0f',
+      <div style={isYouTubeTheme ? {
+        display: 'flex', gap: 8, padding: '12px 16px', borderBottom: `1px solid ${ytColors.border}`,
+        background: ytColors.base,
       } : {
         display: 'flex', borderBottom: '1px solid var(--border)',
         background: 'var(--bg-card)',
@@ -550,10 +604,10 @@ export default function ChatPanel({
               key={tab.id}
               onClick={() => setChatTab(tab.id)}
               className={`chat-tab-btn ${isActive ? 'active' : ''}`}
-              style={theme === 'youtube' ? {
+              style={isYouTubeTheme ? {
                 padding: '6px 12px', fontSize: 12, fontWeight: 600,
-                background: isActive ? '#ffffff' : '#272727',
-                color: isActive ? '#0f0f0f' : '#ffffff',
+                background: isActive ? ytColors.text : ytColors.elevated,
+                color: isActive ? ytColors.base : ytColors.text,
                 borderRadius: 100, border: 'none', cursor: 'pointer',
                 transition: 'all 0.15s ease',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
@@ -566,13 +620,13 @@ export default function ChatPanel({
                 display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4,
               }}
             >
-              {theme === 'youtube' ? (
+              {isYouTubeTheme ? (
                 tab.id === 'chat' ? (lang === 'pt' ? 'Chat' : lang === 'es' ? 'Chat' : 'Chat') : tab.id === 'qa' ? (lang === 'pt' ? 'Q&A' : lang === 'es' ? 'P&R' : 'Q&A') : (lang === 'pt' ? 'Materiais' : lang === 'es' ? 'Materiales' : 'Materials')
               ) : tab.label}
               {tab.count > 0 && (
                 <span style={{
-                  background: isActive ? (theme === 'youtube' ? '#0f0f0f' : 'var(--brand)') : (theme === 'youtube' ? '#3e3e3e' : 'var(--border)'),
-                  color: isActive ? (theme === 'youtube' ? '#ffffff' : '#fff') : (theme === 'youtube' ? '#aaaaaa' : 'var(--text-muted)'),
+                  background: isActive ? (isYouTubeTheme ? ytColors.base : 'var(--brand)') : (isYouTubeTheme ? ytColors.hover : 'var(--border)'),
+                  color: isActive ? (isYouTubeTheme ? ytColors.text : '#fff') : (isYouTubeTheme ? ytColors.softText : 'var(--text-muted)'),
                   borderRadius: 99, padding: '0px 6px', fontSize: 10, fontWeight: 700,
                 }}>{tab.count}</span>
               )}
@@ -600,7 +654,7 @@ export default function ChatPanel({
         <div className="chat-messages">
           {messages.length === 0 && (
             <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, paddingTop: 32 }}>
-              Seja o primeiro a comentar! 👋
+              {t.firstComment}
             </div>
           )}
           {messages.slice(-150).map((msg, i) => {
@@ -706,25 +760,25 @@ export default function ChatPanel({
                           : 'var(--brand)',
                       backgroundImage: msg.avatar ? `url(${msg.avatar})` : undefined,
                       backgroundSize: 'cover',
-                      width: theme === 'youtube' ? 24 : undefined,
-                      height: theme === 'youtube' ? 24 : undefined,
+                      width: isYouTubeTheme ? 24 : undefined,
+                      height: isYouTubeTheme ? 24 : undefined,
                     }}
                   >
                     {!msg.avatar && (isPitchCard ? '🎁' : getInitials(msg.author))}
                   </div>
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {!isBroadcast && theme === 'youtube' ? (
+                  {!isBroadcast && isYouTubeTheme ? (
                     <div style={{ display: 'inline', alignItems: 'baseline', fontSize: 13, lineHeight: '1.4' }}>
                       <span style={{
                         fontWeight: 600,
-                        color: isPitchCard ? '#22c55e' : isAi ? '#ff4d4d' : (msg.author.charCodeAt(0) % 5 === 0 ? '#2ba640' : '#aaaaaa'),
+                        color: isPitchCard ? '#22c55e' : isAi ? '#ff4d4d' : (msg.author.charCodeAt(0) % 5 === 0 ? '#2ba640' : ytColors.softText),
                         marginRight: 8,
                         cursor: 'pointer'
                       }}>
                         {formatYtHandle(msg.author)}
                       </span>
-                      <span style={{ color: '#f1f1f1', whiteSpace: 'pre-line' }}>{renderMessageText(msg.text)}</span>
+                      <span style={{ color: ytColors.text, whiteSpace: 'pre-line' }}>{renderMessageText(msg.text)}</span>
                       {isAdmin && !isPitchCard && (
                         <span style={{ display: 'inline-flex', gap: 6, marginLeft: 8, verticalAlign: 'middle' }}>
                           <button
@@ -817,7 +871,7 @@ export default function ChatPanel({
                     </div>
                   ) : null}
 
-                  {theme !== 'youtube' && (
+                  {!isYouTubeTheme && (
                     <div className="chat-msg-text" style={{
                       ...(isBroadcast ? { color: 'var(--success)', fontWeight: 600 } : {}),
                       whiteSpace: 'pre-line',
@@ -826,7 +880,7 @@ export default function ChatPanel({
                     </div>
                   )}
 
-                  {isBroadcast && theme === 'youtube' && (
+                  {isBroadcast && isYouTubeTheme && (
                     <div style={{ fontSize: 13, color: 'var(--success)', fontWeight: 600, whiteSpace: 'pre-line' }}>
                       {renderMessageText(msg.text)}
                     </div>
@@ -872,8 +926,8 @@ export default function ChatPanel({
                   background: '#ef4444',
                   backgroundImage: displayAvatar ? `url(${displayAvatar})` : undefined,
                   backgroundSize: 'cover',
-                  width: theme === 'youtube' ? 24 : undefined,
-                  height: theme === 'youtube' ? 24 : undefined,
+                  width: isYouTubeTheme ? 24 : undefined,
+                  height: isYouTubeTheme ? 24 : undefined,
                 }}
               >
                 {!displayAvatar && (isAiDefaultOrEmoji ? '🤖' : getInitials(displayName))}
@@ -895,8 +949,8 @@ export default function ChatPanel({
         <div className="chat-messages">
           {qaMessages.length === 0 && (
             <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, paddingTop: 32, lineHeight: 1.6 }}>
-              ❓ Envie sua dúvida aqui<br />
-              <span style={{ fontSize: 11 }}>A IA ou o apresentador irá responder</span>
+              {t.qaEmptyTitle}<br />
+              <span style={{ fontSize: 11 }}>{t.qaEmptyDesc}</span>
             </div>
           )}
           {qaMessages.map(q => (
@@ -931,8 +985,8 @@ export default function ChatPanel({
         <div className="chat-messages">
           {visibleMaterials.length === 0 && (
             <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, paddingTop: 32, lineHeight: 1.6 }}>
-              📂 Nenhum material disponível ainda<br />
-              <span style={{ fontSize: 11 }}>Os materiais serão liberados durante o webinar</span>
+              {t.materialsEmptyTitle}<br />
+              <span style={{ fontSize: 11 }}>{t.materialsEmptyDesc}</span>
             </div>
           )}
           {visibleMaterials.map(m => (
@@ -953,14 +1007,14 @@ export default function ChatPanel({
               <span style={{ fontSize: 24 }}>{m.icon}</span>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{m.label}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Clique para baixar / acessar</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t.downloadMaterial}</div>
               </div>
               <span style={{ fontSize: 18, color: 'var(--brand)' }}>↗</span>
             </a>
           ))}
           {materials.filter(m => m.show_at_seconds > elapsedSeconds).length > 0 && (
             <div style={{ padding: 12, textAlign: 'center', fontSize: 12, color: 'var(--text-muted)', marginTop: 8 }}>
-              🔒 {materials.filter(m => m.show_at_seconds > elapsedSeconds).length} material(is) ainda serão liberados...
+              🔒 {materials.filter(m => m.show_at_seconds > elapsedSeconds).length} {t.lockedMaterials}
             </div>
           )}
         </div>
@@ -969,11 +1023,11 @@ export default function ChatPanel({
       {/* DYNAMIC INPUT BY TAB */}
       <div className="chat-input-area" style={{
         paddingBottom: hasBottomBar ? 'calc(72px + env(safe-area-inset-bottom, 0px))' : undefined,
-        borderTop: theme === 'youtube' ? '1px solid #303030' : undefined,
-        background: theme === 'youtube' ? '#0f0f0f' : undefined,
+        borderTop: isYouTubeTheme ? `1px solid ${ytColors.border}` : undefined,
+        background: isYouTubeTheme ? ytColors.base : undefined,
       }}>
         {chatTab === 'chat' && (
-          theme === 'youtube' ? (
+          isYouTubeTheme ? (
             <div style={{ display: 'flex', gap: 12, padding: '12px 16px', width: '100%', alignItems: 'center' }}>
               <div style={{
                 width: 24, height: 24, borderRadius: '50%',
@@ -983,10 +1037,10 @@ export default function ChatPanel({
               }}>
                 {getInitials(userName)}
               </div>
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: '#272727', borderRadius: 20, padding: '4px 12px' }}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: ytColors.elevated, borderRadius: 20, padding: '4px 12px' }}>
                 <input
                   type="text"
-                  placeholder={isBanned ? "Você foi suspenso deste chat." : "Diga algo..."}
+                  placeholder={isBanned ? t.bannedPlaceholder : t.saySomething}
                   disabled={isBanned}
                   value={chatInput}
                   onChange={e => setChatInput(e.target.value)}
@@ -995,7 +1049,7 @@ export default function ChatPanel({
                     flex: 1,
                     background: 'transparent',
                     border: 'none',
-                    color: '#fff',
+                    color: ytColors.text,
                     outline: 'none',
                     fontSize: 13,
                     padding: '6px 0',
@@ -1007,14 +1061,14 @@ export default function ChatPanel({
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: chatInput.trim() ? '#3ea6ff' : '#717171',
+                    color: chatInput.trim() ? ytColors.accent : ytColors.muted,
                     cursor: chatInput.trim() ? 'pointer' : 'default',
                     fontSize: 13,
                     fontWeight: 'bold',
                     padding: '4px 8px',
                   }}
                 >
-                  Enviar
+                  {t.send}
                 </button>
               </div>
             </div>
@@ -1023,7 +1077,7 @@ export default function ChatPanel({
               <input
                 type="text"
                 className="chat-input"
-                placeholder={isBanned ? "Você foi suspenso deste chat." : "Digite sua mensagem..."}
+                placeholder={isBanned ? t.bannedPlaceholder : t.sendPlaceholder}
                 disabled={isBanned}
                 value={chatInput}
                 onChange={e => setChatInput(e.target.value)}
@@ -1034,7 +1088,7 @@ export default function ChatPanel({
           )
         )}
         {chatTab === 'qa' && (
-          theme === 'youtube' ? (
+          isYouTubeTheme ? (
             <div style={{ display: 'flex', gap: 12, padding: '12px 16px', width: '100%', alignItems: 'center' }}>
               <div style={{
                 width: 24, height: 24, borderRadius: '50%',
@@ -1044,10 +1098,10 @@ export default function ChatPanel({
               }}>
                 {getInitials(userName)}
               </div>
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: '#272727', borderRadius: 20, padding: '4px 12px' }}>
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: ytColors.elevated, borderRadius: 20, padding: '4px 12px' }}>
                 <input
                   type="text"
-                  placeholder={isBanned ? "Você foi suspenso deste chat." : "Envie sua dúvida..."}
+                  placeholder={isBanned ? t.bannedPlaceholder : t.qaPlaceholder}
                   disabled={isBanned}
                   value={qaInput}
                   onChange={e => setQaInput(e.target.value)}
@@ -1056,7 +1110,7 @@ export default function ChatPanel({
                     flex: 1,
                     background: 'transparent',
                     border: 'none',
-                    color: '#fff',
+                    color: ytColors.text,
                     outline: 'none',
                     fontSize: 13,
                     padding: '6px 0',
@@ -1068,14 +1122,14 @@ export default function ChatPanel({
                   style={{
                     background: 'none',
                     border: 'none',
-                    color: qaInput.trim() ? '#3ea6ff' : '#717171',
+                    color: qaInput.trim() ? ytColors.accent : ytColors.muted,
                     cursor: qaInput.trim() ? 'pointer' : 'default',
                     fontSize: 13,
                     fontWeight: 'bold',
                     padding: '4px 8px',
                   }}
                 >
-                  Enviar
+                  {t.send}
                 </button>
               </div>
             </div>
@@ -1084,7 +1138,7 @@ export default function ChatPanel({
               <input
                 type="text"
                 className="chat-input"
-                placeholder={isBanned ? "Você foi suspenso deste chat." : "Envie sua dúvida..."}
+                placeholder={isBanned ? t.bannedPlaceholder : t.qaPlaceholder}
                 disabled={isBanned}
                 value={qaInput}
                 onChange={e => setQaInput(e.target.value)}

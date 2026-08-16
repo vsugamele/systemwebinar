@@ -15,7 +15,7 @@ interface WebinarData {
   video_url: string | null
   waiting_room_enabled: boolean
   waiting_delay_seconds: number
-  theme?: 'dark' | 'light' | 'youtube'
+  theme?: 'dark' | 'light' | 'youtube' | 'clear_vsl'
   tracking_head_code?: string
   tracking_body_code?: string
   webhook_url?: string

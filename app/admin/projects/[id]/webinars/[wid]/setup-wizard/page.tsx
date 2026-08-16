@@ -19,7 +19,7 @@ interface WebinarData {
   landing_headline: string | null
   landing_subheadline: string | null
   landing_button_text: string | null
-  theme: 'dark' | 'light' | 'youtube'
+  theme: 'dark' | 'light' | 'youtube' | 'clear_vsl'
   video_orientation: 'horizontal' | 'vertical'
   waiting_room_enabled: boolean
   waiting_delay_seconds: number
@@ -74,7 +74,7 @@ export default function SetupWizardPage() {
   const [landingSubheadline, setLandingSubheadline] = useState('')
   const [landingButtonText, setLandingButtonText] = useState('')
 
-  const [theme, setTheme] = useState<'dark' | 'light' | 'youtube'>('dark')
+  const [theme, setTheme] = useState<'dark' | 'light' | 'youtube' | 'clear_vsl'>('dark')
   const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>('horizontal')
   const [waitingRoomEnabled, setWaitingRoomEnabled] = useState(false)
   const [waitingDelaySeconds, setWaitingDelaySeconds] = useState(120)
@@ -560,6 +560,7 @@ export default function SetupWizardPage() {
                     <option value="dark">Dark (Escuro Elegante)</option>
                     <option value="light">Claro (Branco Clássico)</option>
                     <option value="youtube">YouTube (Familiar)</option>
+                    <option value="clear_vsl">Clear VSL (White YouTube)</option>
                   </select>
                 </div>
                 <div className="form-group">

@@ -285,6 +285,7 @@ export default function WebinarsPage() {
                     { value: 'dark', label: '🌑 Dark' },
                     { value: 'light', label: '☀️ Light' },
                     { value: 'youtube', label: '▶ YouTube' },
+                    { value: 'clear_vsl', label: '▶ Clear VSL' },
                   ] as const).map(opt => (
                     <button
                       key={opt.value}
